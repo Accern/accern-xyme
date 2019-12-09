@@ -1,0 +1,47 @@
+"""
+Created on 2019-12-09
+"""
+import os
+import codecs
+
+from setuptools import setup
+
+here = os.path.abspath(os.path.dirname(__file__))
+
+with codecs.open(os.path.join(here, "README.rst"), encoding="utf-8") as f:
+    long_description = f.read()
+
+# NOTE! steps to distribute:
+# $ python setup.py sdist bdist_wheel
+# $ twine upload dist/... <- here be the new version!
+
+setup(
+    name="accern_xyme",
+    version="0.0.1",
+    description="AccernXYME is a library for easily "
+                "accessing XYME via python.",
+    long_description=long_description,
+    url="https://github.com/Accern/accern-xyme",
+    author="Accern Corp.",
+    author_email="josua.krause@accern.com",
+    license="MIT",
+    classifiers=[
+        "Development Status :: 4 - Beta",
+        "License :: OSI Approved :: MIT License",
+        "Programming Language :: Python :: 3",
+        "Programming Language :: Python :: 3.6",
+        "Programming Language :: Python :: 3.7",
+        "Programming Language :: Python :: 3.8",
+    ],
+    keywords="XYME AI machine learning client",
+    packages=["accern_xyme"],
+    install_requires=[
+        "quick-server>=0.7.0",
+    ],
+    extras_require={
+        "dev": [],
+        "test": [],
+    },
+    package_data={},
+    data_files=[],
+)
