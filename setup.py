@@ -36,7 +36,9 @@ setup(
     keywords="XYME AI machine learning client",
     packages=["accern_xyme"],
     install_requires=[
-        "quick-server>=0.7.0",
+        "numpy>=1.17.3",
+        "pandas>=0.25.3",
+        "quick-server>=0.7.3",
     ],
     extras_require={
         "dev": [],
