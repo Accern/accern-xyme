@@ -1,4 +1,6 @@
 *.pyc
 .DS_Store
+/build/
+/dist/
 /accern_xyme.egg-info
 /.mypy_cache
