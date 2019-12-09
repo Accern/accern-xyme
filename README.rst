@@ -10,7 +10,7 @@ You can install *accern\_xyme* with pip:
 
 .. code:: sh
 
-    pip install --user accern_xyme
+    pip install --user accern-xyme
 
 Import it in python via:
 
