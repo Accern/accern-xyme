@@ -38,7 +38,9 @@ setup(
     install_requires=[
         "numpy>=1.17.3",
         "pandas>=0.25.3",
-        "quick-server>=0.7.3",
+        "quick-server>=0.7.4",
+        "requests>=2.22.0",
+        "typing-extensions>=3.7.4.1",
     ],
     extras_require={
         "dev": [],
