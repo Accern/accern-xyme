@@ -22,8 +22,9 @@ Import it in python via:
         "https://xyme.accern.com/", "<USERNAME>", "<PASSWORD>")
     print(client.get_user_info())
 
-<USERNAME> and <PASSWORD> are the login credentials for XYME. The values can
-also be set to `None` in which case the values must be set in the environment
-variables `ACCERN_USER` and `ACCERN_PASSWORD`.
+:code:`<USERNAME>` and :code:`<PASSWORD>` are the login credentials for XYME.
+The values can also be set to :code:`None` in which case the values must
+be set in the environment variables :code:`ACCERN_USER`
+and :code:`ACCERN_PASSWORD`.
 
 You will need python3.6 or later.
