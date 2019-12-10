@@ -1,4 +1,4 @@
-from typing import Any, cast, Dict, List, Optional, Iterator
+from typing import Any, cast, Dict, List, Optional, Iterator, IO, Tuple, Union
 import os
 import copy
 import json
@@ -6,14 +6,17 @@ import time
 import urllib
 import requests
 import contextlib
+from io import BytesIO, TextIOWrapper
+import pandas as pd
 from typing_extensions import TypedDict
 import quick_server
 
 
-__version__ = "0.0.2"
+__version__ = "0.0.3"
 
 
 METHOD_DELETE = "DELETE"
+METHOD_FILE = "FILE"
 METHOD_GET = "GET"
 METHOD_LONGPOST = "LONGPOST"
 METHOD_POST = "POST"
@@ -115,43 +118,127 @@ JobListResponse = TypedDict('JobListResponse', {
     "pollHint": float,
     "isReadAdmin": bool,
 })
+StdoutMarker = int
+StdoutLine = Tuple[StdoutMarker, str]
+StdoutResponse = TypedDict('StdoutResponse', {
+    "lines": List[StdoutLine],
+    "messages": Dict[str, List[Tuple[str, List[StdoutLine]]]],
+    "exceptions": List[Tuple[str, List[StdoutLine]]],
+})
+PredictionsResponse = TypedDict('PredictionsResponse', {
+    "columns": List[str],
+    "dtypes": List[str],
+    "values": List[List[Union[str, float, int]]],
+})
+Approximate = TypedDict('Approximate', {
+    "mean": float,
+    "stddev": float,
+    "q_low": float,
+    "q_high": float,
+    "vmin": float,
+    "vmax": float,
+    "count": int,
+})
+ApproximateImportance = TypedDict('ApproximateImportance', {
+    "name": str,
+    "importance": Approximate,
+})
+ApproximateUserExplanation = TypedDict('ApproximateUserExplanation', {
+    "label": Union[str, int],
+    "weights": List[ApproximateImportance],
+})
+DynamicPredictionResponse = TypedDict('DynamicPredictionResponse', {
+    "predictions": Optional[PredictionsResponse],
+    "explanations": Optional[List[ApproximateUserExplanation]],
+    "stdout": StdoutResponse,
+})
+
+
+def df_to_csv(df: pd.DataFrame) -> BytesIO:
+    bio = BytesIO()
+    wrap = TextIOWrapper(bio, encoding="utf-8", write_through=True)
+    df.to_csv(wrap, index=False)
+    wrap.detach()
+    bio.seek(0)
+    return bio
+
+
+def predictions_to_df(preds: PredictionsResponse) -> pd.DataFrame:
+    return pd.DataFrame(preds["values"], columns=preds["columns"])
+
+
+def maybe_predictions_to_df(
+        preds: Optional[PredictionsResponse]) -> Optional[pd.DataFrame]:
+    if preds is None:
+        return None
+    return predictions_to_df(preds)
 
 
 class AccessDenied(Exception):
     pass
 
 
+class StdoutWrapper:
+    def __init__(self, stdout: StdoutResponse) -> None:
+        self._lines = stdout["lines"]
+        self._messages = stdout["messages"]
+        self._exceptions = stdout["exceptions"]
+
+    def full_output(self) -> str:
+        return "\n".join((line for _, line in self._lines))
+
+    def __str__(self) -> str:
+        return self.full_output()
+
+
 class XYMEClient:
     def __init__(self,
                  url: str,
                  user: Optional[str],
-                 password: Optional[str]) -> None:
+                 password: Optional[str],
+                 token: Optional[str]) -> None:
         self._url = url.rstrip("/")
         if user is None:
-            user = os.environ["ACCERN_USER"]
-        self._user: str = user
+            user = os.environ.get("ACCERN_USER")
+        self._user = user
         if password is None:
-            password = os.environ["ACCERN_PASSWORD"]
-        self._password: str = password
-        self._token: Optional[str] = None
+            password = os.environ.get("ACCERN_PASSWORD")
+        self._password = password
+        self._token: Optional[str] = token
         self._last_action = time.monotonic()
 
     def _raw_request_json(self,
                           method: str,
                           path: str,
                           args: Dict[str, Any],
-                          add_prefix: bool = True) -> Dict[str, Any]:
+                          add_prefix: bool = True,
+                          files: Optional[Dict[str, IO[bytes]]] = None,
+                          ) -> Dict[str, Any]:
         url = f"{self._url}{PREFIX if add_prefix else ''}{path}"
+        if method != METHOD_FILE and files is not None:
+            raise ValueError(
+                f"files are only allow for post (got {method}): {files}")
         if method == METHOD_GET:
-            args_str = ""
-            for (key, value) in args.items():
-                if args_str:
-                    args_str += "&"
-                else:
-                    args_str += "?"
-                args_str += (f"{urllib.parse.quote(key)}="
-                             f"{urllib.parse.quote(value)}")
-            req = requests.get(f"{url}{args_str}")
+            req = requests.get(url, params=args)
+            if req.status_code == 403:
+                raise AccessDenied()
+            if req.status_code == 200:
+                return json.loads(req.text)
+            raise ValueError(
+                f"error {req.status_code} in worker request:\n{req.text}")
+        elif method == METHOD_FILE:
+            if files is None:
+                raise ValueError(f"file method must have files: {files}")
+            for fbuff in files.values():
+                if hasattr(fbuff, "seek"):
+                    fbuff.seek(0)
+            req = requests.post(url, data=args, files={
+                key: (
+                    getattr(value, "name", key),
+                    value,
+                    "application/octet-stream",
+                ) for (key, value) in files.items()
+            })
             if req.status_code == 403:
                 raise AccessDenied()
             if req.status_code == 200:
@@ -159,9 +246,7 @@ class XYMEClient:
             raise ValueError(
                 f"error {req.status_code} in worker request:\n{req.text}")
         elif method == METHOD_POST:
-            req = requests.post(url, headers={
-                "Content-Type": "application/json",
-            }, data=json.dumps(args))
+            req = requests.post(url, json=args)
             if req.status_code == 403:
                 raise AccessDenied()
             if req.status_code == 200:
@@ -169,9 +254,7 @@ class XYMEClient:
             raise ValueError(
                 f"error {req.status_code} in worker request:\n{req.text}")
         elif method == METHOD_PUT:
-            req = requests.put(url, headers={
-                "Content-Type": "application/json",
-            }, data=json.dumps(args))
+            req = requests.put(url, json=args)
             if req.status_code == 403:
                 raise AccessDenied()
             if req.status_code == 200:
@@ -179,9 +262,7 @@ class XYMEClient:
             raise ValueError(
                 f"error {req.status_code} in worker request:\n{req.text}")
         elif method == METHOD_DELETE:
-            req = requests.delete(url, headers={
-                "Content-Type": "application/json",
-            }, data=json.dumps(args))
+            req = requests.delete(url, json=args)
             if req.status_code == 403:
                 raise AccessDenied()
             if req.status_code == 200:
@@ -194,6 +275,8 @@ class XYMEClient:
             raise ValueError(f"unknown method {method}")
 
     def _login(self) -> None:
+        if self._user is None or self._password is None:
+            raise ValueError("cannot login without user or password")
         res = cast(UserLogin, self._raw_request_json(METHOD_POST, "/login", {
             "user": self._user,
             "pw": self._password,
@@ -214,13 +297,15 @@ class XYMEClient:
                       path: str,
                       args: Dict[str, Any],
                       capture_err: bool,
-                      add_prefix: bool = True) -> Dict[str, Any]:
+                      add_prefix: bool = True,
+                      files: Optional[Dict[str, IO[bytes]]] = None,
+                      ) -> Dict[str, Any]:
         if self._token is None:
             self._login()
 
         def execute() -> Dict[str, Any]:
             args["token"] = self._token
-            res = self._raw_request_json(method, path, args, add_prefix)
+            res = self._raw_request_json(method, path, args, add_prefix, files)
             if capture_err and "errMessage" in res and res["errMessage"]:
                 raise ValueError(res["errMessage"])
             return res
@@ -421,7 +506,7 @@ class JobHandle:
             METHOD_LONGPOST, "/status", {
                 "job": self._job_id,
             }, capture_err=False)
-        if res.get("empty", True):
+        if res.get("empty", True) and "name" not in res:
             raise ValueError("could not update status")
         info = cast(JobStatusInfo, res)
         self._name = info["name"]
@@ -553,6 +638,59 @@ class JobHandle:
             }, capture_err=True))
         return is_pause if res["success"] else not is_pause
 
+    def dynamic_predict(self,
+                        method: str,
+                        fbuff: IO[bytes]) -> DynamicPredictionResponse:
+        res = cast(DynamicPredictionResponse, self._client._request_json(
+            METHOD_FILE, "/dynamic_predict", {
+                "job": self._job_id,
+                "method": method,
+            }, capture_err=True, files={"file": fbuff}))
+        return res
 
-def create_xyme_client(url: str, user: str, password: str) -> XYMEClient:
-    return XYMEClient(url, user, password)
+    def predict(self,
+                df: pd.DataFrame,
+                ) -> Tuple[Optional[pd.DataFrame], StdoutWrapper]:
+        buff = df_to_csv(df)
+        res = self.dynamic_predict("dyn_pred", buff)
+        return (
+            maybe_predictions_to_df(res["predictions"]),
+            StdoutWrapper(res["stdout"]),
+        )
+
+    def predict_proba(self,
+                      df: pd.DataFrame,
+                      ) -> Tuple[Optional[pd.DataFrame], StdoutWrapper]:
+        buff = df_to_csv(df)
+        res = self.dynamic_predict("dyn_prob", buff)
+        return (
+            maybe_predictions_to_df(res["predictions"]),
+            StdoutWrapper(res["stdout"]),
+        )
+
+    def predict_file(self,
+                     csv: str,
+                     ) -> Tuple[Optional[pd.DataFrame], StdoutWrapper]:
+        with open(csv, "rb") as f_in:
+            res = self.dynamic_predict("dyn_pred", f_in)
+            return (
+                maybe_predictions_to_df(res["predictions"]),
+                StdoutWrapper(res["stdout"]),
+            )
+
+    def predict_proba_file(self,
+                           csv: str,
+                           ) -> Tuple[Optional[pd.DataFrame], StdoutWrapper]:
+        with open(csv, "rb") as f_in:
+            res = self.dynamic_predict("dyn_prob", f_in)
+            return (
+                maybe_predictions_to_df(res["predictions"]),
+                StdoutWrapper(res["stdout"]),
+            )
+
+
+def create_xyme_client(url: str,
+                       user: Optional[str] = None,
+                       password: Optional[str] = None,
+                       token: Optional[str] = None) -> XYMEClient:
+    return XYMEClient(url, user, password, token)
