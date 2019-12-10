@@ -70,7 +70,7 @@ A new job can be started via:
     job.start()
 
     import time
-    time.sleep(30 * 1000)
+    time.sleep(30)
 
     # remember to flush caches before checking the status
     job.flush_caches()

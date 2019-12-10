@@ -190,6 +190,9 @@ class StdoutWrapper:
     def __str__(self) -> str:
         return self.full_output()
 
+    def __repr__(self) -> str:
+        return self.full_output()
+
 
 class XYMEClient:
     def __init__(self,
