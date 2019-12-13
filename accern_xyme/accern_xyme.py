@@ -13,8 +13,12 @@ import quick_server
 
 
 __version__ = "0.0.4"
-# FIXME: add versioning, non-cache-mode, async calls, all dashboard calls,
-# documentation, auth
+# FIXME: non-cache-mode, async calls, all dashboard calls,
+# documentation, auth, metric/plots/get accuracy, summary – time it took etc.,
+# add inspector, basically make old-tykhe obsolete
+
+
+API_VERSION = 0
 
 
 METHOD_DELETE = "DELETE"
@@ -224,6 +228,13 @@ class XYMEClient:
         self._password = password
         self._token: Optional[str] = token
         self._last_action = time.monotonic()
+        self._auto_refresh = True
+
+    def set_auto_refresh(self, is_auto_refresh: bool) -> None:
+        self._auto_refresh = is_auto_refresh
+
+    def is_auto_refresh(self) -> bool:
+        return self._auto_refresh
 
     def _raw_request_json(self,
                           method: str,
@@ -232,7 +243,10 @@ class XYMEClient:
                           add_prefix: bool = True,
                           files: Optional[Dict[str, IO[bytes]]] = None,
                           ) -> Dict[str, Any]:
-        url = f"{self._url}{PREFIX if add_prefix else ''}{path}"
+        prefix = ""
+        if add_prefix:
+            prefix = f"{PREFIX}/v{API_VERSION}"
+        url = f"{self._url}{prefix}{path}"
         if method != METHOD_FILE and files is not None:
             raise ValueError(
                 f"files are only allow for post (got {method}): {files}")
@@ -513,7 +527,7 @@ class JobHandle:
         self._tabs: Optional[List[str]] = None
         self._tickers: Optional[List[str]] = None
 
-    def flush_caches(self) -> None:
+    def refresh(self) -> None:
         self._name = None
         self._path = None
         self._schema_obj = None
@@ -531,6 +545,10 @@ class JobHandle:
         self._plot_order_types = None
         self._tabs = None
         self._tickers = None
+
+    def _maybe_refresh(self) -> None:
+        if self._client.is_auto_refresh():
+            self.refresh()
 
     def _fetch_info(self) -> None:
         res = self._client._request_json(
@@ -562,6 +580,7 @@ class JobHandle:
         return self._job_id
 
     def get_schema(self) -> Dict[str, Any]:
+        self._maybe_refresh()
         if self._schema_obj is None:
             self._fetch_info()
         assert self._schema_obj is not None
@@ -577,6 +596,7 @@ class JobHandle:
 
     @contextlib.contextmanager
     def update_schema(self) -> Iterator[Dict[str, Any]]:
+        self._maybe_refresh()
         if self._schema_obj is None:
             self._fetch_info()
         assert self._schema_obj is not None
@@ -589,46 +609,52 @@ class JobHandle:
               nowait: Optional[bool] = None) -> JobStartResponse:
         res = self._client.start_job(
             self._job_id, user=user, company=company, nowait=nowait)
-        self.flush_caches()
+        self.refresh()
         return res
 
     def delete(self) -> None:
         self._client._request_json(METHOD_DELETE, "/clean", {
             "job": self._job_id,
         }, capture_err=True)
-        self.flush_caches()
+        self.refresh()
 
     def get_name(self) -> str:
+        self._maybe_refresh()
         if self._name is None:
             self._fetch_info()
         assert self._name is not None
         return self._name
 
     def get_path(self) -> str:
+        self._maybe_refresh()
         if self._path is None:
             self._fetch_info()
         assert self._path is not None
         return self._path
 
     def get_status(self) -> str:
+        self._maybe_refresh()
         if self._status is None:
             self._fetch_info()
         assert self._status is not None
         return self._status
 
     def can_rename(self) -> bool:
+        self._maybe_refresh()
         if self._can_rename is None:
             self._fetch_info()
         assert self._can_rename is not None
         return self._can_rename
 
     def is_symjob(self) -> bool:
+        self._maybe_refresh()
         if self._is_symjob is None:
             self._fetch_info()
         assert self._is_symjob is not None
         return self._is_symjob
 
     def is_user_job(self) -> bool:
+        self._maybe_refresh()
         if self._is_user_job is None:
             self._fetch_info()
         assert self._is_user_job is not None
@@ -641,12 +667,14 @@ class JobHandle:
         return self.get_status() == "draft"
 
     def get_permalink(self) -> str:
+        self._maybe_refresh()
         if self._permalink is None:
             self._fetch_info()
         assert self._permalink is not None
         return self._permalink
 
     def get_tickers(self) -> List[str]:
+        self._maybe_refresh()
         if self._tickers is None:
             self._fetch_info()
         assert self._tickers is not None
