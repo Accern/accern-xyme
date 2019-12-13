@@ -157,7 +157,7 @@ DynamicPredictionResponse = TypedDict('DynamicPredictionResponse', {
 ShareList = TypedDict('ShareList', {
     "shareable": List[Tuple[str, str]],
 })
-ShareablePaths = TypedDict('ShareablePaths', {
+ShareablePath = TypedDict('ShareablePath', {
     "name": str,
     "path": str,
 })
@@ -470,7 +470,7 @@ class XYMEClient:
             for job in res["jobs"][workspace]
         ]
 
-    def get_shareable(self) -> List[ShareablePaths]:
+    def get_shareable(self) -> List[ShareablePath]:
         res = cast(ShareList, self._request_json(
             METHOD_GET, "/share", {}, capture_err=False))
         return [{
