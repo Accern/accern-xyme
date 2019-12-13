@@ -12,7 +12,9 @@ from typing_extensions import TypedDict
 import quick_server
 
 
-__version__ = "0.0.3"
+__version__ = "0.0.4"
+# FIXME: add versioning, non-cache-mode, async calls, all dashboard calls,
+# documentation, auth
 
 
 METHOD_DELETE = "DELETE"
@@ -152,6 +154,16 @@ DynamicPredictionResponse = TypedDict('DynamicPredictionResponse', {
     "explanations": Optional[List[ApproximateUserExplanation]],
     "stdout": StdoutResponse,
 })
+ShareList = TypedDict('ShareList', {
+    "shareable": List[Tuple[str, str]],
+})
+ShareablePaths = TypedDict('ShareablePaths', {
+    "name": str,
+    "path": str,
+})
+ShareResponse = TypedDict('ShareResponse', {
+    "job": str,
+})
 
 
 def df_to_csv(df: pd.DataFrame) -> BytesIO:
@@ -164,7 +176,10 @@ def df_to_csv(df: pd.DataFrame) -> BytesIO:
 
 
 def predictions_to_df(preds: PredictionsResponse) -> pd.DataFrame:
-    return pd.DataFrame(preds["values"], columns=preds["columns"])
+    df = pd.DataFrame(preds["values"], columns=preds["columns"])
+    if "date" in df.columns:  # pylint: disable=unsupported-membership-test
+        df["date"] = pd.to_datetime(df["date"])
+    return df
 
 
 def maybe_predictions_to_df(
@@ -273,7 +288,12 @@ class XYMEClient:
             raise ValueError(
                 f"error {req.status_code} in worker request:\n{req.text}")
         elif method == METHOD_LONGPOST:
-            return quick_server.worker_request(url, args)
+            try:
+                return quick_server.worker_request(url, args)
+            except quick_server.WorkerError as e:
+                if e.get_status_code() == 403:
+                    raise AccessDenied()
+                raise e
         else:
             raise ValueError(f"unknown method {method}")
 
@@ -342,9 +362,9 @@ class XYMEClient:
             METHOD_GET, "/maintenance", {}, capture_err=False))
 
     def create_job(self,
-                   schema: Optional[Dict[str, Any]],
-                   from_job_id: Optional[str],
-                   name: Optional[str],
+                   schema: Optional[Dict[str, Any]] = None,
+                   from_job_id: Optional[str] = None,
+                   name: Optional[str] = None,
                    is_system_preset: bool = False) -> 'JobHandle':
         schema_str = json.dumps(schema) if schema is not None else None
         obj: Dict[str, Any] = {
@@ -449,6 +469,14 @@ class XYMEClient:
             )
             for job in res["jobs"][workspace]
         ]
+
+    def get_shareable(self) -> List[ShareablePaths]:
+        res = cast(ShareList, self._request_json(
+            METHOD_GET, "/share", {}, capture_err=False))
+        return [{
+            "name": name,
+            "path": path,
+        } for (name, path) in res["shareable"]]
 
 
 class JobHandle:
@@ -691,9 +719,40 @@ class JobHandle:
                 StdoutWrapper(res["stdout"]),
             )
 
+    def share(self, path: str) -> 'JobHandle':
+        shared = cast(ShareResponse, self._client._request_json(
+            METHOD_PUT, "/share", {
+                "job": self._job_id,
+                "with": path,
+            }, capture_err=True))
+        return JobHandle(client=self._client,
+                         job_id=shared["job"],
+                         path=None,
+                         name=None,
+                         schema_obj=None,
+                         kinds=None,
+                         status=None,
+                         permalink=None,
+                         time_total=None,
+                         time_start=None,
+                         time_end=None,
+                         time_estimate=None)
+
 
 def create_xyme_client(url: str,
                        user: Optional[str] = None,
                        password: Optional[str] = None,
                        token: Optional[str] = None) -> XYMEClient:
     return XYMEClient(url, user, password, token)
+
+
+@contextlib.contextmanager
+def create_xyme_session(url: str,
+                        user: Optional[str] = None,
+                        password: Optional[str] = None,
+                        token: Optional[str] = None) -> Iterator[XYMEClient]:
+    try:
+        client = XYMEClient(url, user, password, token)
+        yield client
+    finally:
+        client.logout()
