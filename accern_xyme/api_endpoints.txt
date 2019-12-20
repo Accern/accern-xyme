@@ -13,7 +13,7 @@
 [ ] GET /xyme/hpo_definition
 [ ] GET /xyme/init
 [ ] GET /xyme/input_details
-[ ] GET /xyme/job_source
+[X] GET /xyme/job_source
 [X] GET /xyme/maintenance
 [ ] GET /xyme/merged_file
 [ ] GET /xyme/model_config
@@ -24,7 +24,7 @@
 [ ] GET /xyme/presets
 [ ] GET /xyme/schema
 [ ] GET /xyme/schemas
-[ ] GET /xyme/source_schema
+[X] GET /xyme/source_schema
 [ ] GET /xyme/sources
 [ ] GET /xyme/strategies
 [ ] GET /xyme/suggestion
@@ -37,7 +37,7 @@
 [ ] POST /xyme/backtest
 [ ] POST /xyme/create_input_id
 [X] POST /xyme/create_job_id
-[ ] POST /xyme/create_source_id
+[X] POST /xyme/create_source_id
 [ ] POST /xyme/data_plots
 [ ] POST /xyme/deploy
 [X] POST /xyme/dynamic_predict
@@ -72,13 +72,13 @@
 [ ] POST /xyme/upload
 [X] POST /xyme/username
 [ ] PUT /xyme/hide_source
-[ ] PUT /xyme/lock_source
+[X] PUT /xyme/lock_source
 [X] PUT /xyme/maintenance
 [ ] PUT /xyme/remove_source
 [X] PUT /xyme/rename
 [ ] PUT /xyme/schema
 [ ] PUT /xyme/select_plots
 [X] PUT /xyme/share
-[ ] PUT /xyme/source_schema
+[X] PUT /xyme/source_schema
 [X] PUT /xyme/update_job_schema
 [ ] PUT /xyme/user_preset

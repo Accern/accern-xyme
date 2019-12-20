@@ -30,6 +30,19 @@ METHOD_PUT = "PUT"
 
 PREFIX = "/xyme"
 
+SOURCE_TYPE_MULTI = "multi"
+SOURCE_TYPE_CSV = "csv"
+SOURCE_TYPE_IO = "io"
+SOURCE_TYPE_PRICES = "prices"
+SOURCE_TYPE_USER = "user"
+ALL_SOURCE_TYPES = [
+    SOURCE_TYPE_MULTI,
+    SOURCE_TYPE_CSV,
+    SOURCE_TYPE_IO,
+    SOURCE_TYPE_PRICES,
+    SOURCE_TYPE_USER,
+]
+
 
 VersionInfo = TypedDict('VersionInfo', {
     "time": str,
@@ -66,6 +79,9 @@ JobCreateResponse = TypedDict('JobCreateResponse', {
 })
 SchemaResponse = TypedDict('SchemaResponse', {
     "schema": str,
+})
+SourceResponse = TypedDict('SourceResponse', {
+    "sourceId": str,
 })
 JobStartResponse = TypedDict('JobStartResponse', {
     "job": Optional[str],
@@ -167,6 +183,39 @@ ShareablePath = TypedDict('ShareablePath', {
 })
 ShareResponse = TypedDict('ShareResponse', {
     "job": str,
+})
+CreateSourceResponse = TypedDict('CreateSourceResponse', {
+    "multiSourceId": str,
+    "sourceId": str,
+    "jobSchema": Optional[str],
+})
+CreateSource = TypedDict('CreateSource', {
+    "source": 'SourceHandle',
+    "multi_source": 'SourceHandle',
+})
+LockSourceResponse = TypedDict('LockSourceResponse', {
+    "newSourceId": str,
+    "immutable": bool,
+    "jobSchema": Optional[str],
+    "multiSourceId": Optional[str],
+    "sourceSchemaMap": Dict[str, Dict[str, Any]],
+})
+LockSource = TypedDict('LockSource', {
+    "new_source": 'SourceHandle',
+    "immutable": bool,
+    "multi_source": Optional['SourceHandle'],
+    "source_schema_map": Dict[str, Dict[str, Any]],
+})
+SourceInfoResponse = TypedDict('SourceInfoResponse', {
+    "dirty": bool,
+    "immutable": bool,
+    "sourceName": Optional[str],
+    "sourceType": Optional[str],
+})
+SourceSchemaResponse = TypedDict('SourceSchemaResponse', {
+    "sourceSchema": Dict[str, Any],
+    "sourceInfo": SourceInfoResponse,
+    "pollHint": float,
 })
 
 
@@ -492,6 +541,94 @@ class XYMEClient:
             "path": path,
         } for (name, path) in res["shareable"]]
 
+    def create_source_raw(self,
+                          name: Optional[str],
+                          source_type: str,
+                          job: Optional['JobHandle'],
+                          multi_source: Optional['SourceHandle'],
+                          from_id: Optional['SourceHandle'],
+                          ) -> CreateSource:
+        if source_type not in ALL_SOURCE_TYPES:
+            raise ValueError(
+                f"invalid source type: {source_type}\nmust be one of "
+                f"{', '.join(ALL_SOURCE_TYPES)}")
+        multi_source_id = None
+        if multi_source is not None:
+            if not multi_source.is_multi_source():
+                raise ValueError(f"source {multi_source.get_source_id()} "
+                                 "must be multi source")
+            multi_source_id = multi_source.get_source_id()
+        from_id_str = from_id.get_source_id() if from_id is not None else None
+        res = cast(CreateSourceResponse, self._request_json(
+            METHOD_LONGPOST, "/create_source_id", {
+                "name": name,
+                "type": source_type,
+                "job": job.get_job_id() if job is not None else None,
+                "multiSourceId": multi_source_id,
+                "fromId": from_id_str,
+            }, capture_err=True))
+        job_schema_str = res["jobSchema"]
+        if job is not None and job_schema_str:
+            job._schema_obj = json.loads(job_schema_str)
+        return {
+            "multi_source": SourceHandle(
+                self, res["multiSourceId"], SOURCE_TYPE_MULTI),
+            "source": SourceHandle(self, res["sourceId"], source_type),
+        }
+
+    def create_source(self, name: Optional[str]) -> 'SourceHandle':
+        res = self.create_source_raw(name, SOURCE_TYPE_MULTI, None, None, None)
+        return res["multi_source"]
+
+    def set_immutable_raw(self,
+                          source: 'SourceHandle',
+                          multi_source: Optional['SourceHandle'],
+                          job: Optional['JobHandle'],
+                          is_immutable: Optional[bool]) -> LockSource:
+        multi_source_id = None
+        if multi_source is not None:
+            if not multi_source.is_multi_source():
+                raise ValueError(f"source {multi_source.get_source_id()} "
+                                 "must be multi source")
+            multi_source_id = multi_source.get_source_id()
+        res = cast(LockSourceResponse, self._request_json(
+            METHOD_PUT, "/lock_source", {
+                "sourceId": source.get_source_id(),
+                "multiSourceId": multi_source_id,
+                "job": job.get_job_id() if job is not None else None,
+                "immutable": is_immutable,
+            }, capture_err=False))
+        if "multiSourceId" not in res:
+            res["multiSourceId"] = None
+        if "sourceSchemaMap" not in res:
+            res["sourceSchemaMap"] = {}
+        job_schema_str = res["jobSchema"]
+        if job is not None and job_schema_str:
+            job._schema_obj = json.loads(job_schema_str)
+        if res["newSourceId"] == source.get_source_id():
+            new_source = source
+        else:
+            new_source = SourceHandle(
+                self, res["newSourceId"], source.get_source_type())
+        if res["multiSourceId"] is None:
+            new_multi_source: Optional[SourceHandle] = None
+        elif res["multiSourceId"] == new_source.get_source_id():
+            new_multi_source = new_source
+        elif res["multiSourceId"] == source.get_source_id():
+            new_multi_source = source
+        elif multi_source is not None and \
+                res["multiSourceId"] == multi_source.get_source_id():
+            new_multi_source = multi_source
+        else:
+            new_multi_source = SourceHandle(
+                self, res["multiSourceId"], SOURCE_TYPE_MULTI)
+        return {
+            "new_source": new_source,
+            "immutable": res["immutable"],
+            "multi_source": new_multi_source,
+            "source_schema_map": res["sourceSchemaMap"],
+        }
+
 
 class JobHandle:
     def __init__(self,
@@ -526,6 +663,7 @@ class JobHandle:
         self._plot_order_types: Optional[List[str]] = None
         self._tabs: Optional[List[str]] = None
         self._tickers: Optional[List[str]] = None
+        self._source: Optional[SourceHandle] = None
 
     def refresh(self) -> None:
         self._name = None
@@ -545,6 +683,7 @@ class JobHandle:
         self._plot_order_types = None
         self._tabs = None
         self._tickers = None
+        self._source = None
 
     def _maybe_refresh(self) -> None:
         if self._client.is_auto_refresh():
@@ -766,11 +905,132 @@ class JobHandle:
                          time_end=None,
                          time_estimate=None)
 
+    def create_source(
+            self, name: Optional[str], source_type: str) -> 'SourceHandle':
+        res = self._client.create_source_raw(
+            name, source_type, self, None, None)
+        return res["source"]
+
+    def get_source(self, ticker: Optional[str] = None) -> 'SourceHandle':
+        self._maybe_refresh()
+        if self._source is not None:
+            return self._source
+        res = cast(SourceResponse, self._client._request_json(
+            METHOD_GET, "/job_source", {
+                "job": self._job_id,
+                "ticker": ticker,
+            }, capture_err=True))
+        self._source = SourceHandle(
+            self._client, res["sourceId"], None, infer_type=True)
+        return self._source
+
 
 class SourceHandle:
-    def __init__(self, client: XYMEClient, source_id: str):
+    def __init__(self,
+                 client: XYMEClient,
+                 source_id: str,
+                 source_type: Optional[str],
+                 infer_type: bool = False):
+        if not source_id:
+            raise ValueError("source id is not set!")
+        if not infer_type and (
+                not source_type or source_type not in ALL_SOURCE_TYPES):
+            raise ValueError(f"invalid source type: {source_type}")
         self._client = client
         self._source_id = source_id
+        self._source_type = source_type
+        self._schema_obj: Optional[Dict[str, Any]] = None
+        self._dirty: Optional[bool] = None
+        self._immutable: Optional[bool] = None
+        self._name: Optional[str] = None
+
+    def refresh(self) -> None:
+        self._schema_obj = None
+        self._dirty = None
+        self._immutable = None
+        self._name = None
+
+    def _maybe_refresh(self) -> None:
+        if self._client.is_auto_refresh():
+            self.refresh()
+
+    def _fetch_info(self) -> None:
+        res = cast(SourceSchemaResponse, self._client._request_json(
+            METHOD_GET, "/source_schema", {
+                "sourceId": self._source_id,
+            }, capture_err=True))
+        self._schema_obj = res["sourceSchema"]
+        info = res["sourceInfo"]
+        self._dirty = info["dirty"]
+        self._immutable = info["immutable"]
+        self._name = info["sourceName"]
+        self._source_type = info["sourceType"]
+
+    def get_schema(self) -> Dict[str, Any]:
+        self._maybe_refresh()
+        if self._schema_obj is None:
+            self._fetch_info()
+        assert self._schema_obj is not None
+        return copy.deepcopy(self._schema_obj)
+
+    def set_schema(self, schema: Dict[str, Any]) -> None:
+        res = cast(SchemaResponse, self._client._request_json(
+            METHOD_PUT, "/source_schema", {
+                "sourceId": self._source_id,
+                "schema": json.dumps(schema),
+            }, capture_err=True))
+        schema_obj = json.loads(res["schema"])
+        self._schema_obj = schema_obj
+        # NOTE: we can infer information about
+        # the source by being able to change it
+        self._name = schema_obj.get("name")
+        self._source_type = schema_obj.get("type")
+        self._dirty = True
+        self._immutable = False
+
+    @contextlib.contextmanager
+    def update_schema(self) -> Iterator[Dict[str, Any]]:
+        self._maybe_refresh()
+        if self._schema_obj is None:
+            self._fetch_info()
+        assert self._schema_obj is not None
+        yield self._schema_obj
+        self.set_schema(self._schema_obj)
+
+    def is_dirty(self) -> bool:
+        self._maybe_refresh()
+        if self._dirty is None:
+            self._fetch_info()
+        assert self._dirty is not None
+        return self._dirty
+
+    def is_immutable(self) -> bool:
+        self._maybe_refresh()
+        if self._immutable is None:
+            self._fetch_info()
+        assert self._immutable is not None
+        return self._immutable
+
+    def get_source_id(self) -> str:
+        return self._source_id
+
+    def get_source_type(self) -> str:
+        # NOTE: we don't refresh source type frequently
+        if self._source_type is None:
+            self._fetch_info()
+        assert self._source_type is not None
+        return self._source_type
+
+    def is_multi_source(self) -> bool:
+        return self.get_source_type() == SOURCE_TYPE_MULTI
+
+    def set_immutable(self, is_immutable: bool) -> SourceHandle:
+        res = self._client.set_immutable_raw(self, None, None, is_immutable)
+        return res["new_source"]
+
+    def flip_immutable(self) -> SourceHandle:
+        res = self._client.set_immutable_raw(self, None, None, None)
+        return res["new_source"]
 
 
 def create_xyme_client(url: str,
