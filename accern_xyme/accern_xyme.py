@@ -486,7 +486,7 @@ class XYMEClient:
 
     def get_shareable(self) -> List[ShareablePath]:
         res = cast(ShareList, self._request_json(
-            METHOD_GET, "/share", {}, capture_err=False))
+            METHOD_LONGPOST, "/share", {}, capture_err=False))
         return [{
             "name": name,
             "path": path,
@@ -765,6 +765,12 @@ class JobHandle:
                          time_start=None,
                          time_end=None,
                          time_estimate=None)
+
+
+class SourceHandle:
+    def __init__(self, client: XYMEClient, source_id: str):
+        self._client = client
+        self._source_id = source_id
 
 
 def create_xyme_client(url: str,
