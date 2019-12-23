@@ -1,0 +1,88 @@
+X - implemented
+U - unused
+D - deprecated
+
+[X] DELETE /xyme/clean
+[ ] DELETE /xyme/delete_plot
+[ ] DELETE /xyme/schema
+[ ] DELETE /xyme/source
+[U] GET /p
+[ ] GET /xyme/csv
+[D] GET /xyme/deploy
+[D] GET /xyme/env
+[ ] GET /xyme/explain
+[ ] GET /xyme/file_content
+[ ] GET /xyme/file_download
+[ ] GET /xyme/hooks
+[ ] GET /xyme/hpo_definition
+[X] GET /xyme/init
+[ ] GET /xyme/input_details
+[X] GET /xyme/job_source
+[X] GET /xyme/maintenance
+[ ] GET /xyme/merged_file
+[ ] GET /xyme/model_config
+[X] GET /xyme/monitor_logs
+[X] GET /xyme/overview
+[ ] GET /xyme/prediction_features
+[ ] GET /xyme/predictions
+[ ] GET /xyme/presets
+[ ] GET /xyme/schema
+[ ] GET /xyme/schemas
+[X] GET /xyme/source_schema
+[X] GET /xyme/sources
+[ ] GET /xyme/strategies
+[ ] GET /xyme/suggestion
+[ ] GET /xyme/tickers
+[ ] GET /xyme/user_files
+[X] GET /xyme/version
+[ ] GET /xyme/xy_definition
+[X] POST /xyme/afterupdate
+[ ] POST /xyme/alpha
+[ ] POST /xyme/backtest
+[ ] POST /xyme/create_input_id
+[X] POST /xyme/create_job_id
+[X] POST /xyme/create_source_id
+[ ] POST /xyme/data_plots
+[D] POST /xyme/deploy
+[X] POST /xyme/dynamic_predict
+[ ] POST /xyme/explain
+[ ] POST /xyme/feature_summary
+[ ] POST /xyme/features
+[ ] POST /xyme/features_summary
+[ ] POST /xyme/input
+[ ] POST /xyme/inspect
+[X] POST /xyme/jobs
+[X] POST /xyme/login
+[X] POST /xyme/logout
+[ ] POST /xyme/metric
+[ ] POST /xyme/metric_plots
+[ ] POST /xyme/model_param
+[ ] POST /xyme/model_schema
+[X] POST /xyme/pause
+[D] POST /xyme/pause_deploy
+[ ] POST /xyme/pdp
+[ ] POST /xyme/predictions
+[ ] POST /xyme/preview
+[ ] POST /xyme/redisout
+[ ] POST /xyme/resume
+[X] POST /xyme/share
+[ ] POST /xyme/source_data
+[X] POST /xyme/start
+[X] POST /xyme/status
+[ ] POST /xyme/stdout
+[ ] POST /xyme/summary
+[ ] POST /xyme/ticker_summary
+[X] POST /xyme/unpause
+[ ] POST /xyme/upload
+[X] POST /xyme/username
+[ ] PUT /xyme/hide_source
+[X] PUT /xyme/lock_source
+[X] PUT /xyme/maintenance
+[ ] PUT /xyme/remove_source
+[X] PUT /xyme/rename
+[ ] PUT /xyme/schema
+[ ] PUT /xyme/select_plots
+[X] PUT /xyme/share
+[X] PUT /xyme/source_schema
+[X] PUT /xyme/update_job_schema
+[ ] PUT /xyme/user_preset

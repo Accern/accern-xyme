@@ -72,24 +72,17 @@ A new job can be started via:
     import time
     time.sleep(30)
 
-    # remember to flush caches before checking the status
-    job.flush_caches()
     print(job.get_status())
 
 Computing Predictions
 ---------------------
 
-Predictions for a file or plain data can be obtained
-for a finished or running job:
+Predictions can be obtained for a finished or running job:
 
 .. code:: python
 
-    # predicting for a file
-    res = job.predict_file(file_name)
-    # or for a pandas dataframe (predict_proba variants are also available)
-    res = job.predict(df)
-
-    predictions, stdout = res
+    # predict_proba is also available
+    predictions, stdout = job.predict(df)
     print(stdout)
 
     print("prediction of first row: ", predictions.iloc[0])
