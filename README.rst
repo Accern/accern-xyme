@@ -81,7 +81,7 @@ Predictions can be obtained for a finished or running job:
 
 .. code:: python
 
-    # or for a pandas dataframe (predict_proba is also available)
+    # predict_proba is also available
     predictions, stdout = job.predict(df)
     print(stdout)
 
