@@ -22,7 +22,7 @@ D - deprecated
 [ ] GET /xyme/merged_file
 [ ] GET /xyme/model_config
 [X] GET /xyme/monitor_logs
-[ ] GET /xyme/overview
+[X] GET /xyme/overview
 [ ] GET /xyme/prediction_features
 [ ] GET /xyme/predictions
 [ ] GET /xyme/presets

@@ -26,9 +26,8 @@ import quick_server
 
 
 __version__ = "0.0.4"
-# FIXME: non-cache-mode, async calls, all dashboard calls,
-# documentation, auth, metric/plots/get accuracy, summary – time it took etc.,
-# add inspector, basically make old-tykhe obsolete
+# FIXME: async calls, documentation, auth, metric/plots/get accuracy,
+# summary – time it took etc., basically make old-tykhe obsolete
 
 
 API_VERSION = 0
@@ -255,6 +254,25 @@ InspectItem = TypedDict('InspectItem', {
 InspectResponse = TypedDict('InspectResponse', {
     "inspect": InspectItem,
     "pollHint": float,
+})
+RedisQueueSizes = TypedDict('RedisQueueSizes', {
+    "wait": int,
+    "regular": int,
+    "busy": int,
+    "result": int,
+    "failed": int,
+    "paused": int,
+})
+JobsOverview = TypedDict('JobsOverview', {
+    "current": Dict[str, Dict[str, int]],
+    "queues": RedisQueueSizes,
+    "pausedJobs": Optional[List[Dict[str, str]]],
+})
+OverviewResponse = TypedDict('OverviewResponse', {
+    "jobs": JobsOverview,
+    "requests": Dict[str, int],
+    "sessions": Optional[List[Dict[str, Any]]],
+    "workers": Dict[str, List[str]],
 })
 
 
@@ -515,6 +533,10 @@ class XYMEClient:
             "messages": {},
             "exceptions": [],
         })
+
+    def get_system_overview(self) -> OverviewResponse:
+        return cast(OverviewResponse, self._request_json(
+            METHOD_GET, "/overview", {}, capture_err=False))
 
     def create_job(self,
                    schema: Optional[Dict[str, Any]] = None,
