@@ -1,4 +1,16 @@
-from typing import Any, cast, Dict, List, Optional, Iterator, IO, Tuple, Union
+from typing import (
+    Any,
+    cast,
+    Dict,
+    IO,
+    Iterable,
+    Iterator,
+    List,
+    Optional,
+    Set,
+    Tuple,
+    Union,
+)
 import os
 import copy
 import json
@@ -6,6 +18,7 @@ import time
 import urllib
 import requests
 import contextlib
+import collections
 from io import BytesIO, TextIOWrapper
 import pandas as pd
 from typing_extensions import TypedDict
@@ -50,9 +63,9 @@ VersionInfo = TypedDict('VersionInfo', {
     "xymeVersion": str,
 })
 UserLogin = TypedDict('UserLogin', {
-    "permissions": List[str],
-    "success": bool,
     "token": str,
+    "success": bool,
+    "permissions": List[str],
 })
 UserInfo = TypedDict('UserInfo', {
     "company": str,
@@ -217,6 +230,32 @@ SourceSchemaResponse = TypedDict('SourceSchemaResponse', {
     "sourceInfo": SourceInfoResponse,
     "pollHint": float,
 })
+SystemLogResponse = TypedDict('SystemLogResponse', {
+    "logs": Optional[List[StdoutLine]],
+})
+SourceItem = TypedDict('SourceItem', {
+    "id": str,
+    "name": str,
+    "type": Optional[str],
+    "help": str,
+    "immutable": bool,
+})
+SourcesResponse = TypedDict('SourcesResponse', {
+    "systemSources": List[SourceItem],
+    "userSources": List[SourceItem],
+})
+InspectQuery = Optional[Dict[str, Any]]
+InspectItem = TypedDict('InspectItem', {
+    "clazz": str,
+    "leaf": bool,
+    "value": Union[None, str, List[Any]],
+    "extra": str,
+    "collapsed": bool,
+})
+InspectResponse = TypedDict('InspectResponse', {
+    "inspect": InspectItem,
+    "pollHint": float,
+})
 
 
 def df_to_csv(df: pd.DataFrame) -> BytesIO:
@@ -278,6 +317,25 @@ class XYMEClient:
         self._token: Optional[str] = token
         self._last_action = time.monotonic()
         self._auto_refresh = True
+        self._permissions: Optional[List[str]] = None
+        self._init()
+
+    def _init(self) -> None:
+        if self._token is None:
+            self._login()
+            return
+        res = cast(UserLogin, self._request_json(
+            METHOD_GET, "/init", {}, capture_err=False))
+        if not res["success"]:
+            raise AccessDenied()
+        self._token = res["token"]
+        self._permissions = res["permissions"]
+
+    def get_permissions(self) -> List[str]:
+        if self._permissions is None:
+            self._init()
+        assert self._permissions is not None
+        return self._permissions
 
     def set_auto_refresh(self, is_auto_refresh: bool) -> None:
         self._auto_refresh = is_auto_refresh
@@ -285,16 +343,28 @@ class XYMEClient:
     def is_auto_refresh(self) -> bool:
         return self._auto_refresh
 
+    @contextlib.contextmanager
+    def bulk_operation(self) -> Iterator[None]:
+        old_refresh = self.is_auto_refresh()
+        try:
+            self.set_auto_refresh(False)
+            yield
+        finally:
+            self.set_auto_refresh(old_refresh)
+
     def _raw_request_json(self,
                           method: str,
                           path: str,
                           args: Dict[str, Any],
                           add_prefix: bool = True,
                           files: Optional[Dict[str, IO[bytes]]] = None,
+                          api_version: Optional[int] = None,
                           ) -> Dict[str, Any]:
         prefix = ""
         if add_prefix:
-            prefix = f"{PREFIX}/v{API_VERSION}"
+            if api_version is None:
+                api_version = API_VERSION
+            prefix = f"{PREFIX}/v{api_version}"
         url = f"{self._url}{prefix}{path}"
         if method != METHOD_FILE and files is not None:
             raise ValueError(
@@ -370,6 +440,7 @@ class XYMEClient:
         if not res["success"]:
             raise AccessDenied()
         self._token = res["token"]
+        self._permissions = res["permissions"]
 
     def logout(self) -> None:
         if self._token is None:
@@ -385,13 +456,15 @@ class XYMEClient:
                       capture_err: bool,
                       add_prefix: bool = True,
                       files: Optional[Dict[str, IO[bytes]]] = None,
+                      api_version: Optional[int] = None,
                       ) -> Dict[str, Any]:
         if self._token is None:
             self._login()
 
         def execute() -> Dict[str, Any]:
             args["token"] = self._token
-            res = self._raw_request_json(method, path, args, add_prefix, files)
+            res = self._raw_request_json(
+                method, path, args, add_prefix, files, api_version)
             if capture_err and "errMessage" in res and res["errMessage"]:
                 raise ValueError(res["errMessage"])
             return res
@@ -423,6 +496,25 @@ class XYMEClient:
     def get_maintenance_mode(self) -> HintedMaintenanceInfo:
         return cast(HintedMaintenanceInfo, self._request_json(
             METHOD_GET, "/maintenance", {}, capture_err=False))
+
+    def get_system_logs(self,
+                        query: Optional[str] = None,
+                        context: Optional[int] = None) -> StdoutWrapper:
+        obj: Dict[str, Any] = {
+            # FIXME: only regular for now -- other value is deploy
+            "logsKind": "regular",
+        }
+        if query is not None:
+            obj["query"] = query
+        if context is not None:
+            obj["context"] = context
+        res = cast(SystemLogResponse, self._request_json(
+            METHOD_GET, "/monitor_logs", obj, capture_err=False))
+        return StdoutWrapper({
+            "lines": res["logs"] if res["logs"] is not None else [],
+            "messages": {},
+            "exceptions": [],
+        })
 
     def create_job(self,
                    schema: Optional[Dict[str, Any]] = None,
@@ -541,13 +633,13 @@ class XYMEClient:
             "path": path,
         } for (name, path) in res["shareable"]]
 
-    def create_source_raw(self,
-                          name: Optional[str],
-                          source_type: str,
-                          job: Optional['JobHandle'],
-                          multi_source: Optional['SourceHandle'],
-                          from_id: Optional['SourceHandle'],
-                          ) -> CreateSource:
+    def _raw_create_source(self,
+                           source_type: str,
+                           name: Optional[str],
+                           job: Optional['JobHandle'],
+                           multi_source: Optional['SourceHandle'],
+                           from_id: Optional['SourceHandle'],
+                           ) -> CreateSource:
         if source_type not in ALL_SOURCE_TYPES:
             raise ValueError(
                 f"invalid source type: {source_type}\nmust be one of "
@@ -577,7 +669,8 @@ class XYMEClient:
         }
 
     def create_source(self, name: Optional[str]) -> 'SourceHandle':
-        res = self.create_source_raw(name, SOURCE_TYPE_MULTI, None, None, None)
+        res = self._raw_create_source(
+            SOURCE_TYPE_MULTI, name, None, None, None)
         return res["multi_source"]
 
     def set_immutable_raw(self,
@@ -628,6 +721,26 @@ class XYMEClient:
             "multi_source": new_multi_source,
             "source_schema_map": res["sourceSchemaMap"],
         }
+
+    def get_sources(self,
+                    filter_by: Optional[str] = None,
+                    ) -> Iterable['SourceHandle']:
+        if filter_by is not None and filter_by not in ("system", "user"):
+            raise ValueError(f"invalid value for filter_by: {filter_by}")
+        res = cast(SourcesResponse, self._request_json(
+            METHOD_GET, "/sources", {}, capture_err=False))
+
+        def respond(arr: List[SourceItem]) -> Iterable['SourceHandle']:
+            for source in arr:
+                yield SourceHandle(
+                    self, source["id"], source["type"], infer_type=True,
+                    name=source["name"], immutable=source["immutable"],
+                    help_message=source["help"])
+
+        if filter_by is None or filter_by == "system":
+            yield from respond(res["systemSources"])
+        if filter_by is None or filter_by == "user":
+            yield from respond(res["userSources"])
 
 
 class JobHandle:
@@ -741,6 +854,12 @@ class JobHandle:
         assert self._schema_obj is not None
         yield self._schema_obj
         self.set_schema(self._schema_obj)
+
+    @contextlib.contextmanager
+    def bulk_operation(self) -> Iterator[None]:
+        with self._client.bulk_operation():
+            self.refresh()
+            yield
 
     def start(self,
               user: Optional[str] = None,
@@ -905,10 +1024,11 @@ class JobHandle:
                          time_end=None,
                          time_estimate=None)
 
-    def create_source(
-            self, name: Optional[str], source_type: str) -> 'SourceHandle':
-        res = self._client.create_source_raw(
-            name, source_type, self, None, None)
+    def create_source(self,
+                      source_type: str,
+                      name: Optional[str] = None) -> 'SourceHandle':
+        res = self._client._raw_create_source(
+            source_type, name, self, None, None)
         return res["source"]
 
     def get_source(self, ticker: Optional[str] = None) -> 'SourceHandle':
@@ -924,13 +1044,226 @@ class JobHandle:
             self._client, res["sourceId"], None, infer_type=True)
         return self._source
 
+    def inspect(self, ticker: Optional[str]) -> 'InspectHandle':
+        return InspectHandle(self._client, self, ticker)
+
+    def __repr__(self) -> str:
+        name = ""
+        if self._name is not None:
+            name = f" ({self._name})"
+        return f"{self.__class__.__name__}: {self._job_id}{name}"
+
+    def __str__(self) -> str:
+        return repr(self)
+
+
+InspectValue = Union['InspectPath', bool, int, float, str, None]
+
+
+class InspectPath(collections.abc.Mapping):
+    def __init__(self,
+                 clazz: str,
+                 inspect: 'InspectHandle',
+                 path: List[str],
+                 summary: str):
+        self._clazz = clazz
+        self._inspect = inspect
+        self._path = path
+        self._cache: Dict[str, InspectValue] = {}
+        self._key_cache: Optional[Set[str]] = None
+        self._summary = summary
+
+    def flush_cache(self) -> None:
+        self._cache = {}
+
+    def get_clazz(self) -> str:
+        return self._clazz
+
+    def has_cached_value(self, key: str) -> bool:
+        return key in self._cache
+
+    def _set_cache(self, key: str, value: InspectValue) -> None:
+        self._cache[key] = value
+
+    def _set_key_cache(self, keys: Iterable[str]) -> None:
+        self._key_cache = set(keys)
+
+    def __getitem__(self, key: str) -> InspectValue:
+        # pylint: disable=unsupported-membership-test
+        if self._key_cache is not None and key not in self._key_cache:
+            raise KeyError(key)
+        if not self.has_cached_value(key):
+            self._cache[key] = self._inspect.get_value_for_path(
+                self._path + [key])
+        return self._cache[key]
+
+    def _ensure_key_cache(self) -> None:
+        if self._key_cache is not None:
+            return
+        self._key_cache = set()
+
+    def __iter__(self) -> Iterator[str]:
+        self._ensure_key_cache()
+        assert self._key_cache is not None
+        return iter(self._key_cache)
+
+    def __len__(self) -> int:
+        self._ensure_key_cache()
+        assert self._key_cache is not None
+        return len(self._key_cache)
+
+    def __repr__(self) -> str:
+        res = f"{self._clazz}: {{"
+        first = True
+        for key in self:
+            if first:
+                first = False
+            else:
+                res += ", "
+            res += repr(key)
+            res += ": "
+            if self.has_cached_value(key):
+                res += repr(self[key])
+            else:
+                res += "..."
+        return f"{res}}}"
+
+    def __str__(self) -> str:
+        return f"{self._clazz}: {self._summary}"
+
+
+class InspectHandle(InspectPath):
+    def __init__(self,
+                 client: XYMEClient,
+                 job: JobHandle,
+                 ticker: Optional[str]) -> None:
+        super().__init__("uninitialized", self, [], "uninitialized")
+        self._client = client
+        self._job_id = job._job_id
+        self._ticker = ticker
+        init = self._query([])
+        if init is not None:
+            self._clazz = init["clazz"]
+            self._summary = init["extra"]
+            values = init["value"]
+            if isinstance(values, list):
+                self._set_key_cache((name for (name, _) in values))
+
+    def _query(self, path: List[str]) -> Optional[InspectItem]:
+        query: InspectQuery = {"state": {}}
+        assert query is not None
+        subq = query["state"]
+        for seg in path:
+            assert subq is not None
+            subq[seg] = {}
+            subq = subq[seg]
+        res = cast(InspectResponse, self._client._request_json(
+            METHOD_LONGPOST, "/inspect", {
+                "job": self._job_id,
+                "query": query,
+                "ticker": self._ticker,
+            }, capture_err=False))
+        return res["inspect"]
+
+    def get_value_for_path(self, path: List[str]) -> InspectValue:
+        res: InspectValue = self
+        do_query = False
+        for seg in path:
+            if not isinstance(res, InspectPath):
+                raise TypeError(f"cannot query {seg} on {res}")
+            if res.has_cached_value(seg):
+                res = res[seg]
+                continue
+            do_query = True
+            break
+
+        def maybe_set_cache(key: str,
+                            ipath: InspectPath,
+                            obj: InspectItem) -> Optional[InspectPath]:
+            has_value = False
+            res = None
+            if obj["leaf"]:
+                if obj["clazz"] == "None":
+                    val: InspectValue = None
+                elif obj["clazz"] == "bool":
+                    val = bool(obj["value"])
+                elif obj["clazz"] == "int":
+                    if obj["value"] is None:
+                        raise TypeError(f"did not expect None: {obj}")
+                    if isinstance(obj["value"], list):
+                        raise TypeError(f"did not expect list: {obj}")
+                    val = int(obj["value"])
+                elif obj["clazz"] == "float":
+                    if obj["value"] is None:
+                        raise TypeError(f"did not expect None: {obj}")
+                    if isinstance(obj["value"], list):
+                        raise TypeError(f"did not expect list: {obj}")
+                    val = float(obj["value"])
+                elif obj["clazz"] == "str":
+                    val = str(obj["value"])
+                else:
+                    if isinstance(obj["value"], list):
+                        raise TypeError(f"did not expect list: {obj}")
+                    val = obj["value"]
+                has_value = True
+            elif not obj["collapsed"]:
+                res = InspectPath(
+                    obj["clazz"], self, list(upto), obj["extra"])
+                val = res
+                values = obj["value"]
+                if not isinstance(values, list):
+                    raise TypeError(f"expected list got: {values}")
+                keys = []
+                for (name, cur) in values:
+                    keys.append(name)
+                    maybe_set_cache(name, val, cur)
+                val._set_key_cache(keys)
+                has_value = True
+            if has_value:
+                ipath._set_cache(key, val)
+            return res
+
+        if do_query:
+            obj = self._query(path)
+            res = self
+            upto = []
+            for seg in path:
+                upto.append(seg)
+                if obj is None:
+                    raise KeyError(seg)
+                if obj["leaf"]:
+                    raise ValueError(f"early leaf node at {seg}")
+                next_obj: Optional[InspectItem] = None
+                values = obj["value"]
+                if not isinstance(values, list):
+                    raise TypeError(f"expected list got: {values}")
+                for (name, value) in values:
+                    if name == seg:
+                        next_obj = value
+                        break
+                if next_obj is None:
+                    raise KeyError(seg)
+                obj = next_obj
+                if not isinstance(res, InspectPath):
+                    raise TypeError(f"cannot query {seg} on {res}")
+                if res.has_cached_value(seg):
+                    res = res[seg]
+                else:
+                    ipath = maybe_set_cache(seg, res, obj)
+                    assert ipath is not None
+                    res = ipath
+        return res
+
 
 class SourceHandle:
     def __init__(self,
                  client: XYMEClient,
                  source_id: str,
                  source_type: Optional[str],
-                 infer_type: bool = False):
+                 infer_type: bool = False,
+                 name: Optional[str] = None,
+                 immutable: Optional[bool] = None,
+                 help_message: Optional[str] = None):
         if not source_id:
             raise ValueError("source id is not set!")
         if not infer_type and (
@@ -939,16 +1272,18 @@ class SourceHandle:
         self._client = client
         self._source_id = source_id
         self._source_type = source_type
+        self._name = name
+        self._immutable = immutable
+        self._help = help_message
         self._schema_obj: Optional[Dict[str, Any]] = None
         self._dirty: Optional[bool] = None
-        self._immutable: Optional[bool] = None
-        self._name: Optional[str] = None
 
     def refresh(self) -> None:
         self._schema_obj = None
         self._dirty = None
         self._immutable = None
         self._name = None
+        self._help = None
 
     def _maybe_refresh(self) -> None:
         if self._client.is_auto_refresh():
@@ -965,6 +1300,10 @@ class SourceHandle:
         self._immutable = info["immutable"]
         self._name = info["sourceName"]
         self._source_type = info["sourceType"]
+
+    def _ensure_multi_source(self) -> None:
+        if not self.is_multi_source():
+            raise ValueError("can only add source to multi source")
 
     def get_schema(self) -> Dict[str, Any]:
         self._maybe_refresh()
@@ -983,10 +1322,31 @@ class SourceHandle:
         self._schema_obj = schema_obj
         # NOTE: we can infer information about
         # the source by being able to change it
-        self._name = schema_obj.get("name")
+        self._name = schema_obj.get("name", self._source_id)
         self._source_type = schema_obj.get("type")
+        self._help = schema_obj.get("help", "")
         self._dirty = True
         self._immutable = False
+
+    def get_name(self) -> str:
+        self._maybe_refresh()
+        if self._name is None:
+            self._fetch_info()
+        assert self._name is not None
+        return self._name
+
+    def get_help_message(self) -> str:
+        self._maybe_refresh()
+        if self._help is None:
+            self._fetch_info()
+        assert self._help is not None
+        return self._help
+
+    @contextlib.contextmanager
+    def bulk_operation(self) -> Iterator[None]:
+        with self._client.bulk_operation():
+            self.refresh()
+            yield
 
     @contextlib.contextmanager
     def update_schema(self) -> Iterator[Dict[str, Any]]:
@@ -1024,13 +1384,53 @@ class SourceHandle:
     def is_multi_source(self) -> bool:
         return self.get_source_type() == SOURCE_TYPE_MULTI
 
-    def set_immutable(self, is_immutable: bool) -> SourceHandle:
+    def set_immutable(self, is_immutable: bool) -> 'SourceHandle':
         res = self._client.set_immutable_raw(self, None, None, is_immutable)
         return res["new_source"]
 
-    def flip_immutable(self) -> SourceHandle:
+    def flip_immutable(self) -> 'SourceHandle':
         res = self._client.set_immutable_raw(self, None, None, None)
         return res["new_source"]
+
+    def add_new_source(self,
+                       source_type: str,
+                       name: Optional[str] = None) -> 'SourceHandle':
+        self._ensure_multi_source()
+        res = self._client._raw_create_source(
+            source_type, name, None, self, None)
+        self.refresh()
+        return res["source"]
+
+    def add_source(self, source: 'SourceHandle') -> None:
+        with self.bulk_operation():
+            self._ensure_multi_source()
+            with self.update_schema() as schema_obj:
+                if "config" not in schema_obj:
+                    schema_obj["config"] = {}
+                config = schema_obj["config"]
+                if "sources" not in config:
+                    config["sources"] = []
+                config["sources"].append(source.get_source_id())
+
+    def get_sources(self) -> Iterable['SourceHandle']:
+        with self.bulk_operation():
+            self._ensure_multi_source()
+            if self._schema_obj is None:
+                self._fetch_info()
+            assert self._schema_obj is not None
+            sources = self._schema_obj.get("config", {}).get("sources", [])
+            for source_id in sources:
+                yield SourceHandle(
+                    self._client, source_id, None, infer_type=True)
+
+    def __repr__(self) -> str:
+        name = ""
+        if self._name is not None:
+            name = f" ({self._name})"
+        return f"{self.__class__.__name__}: {self._source_id}{name}"
+
+    def __str__(self) -> str:
+        return repr(self)
 
 
 def create_xyme_client(url: str,

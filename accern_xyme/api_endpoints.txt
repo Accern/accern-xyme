@@ -1,23 +1,27 @@
+X - implemented
+U - unused
+D - deprecated
+
 [X] DELETE /xyme/clean
 [ ] DELETE /xyme/delete_plot
 [ ] DELETE /xyme/schema
 [ ] DELETE /xyme/source
-[ ] GET /p
+[U] GET /p
 [ ] GET /xyme/csv
-[ ] GET /xyme/deploy
-[ ] GET /xyme/env
+[D] GET /xyme/deploy
+[D] GET /xyme/env
 [ ] GET /xyme/explain
 [ ] GET /xyme/file_content
 [ ] GET /xyme/file_download
 [ ] GET /xyme/hooks
 [ ] GET /xyme/hpo_definition
-[ ] GET /xyme/init
+[X] GET /xyme/init
 [ ] GET /xyme/input_details
 [X] GET /xyme/job_source
 [X] GET /xyme/maintenance
 [ ] GET /xyme/merged_file
 [ ] GET /xyme/model_config
-[ ] GET /xyme/monitor_logs
+[X] GET /xyme/monitor_logs
 [ ] GET /xyme/overview
 [ ] GET /xyme/prediction_features
 [ ] GET /xyme/predictions
@@ -25,7 +29,7 @@
 [ ] GET /xyme/schema
 [ ] GET /xyme/schemas
 [X] GET /xyme/source_schema
-[ ] GET /xyme/sources
+[X] GET /xyme/sources
 [ ] GET /xyme/strategies
 [ ] GET /xyme/suggestion
 [ ] GET /xyme/tickers
@@ -39,7 +43,7 @@
 [X] POST /xyme/create_job_id
 [X] POST /xyme/create_source_id
 [ ] POST /xyme/data_plots
-[ ] POST /xyme/deploy
+[D] POST /xyme/deploy
 [X] POST /xyme/dynamic_predict
 [ ] POST /xyme/explain
 [ ] POST /xyme/feature_summary
@@ -55,7 +59,7 @@
 [ ] POST /xyme/model_param
 [ ] POST /xyme/model_schema
 [X] POST /xyme/pause
-[ ] POST /xyme/pause_deploy
+[D] POST /xyme/pause_deploy
 [ ] POST /xyme/pdp
 [ ] POST /xyme/predictions
 [ ] POST /xyme/preview
