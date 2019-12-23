@@ -1095,7 +1095,7 @@ class InspectPath(collections.abc.Mapping):
         self._key_cache: Optional[Set[str]] = None
         self._summary = summary
 
-    def flush_cache(self) -> None:
+    def refresh(self) -> None:
         self._cache = {}
 
     def get_clazz(self) -> str:
