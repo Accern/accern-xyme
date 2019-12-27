@@ -12,6 +12,7 @@ from typing import (
     Union,
 )
 import os
+import sys
 import copy
 import json
 import time
@@ -54,6 +55,19 @@ ALL_SOURCE_TYPES = [
     SOURCE_TYPE_PRICES,
     SOURCE_TYPE_USER,
 ]
+
+INPUT_CSV_EXT = ".csv"
+INPUT_TSV_EXT = ".tsv"
+INPUT_ZIP_EXT = ".zip"
+INPUT_EXT = [INPUT_ZIP_EXT, INPUT_CSV_EXT, INPUT_TSV_EXT]
+
+UPLOAD_IN_PROGRESS = "in_progress"
+UPLOAD_DONE = "done"
+UPLOAD_START = "start"
+
+FILTER_SYSTEM = "system"
+FILTER_USER = "user"
+FILTERS = [FILTER_SYSTEM, FILTER_USER]
 
 
 VersionInfo = TypedDict('VersionInfo', {
@@ -205,6 +219,9 @@ CreateSource = TypedDict('CreateSource', {
     "source": 'SourceHandle',
     "multi_source": 'SourceHandle',
 })
+CreateInputResponse = TypedDict('CreateInputResponse', {
+    "inputId": str,
+})
 LockSourceResponse = TypedDict('LockSourceResponse', {
     "newSourceId": str,
     "immutable": bool,
@@ -293,9 +310,20 @@ UploadResponse = TypedDict('UploadResponse', {
     "progress": Optional[str],
     "exists": bool,
 })
+InputItem = TypedDict('InputItem', {
+    "name": Optional[str],
+    "path": str,
+    "file": str,
+    "immutable": bool,
+})
+InputsResponse = TypedDict('InputsResponse', {
+    "systemFiles": List[InputItem],
+    "userFiles": List[InputItem],
+})
 
 
 FILE_UPLOAD_CHUNK_SIZE = 8 * 1024 * 1024  # 8MB
+FILE_HASH_CHUNK_SIZE = FILE_UPLOAD_CHUNK_SIZE
 
 
 def df_to_csv(df: pd.DataFrame) -> BytesIO:
@@ -420,9 +448,11 @@ class XYMEClient:
         elif method == METHOD_FILE:
             if files is None:
                 raise ValueError(f"file method must have files: {files}")
-            for fbuff in files.values():
-                if hasattr(fbuff, "seek"):
-                    fbuff.seek(0)
+            # FIXME: should we reset the streams?
+            # this might be unexpected behavior
+            # for fbuff in files.values():
+            #     if hasattr(fbuff, "seek"):
+            #         fbuff.seek(0)
             req = requests.post(url, data=args, files={
                 key: (
                     getattr(value, "name", key),
@@ -717,6 +747,9 @@ class XYMEClient:
             SOURCE_TYPE_MULTI, name, None, None, None)
         return res["multi_source"]
 
+    def get_source(self, source_id: str) -> 'SourceHandle':
+        return SourceHandle(self, source_id, None)
+
     def set_immutable_raw(self,
                           source: 'SourceHandle',
                           multi_source: Optional['SourceHandle'],
@@ -769,7 +802,7 @@ class XYMEClient:
     def get_sources(self,
                     filter_by: Optional[str] = None,
                     ) -> Iterable['SourceHandle']:
-        if filter_by is not None and filter_by not in ("system", "user"):
+        if filter_by is not None and filter_by not in FILTERS:
             raise ValueError(f"invalid value for filter_by: {filter_by}")
         res = cast(SourcesResponse, self._request_json(
             METHOD_GET, "/sources", {}, capture_err=False))
@@ -781,10 +814,89 @@ class XYMEClient:
                     name=source["name"], immutable=source["immutable"],
                     help_message=source["help"])
 
-        if filter_by is None or filter_by == "system":
+        if filter_by is None or filter_by == FILTER_SYSTEM:
             yield from respond(res["systemSources"])
-        if filter_by is None or filter_by == "user":
+        if filter_by is None or filter_by == FILTER_USER:
             yield from respond(res["userSources"])
+
+    def create_input(self,
+                     name: str,
+                     ext: str,
+                     size: int,
+                     hash_str: Optional[str]) -> 'InputHandle':
+        res = cast(CreateInputResponse, self._request_json(
+            METHOD_LONGPOST, "/create_input_id", {
+                "name": name,
+                "extension": ext,
+                "size": size,
+                "hash": hash_str,
+            }, capture_err=False))
+        return InputHandle(self, res["inputId"], name=name, ext=ext, size=size)
+
+    def get_input(self, input_id: str) -> 'InputHandle':
+        return InputHandle(self, input_id)
+
+    def input_from_io(self,
+                      io_in: IO[bytes],
+                      name: str,
+                      ext: str,
+                      progress_bar: Optional[IO[Any]] = sys.stdout,
+                      ) -> 'InputHandle':
+        from_pos = 0
+        if hasattr(io_in, "tell"):
+            from_pos = io_in.tell()
+        size = io_in.seek(0, os.SEEK_END) - from_pos
+        io_in.seek(from_pos, os.SEEK_SET)
+        hash_str = get_file_hash(io_in)
+        res: InputHandle = self.create_input(name, ext, size, hash_str)
+        res.upload_full(io_in, name, progress_bar)
+        return res
+
+    def input_from_file(self,
+                        filename: str,
+                        progress_bar: Optional[IO[Any]] = sys.stdout,
+                        ) -> 'InputHandle':
+        if filename.endswith(f"{INPUT_CSV_EXT}{INPUT_ZIP_EXT}") \
+                    or filename.endswith(f"{INPUT_TSV_EXT}{INPUT_ZIP_EXT}"):
+            filename = filename[:-len(INPUT_ZIP_EXT)]
+        ext_pos = filename.rfind(".")
+        if ext_pos >= 0:
+            ext = filename[ext_pos + 1:]
+        else:
+            ext = ""
+        fname = os.path.basename(filename)
+        with open(filename, "rb") as fbuff:
+            return self.input_from_io(fbuff, fname, ext, progress_bar)
+
+    def get_inputs(self,
+                   filter_by: Optional[str] = None) -> Iterable['InputHandle']:
+        if filter_by is not None and filter_by not in FILTERS:
+            raise ValueError(f"invalid value for filter_by: {filter_by}")
+        res = cast(InputsResponse, self._request_json(
+            METHOD_GET, "/user_files", {}, capture_err=False))
+
+        def respond(arr: List[InputItem]) -> Iterable['InputHandle']:
+            for input_obj in arr:
+                filename = input_obj["file"]
+                ext_pos = filename.rfind(".")
+                if ext_pos >= 0:
+                    ext: Optional[str] = filename[ext_pos + 1:]
+                    input_id = filename[:ext_pos]
+                else:
+                    ext = None
+                    input_id = filename
+                progress = UPLOAD_DONE if input_obj["immutable"] else None
+                yield InputHandle(self,
+                                  input_id,
+                                  name=input_obj["name"],
+                                  path=input_obj["path"],
+                                  ext=ext,
+                                  progress=progress)
+
+        if filter_by is None or filter_by == FILTER_SYSTEM:
+            yield from respond(res["systemFiles"])
+        if filter_by is None or filter_by == FILTER_USER:
+            yield from respond(res["userFiles"])
 
 
 class JobHandle:
@@ -1478,17 +1590,24 @@ class SourceHandle:
 
 
 class InputHandle:
-    def __init__(self, client: XYMEClient, input_id: str) -> None:
+    def __init__(self,
+                 client: XYMEClient,
+                 input_id: str,
+                 name: Optional[str] = None,
+                 path: Optional[str] = None,
+                 ext: Optional[str] = None,
+                 size: Optional[int] = None,
+                 progress: Optional[str] = None) -> None:
         if not input_id:
             raise ValueError("input id is not set!")
         self._client = client
         self._input_id = input_id
-        self._name: Optional[str] = None
-        self._path: Optional[str] = None
-        self._ext: Optional[str] = None
-        self._progress: Optional[str] = None
+        self._name = name
+        self._ext = ext
+        self._size = size
+        self._path = path
+        self._progress = progress
         self._last_byte_offset: Optional[int] = None
-        self._size: Optional[int] = None
 
     def refresh(self) -> None:
         self._name = None
@@ -1563,7 +1682,7 @@ class InputHandle:
             self.refresh()
             yield
 
-    def upload_partial(self, chunk_content: BytesIO) -> bool:
+    def upload_partial(self, chunk_content: IO[bytes]) -> bool:
         if self._last_byte_offset is None or self._name is None:
             self._fetch_info()
         res = cast(UploadResponse, self._client._request_json(
@@ -1585,16 +1704,17 @@ class InputHandle:
         return res["exists"]
 
     def upload_full(self,
-                    file_content: BytesIO,
+                    file_content: IO[bytes],
                     file_name: Optional[str],
-                    progress_bar: Optional[IO[Any]] = None) -> int:
+                    progress_bar: Optional[IO[Any]] = sys.stdout) -> int:
         if file_name is not None:
             self._name = file_name
         if progress_bar is not None and hasattr(file_content, "seek"):
             init_pos = 0
             if hasattr(file_content, "tell"):
                 init_pos = file_content.tell()
-            total_size: Optional[int] = file_content.seek(0, os.SEEK_END)
+            total_size: Optional[int] = \
+                file_content.seek(0, os.SEEK_END) - init_pos
             file_content.seek(init_pos, os.SEEK_SET)
         else:
             total_size = None
@@ -1639,6 +1759,26 @@ def print_progress_bar(progress: float, final: bool, out: IO[Any]) -> None:
     full_len = len(border) * 2 + len(bar) + len(pstr) + len(end)
     mid = ' ' * max(0, cols - full_len)
     out.write(f"{border}{bar}{mid}{border}{pstr}{end}")
+
+
+def get_file_hash(buff: IO[bytes]) -> str:
+    """
+    Return sha224 hash of data files
+    """
+    import hashlib
+
+    sha = hashlib.sha224()
+    chunk_size = FILE_HASH_CHUNK_SIZE
+    init_pos = 0
+    if hasattr(buff, "tell"):
+        init_pos = buff.tell()
+    while True:
+        chunk = buff.read(chunk_size)
+        if not chunk:
+            break
+        sha.update(chunk)
+    buff.seek(init_pos, os.SEEK_SET)
+    return sha.hexdigest()
 
 
 def create_xyme_client(url: str,
