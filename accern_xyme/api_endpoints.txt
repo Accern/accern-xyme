@@ -1,6 +1,7 @@
-X - implemented
-U - unused
 D - deprecated
+P - partially
+U - unused
+X - implemented
 
 [X] DELETE /xyme/clean
 [ ] DELETE /xyme/delete_plot
@@ -16,7 +17,7 @@ D - deprecated
 [ ] GET /xyme/hooks
 [ ] GET /xyme/hpo_definition
 [X] GET /xyme/init
-[ ] GET /xyme/input_details
+[X] GET /xyme/input_details
 [X] GET /xyme/job_source
 [X] GET /xyme/maintenance
 [ ] GET /xyme/merged_file
@@ -73,7 +74,7 @@ D - deprecated
 [ ] POST /xyme/summary
 [ ] POST /xyme/ticker_summary
 [X] POST /xyme/unpause
-[ ] POST /xyme/upload
+[P] POST /xyme/upload
 [X] POST /xyme/username
 [ ] PUT /xyme/hide_source
 [X] PUT /xyme/lock_source

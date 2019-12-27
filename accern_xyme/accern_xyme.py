@@ -274,6 +274,28 @@ OverviewResponse = TypedDict('OverviewResponse', {
     "sessions": Optional[List[Dict[str, Any]]],
     "workers": Dict[str, List[str]],
 })
+InputDetailsResponse = TypedDict('InputDetailsResponse', {
+    "name": Optional[str],
+    "path": str,
+    "extension": Optional[str],
+    "inputId": str,
+    "lastByteOffset": Optional[int],
+    "size": Optional[int],
+    "progress": Optional[str],
+})
+UploadResponse = TypedDict('UploadResponse', {
+    "name": Optional[str],
+    "path": str,
+    "extension": Optional[str],
+    "inputId": str,
+    "lastByteOffset": Optional[int],
+    "size": Optional[int],
+    "progress": Optional[str],
+    "exists": bool,
+})
+
+
+FILE_UPLOAD_CHUNK_SIZE = 8 * 1024 * 1024  # 8MB
 
 
 def df_to_csv(df: pd.DataFrame) -> BytesIO:
@@ -1453,6 +1475,170 @@ class SourceHandle:
 
     def __str__(self) -> str:
         return repr(self)
+
+
+class InputHandle:
+    def __init__(self, client: XYMEClient, input_id: str) -> None:
+        if not input_id:
+            raise ValueError("input id is not set!")
+        self._client = client
+        self._input_id = input_id
+        self._name: Optional[str] = None
+        self._path: Optional[str] = None
+        self._ext: Optional[str] = None
+        self._progress: Optional[str] = None
+        self._last_byte_offset: Optional[int] = None
+        self._size: Optional[int] = None
+
+    def refresh(self) -> None:
+        self._name = None
+        self._path = None
+        self._ext = None
+        self._progress = None
+        self._last_byte_offset = None
+        self._size = None
+
+    def _maybe_refresh(self) -> None:
+        if self._client.is_auto_refresh():
+            self.refresh()
+
+    def _fetch_info(self) -> None:
+        res = cast(InputDetailsResponse, self._client._request_json(
+            METHOD_GET, "/input_details", {
+                "inputId": self._input_id,
+            }, capture_err=False))
+        self._input_id = res["inputId"]
+        self._name = res["name"]
+        self._path = res["path"]
+        self._ext = res["extension"]
+        self._last_byte_offset = res["lastByteOffset"]
+        self._size = res["size"]
+        self._progress = res["progress"]
+
+    def get_name(self) -> str:
+        self._maybe_refresh()
+        if self._name is None:
+            self._fetch_info()
+        assert self._name is not None
+        return self._name
+
+    def get_path(self) -> str:
+        self._maybe_refresh()
+        if self._path is None:
+            self._fetch_info()
+        assert self._path is not None
+        return self._path
+
+    def get_extension(self) -> str:
+        self._maybe_refresh()
+        if self._ext is None:
+            self._fetch_info()
+        assert self._ext is not None
+        return self._ext
+
+    def get_last_byte_offset(self) -> int:
+        self._maybe_refresh()
+        if self._last_byte_offset is None:
+            self._fetch_info()
+        assert self._last_byte_offset is not None
+        return self._last_byte_offset
+
+    def get_size(self) -> int:
+        self._maybe_refresh()
+        if self._size is None:
+            self._fetch_info()
+        assert self._size is not None
+        return self._size
+
+    def get_progress(self) -> str:
+        self._maybe_refresh()
+        if self._progress is None:
+            self._fetch_info()
+        assert self._progress is not None
+        return self._progress
+
+    @contextlib.contextmanager
+    def bulk_operation(self) -> Iterator[None]:
+        with self._client.bulk_operation():
+            self.refresh()
+            yield
+
+    def upload_partial(self, chunk_content: BytesIO) -> bool:
+        if self._last_byte_offset is None or self._name is None:
+            self._fetch_info()
+        res = cast(UploadResponse, self._client._request_json(
+            METHOD_FILE, "/upload", {
+                "inputId": self._input_id,
+                "chunkByteOffset": self._last_byte_offset,
+                "type": "input",
+                "name": self._name,
+            }, capture_err=True, files={
+                "file": chunk_content,
+            }))
+        self._input_id = res["inputId"]
+        self._name = res["name"]
+        self._path = res["path"]
+        self._ext = res["extension"]
+        self._last_byte_offset = res["lastByteOffset"]
+        self._size = res["size"]
+        self._progress = res["progress"]
+        return res["exists"]
+
+    def upload_full(self,
+                    file_content: BytesIO,
+                    file_name: Optional[str],
+                    progress_bar: Optional[IO[Any]] = None) -> int:
+        if file_name is not None:
+            self._name = file_name
+        if progress_bar is not None and hasattr(file_content, "seek"):
+            init_pos = 0
+            if hasattr(file_content, "tell"):
+                init_pos = file_content.tell()
+            total_size: Optional[int] = file_content.seek(0, os.SEEK_END)
+            file_content.seek(init_pos, os.SEEK_SET)
+        else:
+            total_size = None
+        cur_size = 0
+        while True:
+            if total_size is not None and progress_bar is not None:
+                print_progress_bar(
+                    cur_size / total_size, final=False, out=progress_bar)
+            buff = file_content.read(FILE_UPLOAD_CHUNK_SIZE)
+            if not buff:
+                break
+            cur_size += len(buff)
+            if self.upload_partial(BytesIO(buff)):
+                break
+        if total_size is not None and progress_bar is not None:
+            print_progress_bar(
+                cur_size / total_size, final=True, out=progress_bar)
+        return cur_size
+
+    def __repr__(self) -> str:
+        name = ""
+        if self._name is not None:
+            name = f" ({self._name})"
+        return f"{self.__class__.__name__}: {self._input_id}{name}"
+
+    def __str__(self) -> str:
+        return repr(self)
+
+
+def print_progress_bar(progress: float, final: bool, out: IO[Any]) -> None:
+    import shutil
+
+    cols, _ = shutil.get_terminal_size((80, 20))
+    pstr = f" {progress * 100.0:.2f}%"
+    max_len = len(" 100.00%")
+    cur_len = len(pstr)
+    if cur_len < max_len:
+        pstr = f"{' ' * (max_len - cur_len)}{pstr}"
+    border = "|"
+    end = "\n" if final else "\r"
+    bar = "█" * int(progress * cols)
+    full_len = len(border) * 2 + len(bar) + len(pstr) + len(end)
+    mid = ' ' * max(0, cols - full_len)
+    out.write(f"{border}{bar}{mid}{border}{pstr}{end}")
 
 
 def create_xyme_client(url: str,
