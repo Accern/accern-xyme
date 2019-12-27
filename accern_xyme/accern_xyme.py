@@ -22,7 +22,7 @@ import contextlib
 import collections
 from io import BytesIO, TextIOWrapper
 import pandas as pd
-from typing_extensions import TypedDict
+from typing_extensions import TypedDict, Literal
 import quick_server
 
 
@@ -68,6 +68,11 @@ UPLOAD_START = "start"
 FILTER_SYSTEM = "system"
 FILTER_USER = "user"
 FILTERS = [FILTER_SYSTEM, FILTER_USER]
+
+PLOT_PKL = "pkl"
+PLOT_CSV = "csv"
+PLOT_OUTPUT = "output"
+PLOT_META = "meta"
 
 
 VersionInfo = TypedDict('VersionInfo', {
@@ -320,6 +325,46 @@ InputsResponse = TypedDict('InputsResponse', {
     "systemFiles": List[InputItem],
     "userFiles": List[InputItem],
 })
+EmptyDict = TypedDict('EmptyDict', {})
+AggMetricPlot = TypedDict('AggMetricPlot', {
+    "inner": List[List[Union[str, float]]],
+    "plot": str,
+    "color": str,
+    "name": str,
+    "ticker": Optional[str],
+    "count": int,
+    "cat": bool,
+    "catValues": Optional[List[Union[str, float]]],
+})
+RangedPlot = TypedDict('RangedPlot', {
+    "xrange": List[str],
+    "yrange": List[float],
+    "lines": List[AggMetricPlot],
+    "kind": Literal["time"],
+})
+PlotCoords = List[Tuple[float, float]]
+CoordPlot = TypedDict('CoordPlot', {
+    "name": str,
+    "color": str,
+    "coords": PlotCoords,
+})
+RangedCoords = TypedDict('RangedCoords', {
+    "xaxis": str,
+    "yaxis": str,
+    "xrange": List[float],
+    "yrange": List[float],
+    "coords": List[CoordPlot],
+    "kind": Literal["coord"],
+})
+MetricResponse = TypedDict('MetricResponse', {
+    "lines": Union[EmptyDict, RangedCoords, RangedPlot],
+    "pollHint": float,
+})
+MetricListResponse = TypedDict('MetricListResponse', {
+    "metrics": List[Tuple[str, str]],
+    "selectedPlots": List[Tuple[str, str]],
+    "pollHint": float,
+})
 
 
 FILE_UPLOAD_CHUNK_SIZE = 8 * 1024 * 1024  # 8MB
@@ -352,6 +397,8 @@ def maybe_predictions_to_df(
 class AccessDenied(Exception):
     pass
 
+# *** AccessDenied ***
+
 
 class StdoutWrapper:
     def __init__(self, stdout: StdoutResponse) -> None:
@@ -367,6 +414,62 @@ class StdoutWrapper:
 
     def __repr__(self) -> str:
         return self.full_output()
+
+# *** StdoutWrapper ***
+
+
+class MetricWrapper:
+    pass
+
+# *** MetricWrapper ***
+
+
+class AggregatePlot:
+    def __init__(self, plot: AggMetricPlot) -> None:
+        self._id = plot["plot"]
+        self._name = plot["name"]
+        self._color = plot["color"]
+        self._ticker = plot["ticker"]
+        self._is_cat = plot["cat"]
+        self._cat_values = plot["catValues"]
+        self._count = plot["count"]
+        self._df = pd.DataFrame(
+            plot["inner"], columns=[
+                "date", "vmean", "vstddev", "q_low", "q_high", "vmin", "vmax"])
+
+# *** AggregatePlot ***
+
+
+class MetricPlot(MetricWrapper):
+    def __init__(self, plot: RangedPlot) -> None:
+        self._xrange = (plot["xrange"][0], plot["xrange"][-1])
+        self._yrange = (
+            pd.to_datetime(plot["yrange"][0]),
+            pd.to_datetime(plot["yrange"][-1]),
+        )
+        self._plots = [AggregatePlot(plot) for plot in plot["lines"]]
+
+# *** MetricPlot ***
+
+
+class CoordinatePlot:
+    def __init__(self, plot: CoordPlot) -> None:
+        self._name = plot["name"]
+        self._color = plot["color"]
+        self._df = pd.DataFrame(plot["coords"], columns=["x", "y"])
+
+# *** CoordinatePlot ***
+
+
+class MetricCoords(MetricWrapper):
+    def __init__(self, plot: RangedCoords) -> None:
+        self._xaxis = plot["xaxis"]
+        self._yaxis = plot["yaxis"]
+        self._xrange = (plot["xrange"][0], plot["xrange"][-1])
+        self._yrange = (plot["yrange"][0], plot["yrange"][-1])
+        self._plots = [CoordinatePlot(plot) for plot in plot["coords"]]
+
+# *** MetricCoords ***
 
 
 class XYMEClient:
@@ -870,6 +973,14 @@ class XYMEClient:
         with open(filename, "rb") as fbuff:
             return self.input_from_io(fbuff, fname, ext, progress_bar)
 
+    def input_from_df(self,
+                      df: pd.DataFrame,
+                      name: str,
+                      progress_bar: Optional[IO[Any]] = sys.stdout,
+                      ) -> 'InputHandle':
+        io_in = df_to_csv(df)
+        return self.input_from_io(io_in, name, "csv")
+
     def get_inputs(self,
                    filter_by: Optional[str] = None) -> Iterable['InputHandle']:
         if filter_by is not None and filter_by not in FILTERS:
@@ -899,6 +1010,8 @@ class XYMEClient:
             yield from respond(res["systemFiles"])
         if filter_by is None or filter_by == FILTER_USER:
             yield from respond(res["userFiles"])
+
+# *** XYMEClient ***
 
 
 class JobHandle:
@@ -1205,14 +1318,44 @@ class JobHandle:
     def inspect(self, ticker: Optional[str]) -> 'InspectHandle':
         return InspectHandle(self._client, self, ticker)
 
+    def get_metrics(self, kind: str = PLOT_PKL) -> List[Tuple[str, str]]:
+        res = cast(MetricListResponse, self._client._request_json(
+            METHOD_LONGPOST, "/metric_plots", {
+                "job": self._job_id,
+                "kind": kind,
+            }, capture_err=False))
+        return [(metric, group) for (metric, group) in res["metrics"]]
+
+    def get_metric(self,
+                   metric: str,
+                   ticker: Optional[str],
+                   kind: str = PLOT_PKL) -> Optional[MetricWrapper]:
+        res = cast(MetricResponse, self._client._request_json(
+            METHOD_LONGPOST, "/metric", {
+                "job": self._job_id,
+                "kind": kind,
+                "metric": metric,
+                "ticker": ticker,
+            }, capture_err=False))
+        plot = res["lines"]
+        if not plot:
+            return None
+        if plot["kind"] == "time":
+            return MetricPlot(plot)
+        if plot["kind"] == "coord":
+            return MetricCoords(plot)
+        raise ValueError(f"invalid plot kind: {plot['kind']}")
+
     def __repr__(self) -> str:
         name = ""
         if self._name is not None:
             name = f" ({self._name})"
-        return f"{self.__class__.__name__}: {self._job_id}{name}"
+        return f"{type(self).__name__}: {self._job_id}{name}"
 
     def __str__(self) -> str:
         return repr(self)
+
+# *** JobHandle ***
 
 
 InspectValue = Union['InspectPath', bool, int, float, str, None]
@@ -1288,6 +1431,8 @@ class InspectPath(collections.abc.Mapping):
 
     def __str__(self) -> str:
         return f"{self._clazz}: {self._summary}"
+
+# *** InspectPath ***
 
 
 class InspectHandle(InspectPath):
@@ -1412,6 +1557,8 @@ class InspectHandle(InspectPath):
                     res = ipath
         return res
 
+# *** InspectHandle ***
+
 
 class SourceHandle:
     def __init__(self,
@@ -1462,6 +1609,10 @@ class SourceHandle:
     def _ensure_multi_source(self) -> None:
         if not self.is_multi_source():
             raise ValueError("can only add source to multi source")
+
+    def _ensure_csv_source(self) -> None:
+        if not self.is_csv_source():
+            raise ValueError("can only set input for csv source")
 
     def get_schema(self) -> Dict[str, Any]:
         self._maybe_refresh()
@@ -1542,6 +1693,9 @@ class SourceHandle:
     def is_multi_source(self) -> bool:
         return self.get_source_type() == SOURCE_TYPE_MULTI
 
+    def is_csv_source(self) -> bool:
+        return self.get_source_type() == SOURCE_TYPE_CSV
+
     def set_immutable(self, is_immutable: bool) -> 'SourceHandle':
         res = self._client.set_immutable_raw(self, None, None, is_immutable)
         return res["new_source"]
@@ -1570,6 +1724,35 @@ class SourceHandle:
                     config["sources"] = []
                 config["sources"].append(source.get_source_id())
 
+    def set_input(self, input_obj: 'InputHandle') -> None:
+        with self.bulk_operation():
+            self._ensure_csv_source()
+            with self.update_schema() as schema_obj:
+                with input_obj.bulk_operation():
+                    if "config" not in schema_obj:
+                        schema_obj["config"] = {}
+                    config = schema_obj["config"]
+                    config["filename"] = \
+                        f"{input_obj.get_input_id()}" \
+                        f".{input_obj.get_extension()}"
+
+    def set_input_file(self,
+                       filename: str,
+                       progress_bar: Optional[IO[Any]] = sys.stdout) -> None:
+        with self.bulk_operation():
+            self._ensure_csv_source()
+            input_obj = self._client.input_from_file(filename, progress_bar)
+            self.set_input(input_obj)
+
+    def set_input_df(self,
+                     df: pd.DataFrame,
+                     name: str,
+                     progress_bar: Optional[IO[Any]] = sys.stdout) -> None:
+        with self.bulk_operation():
+            self._ensure_csv_source()
+            input_obj = self._client.input_from_df(df, name, progress_bar)
+            self.set_input(input_obj)
+
     def get_sources(self) -> Iterable['SourceHandle']:
         with self.bulk_operation():
             self._ensure_multi_source()
@@ -1585,10 +1768,12 @@ class SourceHandle:
         name = ""
         if self._name is not None:
             name = f" ({self._name})"
-        return f"{self.__class__.__name__}: {self._source_id}{name}"
+        return f"{type(self).__name__}: {self._source_id}{name}"
 
     def __str__(self) -> str:
         return repr(self)
+
+# *** SourceHandle ***
 
 
 class InputHandle:
@@ -1635,6 +1820,9 @@ class InputHandle:
         self._last_byte_offset = res["lastByteOffset"]
         self._size = res["size"]
         self._progress = res["progress"]
+
+    def get_input_id(self) -> str:
+        return self._input_id
 
     def get_name(self) -> str:
         self._maybe_refresh()
@@ -1743,10 +1931,12 @@ class InputHandle:
         name = ""
         if self._name is not None:
             name = f" ({self._name})"
-        return f"{self.__class__.__name__}: {self._input_id}{name}"
+        return f"{type(self).__name__}: {self._input_id}{name}"
 
     def __str__(self) -> str:
         return repr(self)
+
+# *** InputHandle ***
 
 
 def print_progress_bar(progress: float, final: bool, out: IO[Any]) -> None:
