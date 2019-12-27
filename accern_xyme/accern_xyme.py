@@ -26,9 +26,9 @@ from typing_extensions import TypedDict
 import quick_server
 
 
-__version__ = "0.0.4"
+__version__ = "0.0.5"
 # FIXME: async calls, documentation, auth, metric/plots/get accuracy,
-# summary – time it took etc., basically make old-tykhe obsolete
+# summary – time it took etc.
 
 
 API_VERSION = 0
@@ -848,16 +848,18 @@ class XYMEClient:
         size = io_in.seek(0, os.SEEK_END) - from_pos
         io_in.seek(from_pos, os.SEEK_SET)
         hash_str = get_file_hash(io_in)
-        res: InputHandle = self.create_input(name, ext, size, hash_str)
-        res.upload_full(io_in, name, progress_bar)
-        return res
+        with self.bulk_operation():
+            res: InputHandle = self.create_input(name, ext, size, hash_str)
+            if not res.is_complete():
+                res.upload_full(io_in, name, progress_bar)
+            return res
 
     def input_from_file(self,
                         filename: str,
                         progress_bar: Optional[IO[Any]] = sys.stdout,
                         ) -> 'InputHandle':
         if filename.endswith(f"{INPUT_CSV_EXT}{INPUT_ZIP_EXT}") \
-                    or filename.endswith(f"{INPUT_TSV_EXT}{INPUT_ZIP_EXT}"):
+                or filename.endswith(f"{INPUT_TSV_EXT}{INPUT_ZIP_EXT}"):
             filename = filename[:-len(INPUT_ZIP_EXT)]
         ext_pos = filename.rfind(".")
         if ext_pos >= 0:
@@ -1675,6 +1677,9 @@ class InputHandle:
             self._fetch_info()
         assert self._progress is not None
         return self._progress
+
+    def is_complete(self) -> bool:
+        return self.get_progress() == UPLOAD_DONE
 
     @contextlib.contextmanager
     def bulk_operation(self) -> Iterator[None]:
