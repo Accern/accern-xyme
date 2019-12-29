@@ -454,7 +454,9 @@ class MetricWrapper(collections.abc.Sequence):
     def is_coordinates(self) -> bool:
         raise NotImplementedError()
 
-    def plot(self, figsize: Optional[Tuple[int, int]] = None) -> None:
+    def plot(self,
+             figsize: Optional[Tuple[int, int]] = None,
+             use_ranges: bool = False) -> None:
         import matplotlib.pyplot as plt
         setup_matplotlib()
 
@@ -466,10 +468,20 @@ class MetricWrapper(collections.abc.Sequence):
             plt.title(self[0].get_name())
 
         plt.xlabel(self.get_xaxis())
-        # plt.ylim(self.get_yrange())
         if self.is_coordinates():
             plt.ylabel(self.get_yaxis())
-            # plt.xlim(self.get_xrange())
+
+        if use_ranges:
+
+            def is_proper_range(v_range: Tuple[Any, Any]) -> bool:
+                return v_range[0] != v_range[1]
+
+            x_range = self.get_xrange()
+            if is_proper_range(x_range):
+                plt.xlim(x_range)
+            y_range = self.get_yrange()
+            if is_proper_range(y_range):
+                plt.ylim(y_range)
 
         for plot in self:
             plot.plot(show=False)
@@ -581,11 +593,11 @@ class AggregatePlot:
 
 class MetricPlot(MetricWrapper):
     def __init__(self, plot: RangedPlot) -> None:
-        self._xrange = (plot["xrange"][0], plot["xrange"][-1])
-        self._yrange = (
-            pd.to_datetime(plot["yrange"][0]),
-            pd.to_datetime(plot["yrange"][-1]),
+        self._xrange = (
+            pd.to_datetime(plot["xrange"][0]),
+            pd.to_datetime(plot["xrange"][-1]),
         )
+        self._yrange = (plot["yrange"][0], plot["yrange"][-1])
         self._plots = [AggregatePlot(plot) for plot in plot["lines"]]
 
     @overload
