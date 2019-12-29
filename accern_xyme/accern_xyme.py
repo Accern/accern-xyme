@@ -27,8 +27,7 @@ import quick_server
 
 
 __version__ = "0.0.5"
-# FIXME: async calls, documentation, auth, metric/plots/get accuracy,
-# summary – time it took etc.
+# FIXME: async calls, documentation, auth, summary – time it took etc.
 
 
 API_VERSION = 0
