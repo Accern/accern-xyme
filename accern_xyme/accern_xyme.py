@@ -22,7 +22,7 @@ import contextlib
 import collections
 from io import BytesIO, TextIOWrapper
 import pandas as pd
-from typing_extensions import TypedDict, Literal
+from typing_extensions import TypedDict, Literal, overload
 import quick_server
 
 
@@ -394,6 +394,20 @@ def maybe_predictions_to_df(
     return predictions_to_df(preds)
 
 
+MPL_SETUP = False
+
+
+def setup_matplotlib() -> None:
+    global MPL_SETUP
+
+    if MPL_SETUP:
+        return
+    from pandas.plotting import register_matplotlib_converters
+
+    register_matplotlib_converters()
+    MPL_SETUP = True
+
+
 class AccessDenied(Exception):
     pass
 
@@ -409,6 +423,12 @@ class StdoutWrapper:
     def full_output(self) -> str:
         return "\n".join((line for _, line in self._lines))
 
+    def get_messages(self) -> Dict[str, List[Tuple[str, List[StdoutLine]]]]:
+        return self._messages
+
+    def get_exceptions(self) -> List[Tuple[str, List[StdoutLine]]]:
+        return self._exceptions
+
     def __str__(self) -> str:
         return self.full_output()
 
@@ -418,8 +438,45 @@ class StdoutWrapper:
 # *** StdoutWrapper ***
 
 
-class MetricWrapper:
-    pass
+class MetricWrapper(collections.abc.Sequence):
+    def get_xaxis(self) -> str:
+        raise NotImplementedError()
+
+    def get_yaxis(self) -> str:
+        raise NotImplementedError()
+
+    def get_xrange(self) -> Tuple[Any, Any]:
+        raise NotImplementedError()
+
+    def get_yrange(self) -> Tuple[Any, Any]:
+        raise NotImplementedError()
+
+    def is_coordinates(self) -> bool:
+        raise NotImplementedError()
+
+    def plot(self, figsize: Optional[Tuple[int, int]] = None) -> None:
+        import matplotlib.pyplot as plt
+        setup_matplotlib()
+
+        draw = False
+        if figsize is not None:
+            plt.figure(figsize=figsize)
+
+        if len(self) == 1:
+            plt.title(self[0].get_name())
+
+        plt.xlabel(self.get_xaxis())
+        # plt.ylim(self.get_yrange())
+        if self.is_coordinates():
+            plt.ylabel(self.get_yaxis())
+            # plt.xlim(self.get_xrange())
+
+        for plot in self:
+            plot.plot(show=False)
+            draw = True
+
+        if draw:
+            plt.show()
 
 # *** MetricWrapper ***
 
@@ -433,9 +490,91 @@ class AggregatePlot:
         self._is_cat = plot["cat"]
         self._cat_values = plot["catValues"]
         self._count = plot["count"]
-        self._df = pd.DataFrame(
-            plot["inner"], columns=[
-                "date", "vmean", "vstddev", "q_low", "q_high", "vmin", "vmax"])
+        cols = ["date", "vmean", "vstddev", "q_low", "q_high", "vmin", "vmax"]
+        df = pd.DataFrame(plot["inner"], columns=cols)
+        if not df.empty:
+            df["date"] = pd.to_datetime(df["date"])
+        self._df = df
+
+    def get_id(self) -> str:
+        return self._id
+
+    def get_name(self) -> str:
+        return self._name
+
+    def get_color(self) -> str:
+        return self._color
+
+    def get_ticker(self) -> Optional[str]:
+        return self._ticker
+
+    def is_categorical(self) -> bool:
+        return self._is_cat
+
+    def get_categorical_values(self) -> Optional[List[Union[str, float]]]:
+        return self._cat_values
+
+    def get_aggregate_count(self) -> int:
+        return self._count
+
+    def is_single(self) -> bool:
+        return self._count == 1
+
+    def get_single_df(self) -> pd.DataFrame:
+        if not self.is_single():
+            raise ValueError("metric is aggregate")
+        res = self._df[["date", "vmean"]].copy()
+        if self._is_cat:
+            assert self._cat_values is not None
+            mapping = {ix: val for (ix, val) in enumerate(self._cat_values)}
+            res["vmean"] = res["vmean"].map(mapping)
+        if self._ticker is None:
+            res = res.set_index(["date"])
+        else:
+            res["ticker"] = self._ticker
+            res = res.set_index(["ticker", "date"])
+        return res.rename(columns={"vmean": self._id})
+
+    def get_full_df(self) -> pd.DataFrame:
+        res = self._df.copy()
+        if self._ticker is None:
+            res = res.set_index(["date"])
+        else:
+            res["ticker"] = self._ticker
+            res = res.set_index(["ticker", "date"])
+        return res.rename(columns={
+            "vmean": f"{self._id}_mean",
+            "vstddev": f"{self._id}_stddev",
+            "q_low": f"{self._id}_q_low",
+            "q_high": f"{self._id}_q_high",
+            "vmin": f"{self._id}_min",
+            "vmax": f"{self._id}_max",
+        })
+
+    def plot(self, show: bool = True) -> None:
+        import matplotlib.pyplot as plt
+        setup_matplotlib()
+
+        df = self._df
+        if self.is_single():
+            plt.plot(
+                df["date"], df["vmean"], color=self._color, label=self._name)
+        else:
+            plt.plot(
+                df["date"], df["vmean"], color=self._color, label=self._name)
+            plt.fill_between(
+                df["date"], df["q_low"], df["q_high"], interpolate=True,
+                color=self._color, alpha=0.25)
+            plt.plot(df["date"], df["q_low"], color=self._color, alpha=0.25)
+            plt.plot(df["date"], df["q_high"], color=self._color, alpha=0.25)
+            plt.plot(
+                df["date"], df["vmin"], linestyle="dashed", color=self._color)
+            plt.plot(
+                df["date"], df["vmax"], linestyle="dashed", color=self._color)
+
+        if show:
+            plt.show()
+
 
 # *** AggregatePlot ***
 
@@ -449,6 +588,36 @@ class MetricPlot(MetricWrapper):
         )
         self._plots = [AggregatePlot(plot) for plot in plot["lines"]]
 
+    @overload
+    def __getitem__(self, index: int) -> AggregatePlot: ...
+
+    @overload
+    def __getitem__(self, index: slice) -> List[AggregatePlot]: ...
+
+    def __getitem__(self,
+                    index: Union[int, slice],
+                    ) -> Union[AggregatePlot, List[AggregatePlot]]:
+        return self._plots[index]
+
+    def __len__(self) -> int:
+        return len(self._plots)
+
+    def get_xaxis(self) -> str:
+        return "date"
+
+    def get_yaxis(self) -> str:
+        return "value"
+
+    def get_xrange(self) -> Tuple[Any, Any]:
+        return self._xrange
+
+    def get_yrange(self) -> Tuple[Any, Any]:
+        return self._yrange
+
+    def is_coordinates(self) -> bool:
+        return False
+
+
 # *** MetricPlot ***
 
 
@@ -457,6 +626,25 @@ class CoordinatePlot:
         self._name = plot["name"]
         self._color = plot["color"]
         self._df = pd.DataFrame(plot["coords"], columns=["x", "y"])
+
+    def get_name(self) -> str:
+        return self._name
+
+    def get_color(self) -> str:
+        return self._color
+
+    def get_df(self) -> pd.DataFrame:
+        return self._df.copy()
+
+    def plot(self, show: bool = True) -> None:
+        import matplotlib.pyplot as plt
+        setup_matplotlib()
+
+        df = self._df
+        plt.plot(df["x"], df["y"], color=self._color, label=self._name)
+
+        if show:
+            plt.show()
 
 # *** CoordinatePlot ***
 
@@ -468,6 +656,35 @@ class MetricCoords(MetricWrapper):
         self._xrange = (plot["xrange"][0], plot["xrange"][-1])
         self._yrange = (plot["yrange"][0], plot["yrange"][-1])
         self._plots = [CoordinatePlot(plot) for plot in plot["coords"]]
+
+    @overload
+    def __getitem__(self, index: int) -> CoordinatePlot: ...
+
+    @overload
+    def __getitem__(self, index: slice) -> List[CoordinatePlot]: ...
+
+    def __getitem__(self,
+                    index: Union[int, slice],
+                    ) -> Union[CoordinatePlot, List[CoordinatePlot]]:
+        return self._plots[index]
+
+    def __len__(self) -> int:
+        return len(self._plots)
+
+    def get_xaxis(self) -> str:
+        return self._xaxis
+
+    def get_yaxis(self) -> str:
+        return self._yaxis
+
+    def get_xrange(self) -> Tuple[Any, Any]:
+        return self._xrange
+
+    def get_yrange(self) -> Tuple[Any, Any]:
+        return self._yrange
+
+    def is_coordinates(self) -> bool:
+        return True
 
 # *** MetricCoords ***
 
