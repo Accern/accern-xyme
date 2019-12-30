@@ -34,13 +34,13 @@ X - implemented
 [ ] GET /xyme/strategies
 [ ] GET /xyme/suggestion
 [ ] GET /xyme/tickers
-[ ] GET /xyme/user_files
+[X] GET /xyme/user_files
 [X] GET /xyme/version
 [ ] GET /xyme/xy_definition
 [X] POST /xyme/afterupdate
 [ ] POST /xyme/alpha
 [ ] POST /xyme/backtest
-[ ] POST /xyme/create_input_id
+[X] POST /xyme/create_input_id
 [X] POST /xyme/create_job_id
 [X] POST /xyme/create_source_id
 [ ] POST /xyme/data_plots
@@ -55,8 +55,8 @@ X - implemented
 [X] POST /xyme/jobs
 [X] POST /xyme/login
 [X] POST /xyme/logout
-[ ] POST /xyme/metric
-[ ] POST /xyme/metric_plots
+[X] POST /xyme/metric
+[X] POST /xyme/metric_plots
 [ ] POST /xyme/model_param
 [ ] POST /xyme/model_schema
 [X] POST /xyme/pause
