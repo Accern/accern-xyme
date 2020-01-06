@@ -63,15 +63,15 @@ X - implemented
 [D] POST /xyme/pause_deploy
 [ ] POST /xyme/pdp
 [ ] POST /xyme/predictions
-[ ] POST /xyme/preview
+[P] POST /xyme/preview
 [ ] POST /xyme/redisout
 [ ] POST /xyme/resume
 [X] POST /xyme/share
 [ ] POST /xyme/source_data
 [X] POST /xyme/start
 [X] POST /xyme/status
-[ ] POST /xyme/stdout
-[ ] POST /xyme/summary
+[X] POST /xyme/stdout
+[X] POST /xyme/summary
 [ ] POST /xyme/ticker_summary
 [X] POST /xyme/unpause
 [P] POST /xyme/upload

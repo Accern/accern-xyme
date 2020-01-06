@@ -26,7 +26,7 @@ from typing_extensions import TypedDict, Literal, overload
 import quick_server
 
 
-__version__ = "0.0.5"
+__version__ = "0.0.6"
 # FIXME: async calls, documentation, auth, summary – time it took etc.
 
 
@@ -363,6 +363,59 @@ MetricListResponse = TypedDict('MetricListResponse', {
     "metrics": List[Tuple[str, str]],
     "selectedPlots": List[Tuple[str, str]],
     "pollHint": float,
+})
+SummaryResponse = TypedDict('SummaryResponse', {
+    "messages": Dict[str, List[Tuple[str, List[StdoutLine]]]],
+    "exceptions": List[Tuple[str, List[StdoutLine]]],
+    "lastEvent": Optional[Tuple[str, str, str]],
+    "rows": Optional[int],
+    "rowsTotal": Optional[int],
+    "features": Optional[Dict[str, int]],
+    "droppedFeatures": Optional[Dict[str, int]],
+    "dataStart": Optional[str],
+    "dataHigh": Optional[str],
+    "dataEnd": Optional[str],
+    "pollHint": float,
+})
+SummaryInfo = TypedDict('SummaryInfo', {
+    "stdout": 'StdoutWrapper',
+    "last_event": Optional[Tuple[str, str, str]],
+    "rows": Optional[int],
+    "rows_total": Optional[int],
+    "features": Optional[Dict[str, int]],
+    "dropped_features": Optional[Dict[str, int]],
+    "data_start": Optional[pd.Timestamp],
+    "data_high": Optional[pd.Timestamp],
+    "data_end": Optional[pd.Timestamp],
+})
+JobStdoutResponse = TypedDict('JobStdoutResponse', {
+    "lines": List[StdoutLine],
+    "pollHint": float,
+})
+NotesResponse = TypedDict('NotesResponse', {
+    "usage": Dict[str, bool],
+    "roles": Dict[str, str],
+    "rolesRenamed": Dict[str, str],
+    "dummyColumns": List[str],
+    "stats": Dict[str, Dict[str, Any]],
+    "isRunnable": bool,
+    "suggestions": Dict[str, List[Dict[str, str]]],
+    "isPreview": bool,
+    "error": bool,
+})
+NotesInfo = TypedDict('NotesInfo', {
+    "usage": Dict[str, bool],
+    "roles": Dict[str, str],
+    "roles_renamed": Dict[str, str],
+    "dummy_columns": List[str],
+    "stats": Dict[str, Dict[str, Any]],
+    "is_runnable": bool,
+    "suggestions": Dict[str, List[Dict[str, str]]],
+    "is_preview": bool,
+    "error": bool,
+})
+PreviewNotesResponse = TypedDict('PreviewNotesResponse', {
+    "notes": NotesResponse,
 })
 
 
@@ -1079,7 +1132,7 @@ class XYMEClient:
         return res["multi_source"]
 
     def get_source(self, source_id: str) -> 'SourceHandle':
-        return SourceHandle(self, source_id, None)
+        return SourceHandle(self, source_id, None, infer_type=True)
 
     def set_immutable_raw(self,
                           source: 'SourceHandle',
@@ -1160,7 +1213,7 @@ class XYMEClient:
                 "name": name,
                 "extension": ext,
                 "size": size,
-                "hash": hash_str,
+                "hash": None,  # FIXME: use hash_str,
             }, capture_err=False))
         return InputHandle(self, res["inputId"], name=name, ext=ext, size=size)
 
@@ -1360,10 +1413,38 @@ class JobHandle:
             self.refresh()
             yield
 
+    def get_notes(self, force: bool) -> NotesInfo:
+        res = cast(PreviewNotesResponse, self._client._request_json(
+            METHOD_LONGPOST, "/preview", {
+                "job": self._job_id,
+                "view": "summary",
+                "force": force,
+                "schema": None,
+                "batch": None,
+            }, capture_err=False))
+        notes = res["notes"]
+        return {
+            "usage": notes.get("usage", {}),
+            "roles": notes.get("roles", {}),
+            "roles_renamed": notes.get("rolesRenamed", {}),
+            "dummy_columns": notes.get("dummyColumns", []),
+            "stats": notes.get("stats", {}),
+            "is_runnable": notes.get("isRunnable", False),
+            "suggestions": notes.get("suggestions", {}),
+            "is_preview": notes.get("isPreview", True),
+            "error": notes.get("error", True),
+        }
+
+    def can_start(self, force: bool) -> bool:
+        notes = self.get_notes(force)
+        return notes["is_runnable"] and not notes["error"]
+
     def start(self,
               user: Optional[str] = None,
               company: Optional[str] = None,
               nowait: Optional[bool] = None) -> JobStartResponse:
+        if not self.can_start(force=False):
+            raise ValueError("Cannot start job. Missing data or target?")
         res = self._client.start_job(
             self._job_id, user=user, company=company, nowait=nowait)
         self.refresh()
@@ -1573,6 +1654,57 @@ class JobHandle:
         if plot["kind"] == "coord":
             return MetricCoords(plot)
         raise ValueError(f"invalid plot kind: {plot['kind']}")
+
+    def _raw_stdout(self,
+                    ticker: Optional[str],
+                    do_filter: bool,
+                    query_str: Optional[str],
+                    pos: Optional[int],
+                    context: int,
+                    before: Optional[int],
+                    after: Optional[int]) -> List[StdoutLine]:
+        res = cast(JobStdoutResponse, self._client._request_json(
+            METHOD_POST, "/summary", {
+                "job": self._job_id,
+                "ticker": ticker,
+                "filter": do_filter,
+                "query": query_str,
+                "pos": pos,
+                "context": context,
+                "before": before,
+                "after": after,
+            }, capture_err=False))
+        return res["lines"]
+
+    def get_summary(self, ticker: Optional[str]) -> SummaryInfo:
+        res = cast(SummaryResponse, self._client._request_json(
+            METHOD_LONGPOST, "/summary", {
+                "job": self._job_id,
+                "ticker": ticker,
+            }, capture_err=False))
+        messages = res.get("messages")
+        exceptions = res.get("exceptions")
+        stdout = StdoutWrapper({
+            "messages": {} if messages is None else messages,
+            "exceptions": [] if exceptions is None else exceptions,
+            "lines": [],
+        })
+        data_start = res.get("dataStart")
+        data_high = res.get("dataHigh")
+        data_end = res.get("dataEnd")
+        return {
+            "stdout": stdout,
+            "last_event": res.get("lastEvent"),
+            "rows": res.get("rows"),
+            "rows_total": res.get("rowsTotal"),
+            "features": res.get("features"),
+            "dropped_features": res.get("droppedFeatures"),
+            "data_start":
+                None if data_start is None else pd.Timestamp(data_start),
+            "data_high":
+                None if data_high is None else pd.Timestamp(data_high),
+            "data_end": None if data_end is None else pd.Timestamp(data_end),
+        }
 
     def __repr__(self) -> str:
         name = ""
@@ -2106,6 +2238,8 @@ class InputHandle:
     def upload_partial(self, chunk_content: IO[bytes]) -> bool:
         if self._last_byte_offset is None or self._name is None:
             self._fetch_info()
+            if self._last_byte_offset is None:
+                self._last_byte_offset = 0
         res = cast(UploadResponse, self._client._request_json(
             METHOD_FILE, "/upload", {
                 "inputId": self._input_id,
