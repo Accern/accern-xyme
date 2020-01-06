@@ -388,6 +388,10 @@ SummaryInfo = TypedDict('SummaryInfo', {
     "data_high": Optional[pd.Timestamp],
     "data_end": Optional[pd.Timestamp],
 })
+JobStdoutResponse = TypedDict('JobStdoutResponse', {
+    "lines": List[StdoutLine],
+    "pollHint": float,
+})
 
 
 FILE_UPLOAD_CHUNK_SIZE = 8 * 1024 * 1024  # 8MB
@@ -1597,6 +1601,27 @@ class JobHandle:
         if plot["kind"] == "coord":
             return MetricCoords(plot)
         raise ValueError(f"invalid plot kind: {plot['kind']}")
+
+    def _raw_stdout(self,
+                    ticker: Optional[str],
+                    do_filter: bool,
+                    query_str: Optional[str],
+                    pos: Optional[int],
+                    context: int,
+                    before: Optional[int],
+                    after: Optional[int]) -> List[StdoutLine]:
+        res = cast(JobStdoutResponse, self._client._request_json(
+            METHOD_POST, "/summary", {
+                "job": self._job_id,
+                "ticker": ticker,
+                "filter": do_filter,
+                "query": query_str,
+                "pos": pos,
+                "context": context,
+                "before": before,
+                "after": after,
+            }, capture_err=False))
+        return res["lines"]
 
     def get_summary(self, ticker: Optional[str]) -> SummaryInfo:
         res = cast(SummaryResponse, self._client._request_json(

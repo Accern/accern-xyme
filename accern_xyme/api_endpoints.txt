@@ -70,7 +70,7 @@ X - implemented
 [ ] POST /xyme/source_data
 [X] POST /xyme/start
 [X] POST /xyme/status
-[ ] POST /xyme/stdout
+[X] POST /xyme/stdout
 [X] POST /xyme/summary
 [ ] POST /xyme/ticker_summary
 [X] POST /xyme/unpause
