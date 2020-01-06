@@ -364,6 +364,30 @@ MetricListResponse = TypedDict('MetricListResponse', {
     "selectedPlots": List[Tuple[str, str]],
     "pollHint": float,
 })
+SummaryResponse = TypedDict('SummaryResponse', {
+    "messages": Dict[str, List[Tuple[str, List[StdoutLine]]]],
+    "exceptions": List[Tuple[str, List[StdoutLine]]],
+    "lastEvent": Optional[Tuple[str, str, str]],
+    "rows": Optional[int],
+    "rowsTotal": Optional[int],
+    "features": Optional[Dict[str, int]],
+    "droppedFeatures": Optional[Dict[str, int]],
+    "dataStart": Optional[str],
+    "dataHigh": Optional[str],
+    "dataEnd": Optional[str],
+    "pollHint": float,
+})
+SummaryInfo = TypedDict('SummaryInfo', {
+    "stdout": 'StdoutWrapper',
+    "last_event": Optional[Tuple[str, str, str]],
+    "rows": Optional[int],
+    "rows_total": Optional[int],
+    "features": Optional[Dict[str, int]],
+    "dropped_features": Optional[Dict[str, int]],
+    "data_start": Optional[pd.Timestamp],
+    "data_high": Optional[pd.Timestamp],
+    "data_end": Optional[pd.Timestamp],
+})
 
 
 FILE_UPLOAD_CHUNK_SIZE = 8 * 1024 * 1024  # 8MB
@@ -1573,6 +1597,36 @@ class JobHandle:
         if plot["kind"] == "coord":
             return MetricCoords(plot)
         raise ValueError(f"invalid plot kind: {plot['kind']}")
+
+    def get_summary(self, ticker: Optional[str]) -> SummaryInfo:
+        res = cast(SummaryResponse, self._client._request_json(
+            METHOD_LONGPOST, "/summary", {
+                "job": self._job_id,
+                "ticker": ticker,
+            }, capture_err=False))
+        messages = res.get("messages")
+        exceptions = res.get("exceptions")
+        stdout = StdoutWrapper({
+            "messages": {} if messages is None else messages,
+            "exceptions": [] if exceptions is None else exceptions,
+            "lines": [],
+        })
+        data_start = res.get("dataStart")
+        data_high = res.get("dataHigh")
+        data_end = res.get("dataEnd")
+        return {
+            "stdout": stdout,
+            "last_event": res.get("lastEvent"),
+            "rows": res.get("rows"),
+            "rows_total": res.get("rowsTotal"),
+            "features": res.get("features"),
+            "dropped_features": res.get("droppedFeatures"),
+            "data_start":
+                None if data_start is None else pd.Timestamp(data_start),
+            "data_high":
+                None if data_high is None else pd.Timestamp(data_high),
+            "data_end": None if data_end is None else pd.Timestamp(data_end),
+        }
 
     def __repr__(self) -> str:
         name = ""
