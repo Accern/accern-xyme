@@ -1522,7 +1522,7 @@ class JobHandle:
         res = cast(JobRenameResponse, self._client._request_json(
             METHOD_PUT, "/rename", {
                 "job": self._job_id,
-                "name": name,
+                "newJobName": name,
             }, capture_err=True))
         self._name = res["name"]
         self._path = res["path"]
