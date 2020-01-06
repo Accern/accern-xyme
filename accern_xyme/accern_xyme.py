@@ -26,7 +26,7 @@ from typing_extensions import TypedDict, Literal, overload
 import quick_server
 
 
-__version__ = "0.0.6"
+__version__ = "0.0.7"
 # FIXME: async calls, documentation, auth, summary – time it took etc.
 
 
@@ -1522,7 +1522,7 @@ class JobHandle:
         res = cast(JobRenameResponse, self._client._request_json(
             METHOD_PUT, "/rename", {
                 "job": self._job_id,
-                "name": name,
+                "newJobName": name,
             }, capture_err=True))
         self._name = res["name"]
         self._path = res["path"]
