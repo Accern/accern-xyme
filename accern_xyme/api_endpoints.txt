@@ -63,7 +63,7 @@ X - implemented
 [D] POST /xyme/pause_deploy
 [ ] POST /xyme/pdp
 [ ] POST /xyme/predictions
-[ ] POST /xyme/preview
+[P] POST /xyme/preview
 [ ] POST /xyme/redisout
 [ ] POST /xyme/resume
 [X] POST /xyme/share
