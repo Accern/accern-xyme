@@ -26,7 +26,7 @@ from typing_extensions import TypedDict, Literal, overload
 import quick_server
 
 
-__version__ = "0.0.7"
+__version__ = "0.0.8"
 # FIXME: async calls, documentation, auth, summary – time it took etc.
 
 
@@ -1213,7 +1213,7 @@ class XYMEClient:
                 "name": name,
                 "extension": ext,
                 "size": size,
-                "hash": None,  # FIXME: use hash_str,
+                "hash": hash_str,
             }, capture_err=False))
         return InputHandle(self, res["inputId"], name=name, ext=ext, size=size)
 
