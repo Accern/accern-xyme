@@ -1546,19 +1546,52 @@ class JobHandle:
 
     def dynamic_predict(self,
                         method: str,
-                        fbuff: IO[bytes]) -> DynamicPredictionResponse:
-        res = cast(DynamicPredictionResponse, self._client._request_json(
-            METHOD_FILE, "/dynamic_predict", {
-                "job": self._job_id,
-                "method": method,
-            }, capture_err=True, files={"file": fbuff}))
+                        fbuff: Optional[IO[bytes]],
+                        source: Optional[SourceHandle],
+                        ) -> DynamicPredictionResponse:
+        if fbuff is not None:
+            res = cast(DynamicPredictionResponse, self._client._request_json(
+                METHOD_FILE, "/dynamic_predict", {
+                    "job": self._job_id,
+                    "method": method,
+                }, capture_err=True, files={"file": fbuff}))
+        elif source is not None:
+            if LEGACY_XYME:
+                raise ValueError("the XYME version does not "
+                                 "support dynamic predict sources")
+            res = cast(DynamicPredictionResponse, self._client._request_json(
+                METHOD_POST, "/dynamic_predict", {
+                    "job": self._job_id,
+                    "method": method,
+                    "multiSourceId": source.get_source_id(),
+                }, capture_err=True))
+        else:
+            raise ValueError("one of fbuff or source must not be None")
         return res
+
+    def predict_source(self,
+                       source: 'SourceHandle',
+                       ) -> Tuple[Optional[pd.DataFrame], StdoutWrapper]:
+        res = self.dynamic_predict("dyn_pred", fbuff=None, source=source)
+        return (
+            maybe_predictions_to_df(res["predictions"]),
+            StdoutWrapper(res["stdout"]),
+        )
+
+    def predict_proba_source(self,
+                             source: 'SourceHandle',
+                             ) -> Tuple[Optional[pd.DataFrame], StdoutWrapper]:
+        res = self.dynamic_predict("dyn_prob", fbuff=None, source=source)
+        return (
+            maybe_predictions_to_df(res["predictions"]),
+            StdoutWrapper(res["stdout"]),
+        )
 
     def predict(self,
                 df: pd.DataFrame,
                 ) -> Tuple[Optional[pd.DataFrame], StdoutWrapper]:
         buff = df_to_csv(df)
-        res = self.dynamic_predict("dyn_pred", buff)
+        res = self.dynamic_predict("dyn_pred", fbuff=buff, source=None)
         return (
             maybe_predictions_to_df(res["predictions"]),
             StdoutWrapper(res["stdout"]),
@@ -1568,7 +1601,7 @@ class JobHandle:
                       df: pd.DataFrame,
                       ) -> Tuple[Optional[pd.DataFrame], StdoutWrapper]:
         buff = df_to_csv(df)
-        res = self.dynamic_predict("dyn_prob", buff)
+        res = self.dynamic_predict("dyn_prob", fbuff=buff, source=None)
         return (
             maybe_predictions_to_df(res["predictions"]),
             StdoutWrapper(res["stdout"]),
@@ -1578,7 +1611,7 @@ class JobHandle:
                      csv: str,
                      ) -> Tuple[Optional[pd.DataFrame], StdoutWrapper]:
         with open(csv, "rb") as f_in:
-            res = self.dynamic_predict("dyn_pred", f_in)
+            res = self.dynamic_predict("dyn_pred", fbuff=f_in, source=None)
             return (
                 maybe_predictions_to_df(res["predictions"]),
                 StdoutWrapper(res["stdout"]),
@@ -1588,7 +1621,7 @@ class JobHandle:
                            csv: str,
                            ) -> Tuple[Optional[pd.DataFrame], StdoutWrapper]:
         with open(csv, "rb") as f_in:
-            res = self.dynamic_predict("dyn_prob", f_in)
+            res = self.dynamic_predict("dyn_prob", fbuff=f_in, source=None)
             return (
                 maybe_predictions_to_df(res["predictions"]),
                 StdoutWrapper(res["stdout"]),
