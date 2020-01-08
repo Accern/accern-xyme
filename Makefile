@@ -9,7 +9,6 @@ help:
 	@echo "lint-pylint	run linter check using pylint standard"
 	@echo "lint-flake8  run flake8 checker to deteck missing trailing comma"
 	@echo "lint-type-check	run type check"
-	@echo "pytest	run all test with pytest"
 
 lint-comment:
 	! find . \( -name '*.py' -o -name '*.pyi' \) -and -not -path './venv/*' \
@@ -49,7 +48,3 @@ lint-type-check:
 
 lint-flake8:
 	flake8 ./ --verbose --select C812 --exclude venv --show-source
-
-pytest:
-	export USER_FILEPATH=./userdata; \
-	pytest -xvv $(FILE)
