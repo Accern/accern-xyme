@@ -48,12 +48,6 @@ jobs:
           key: v1-dependencies-{{ checksum "requirements.lint.txt" }}-{{ checksum "requirements.txt" }}
 
       - run:
-          name: Git Check (tests may not alter any git visible files)
-          command: |
-            git status -sb --porcelain
-            [ -z "$(git status --porcelain)" ]
-
-      - run:
           name: Lint Code (use uppercase TODO, XXX, FIXME, NOTE and explain nopep8)
           command: |
             make lint-comment
