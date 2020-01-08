@@ -1473,8 +1473,8 @@ class JobHandle:
                 self.refresh()
             yield do_refresh
 
-    def get_notes(self, force: bool) -> NotesInfo:
-        res = cast(PreviewNotesResponse, self._client._request_json(
+    def get_notes(self, force: bool) -> Optional[NotesInfo]:
+        res = cast(Optional[PreviewNotesResponse], self._client._request_json(
             METHOD_LONGPOST, "/preview", {
                 "job": self._job_id,
                 "view": "summary",
@@ -1483,6 +1483,8 @@ class JobHandle:
                 "batch": None,
             }, capture_err=False))
         notes = res["notes"]
+        if notes is None:
+            return None
         return {
             "usage": notes.get("usage", {}),
             "roles": notes.get("roles", {}),
@@ -1497,6 +1499,8 @@ class JobHandle:
 
     def can_start(self, force: bool) -> bool:
         notes = self.get_notes(force)
+        if notes is None:
+            return True
         return notes["is_runnable"] and not notes["error"]
 
     def start(self,
