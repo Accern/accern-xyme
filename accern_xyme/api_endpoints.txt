@@ -66,6 +66,7 @@ X - implemented
 [P] POST /xyme/preview
 [ ] POST /xyme/redisout
 [ ] POST /xyme/resume
+[X] POST /xyme/segments
 [X] POST /xyme/share
 [ ] POST /xyme/source_data
 [X] POST /xyme/start

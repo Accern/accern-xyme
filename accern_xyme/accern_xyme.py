@@ -429,10 +429,18 @@ BacktestResponse = TypedDict('BacktestResponse', {
     "errMessage": Optional[str],
     "pollHint": float,
 })
+SegmentResponse = TypedDict('SegmentResponse', {
+    "segments": List[Tuple[int, Optional[str], Optional[str]]],
+    "pollHint": float,
+})
 
 
 FILE_UPLOAD_CHUNK_SIZE = 8 * 1024 * 1024  # 8MB
 FILE_HASH_CHUNK_SIZE = FILE_UPLOAD_CHUNK_SIZE
+
+
+def maybe_timestamp(timestamp: Optional[str]) -> Optional[pd.Timestamp]:
+    return None if timestamp is None else pd.Timestamp(timestamp)
 
 
 def df_to_csv(df: pd.DataFrame) -> BytesIO:
@@ -1690,7 +1698,7 @@ class JobHandle:
             source_type, name, self, None, None)
         return res["source"]
 
-    def get_schema_sources(self) -> List['SourceHandle']:
+    def get_sources(self) -> List['SourceHandle']:
         schema_obj = self.get_schema()
         x_obj = schema_obj.get("X", {})
         res = []
@@ -1705,7 +1713,33 @@ class JobHandle:
                     self._client, cur_source_ix, None, infer_type=True))
         return res
 
-    def get_source(self, ticker: Optional[str] = None) -> 'SourceHandle':
+    def get_fast_segments(self) -> List[
+            Tuple[Optional[pd.Timestamp], Optional[pd.Timestamp]]]:
+        schema_obj = self.get_schema()
+        x_obj = schema_obj.get("X", {})
+        res: List[Tuple[Optional[pd.Timestamp], Optional[pd.Timestamp]]] = \
+            [(None, None)]
+        res.extend((
+            maybe_timestamp(progress.get("start_time")),
+            maybe_timestamp(progress.get("end_time")),
+        ) for progress in x_obj.get("source_progress", []))
+        return res
+
+    def get_segments(self,
+                     ticker: Optional[str] = None,
+                     ) -> List[Tuple[
+                         int, Optional[pd.Timestamp], Optional[pd.Timestamp]]]:
+        res = cast(SegmentResponse, self._client._request_json(
+            METHOD_LONGPOST, "/segments", {
+                "job": self._job_id,
+                "ticker": ticker,
+            }, capture_err=False))
+        return [
+            (rows, maybe_timestamp(start_time), maybe_timestamp(end_time))
+            for (rows, start_time, end_time) in res.get("segments", [])
+        ]
+
+    def get_main_source(self, ticker: Optional[str] = None) -> 'SourceHandle':
         self._maybe_refresh()
         if self._source is not None:
             return self._source
@@ -1717,6 +1751,29 @@ class JobHandle:
         self._source = SourceHandle(
             self._client, res["sourceId"], None, infer_type=True)
         return self._source
+
+    def set_main_source(self, source: 'SourceHandle') -> None:
+        with self.update_schema() as obj:
+            x_obj = obj.get("X", {})
+            x_obj["source"] = source.get_source_id()
+            obj["X"] = x_obj
+
+    def append_source(self,
+                      source: 'SourceHandle',
+                      start_time: Optional[Union[str, pd.Timestamp]],
+                      end_time: Optional[Union[str, pd.Timestamp]],
+                      change_set: Optional[Dict[str, Any]] = None) -> None:
+        with self.update_schema() as obj:
+            x_obj = obj.get("X", {})
+            progress = x_obj.get("source_progress", [])
+            progress.append({
+                "source": source.get_source_id(),
+                "start_time": None if start_time is None else f"{start_time}",
+                "end_time": None if end_time is None else f"{end_time}",
+                "change_set": {} if change_set is None else change_set,
+            })
+            x_obj["source_progress"] = progress
+            obj["X"] = x_obj
 
     def inspect(self, ticker: Optional[str]) -> 'InspectHandle':
         return InspectHandle(self._client, self, ticker)
@@ -1793,11 +1850,9 @@ class JobHandle:
             "rows_total": res.get("rowsTotal"),
             "features": res.get("features"),
             "dropped_features": res.get("droppedFeatures"),
-            "data_start":
-                None if data_start is None else pd.Timestamp(data_start),
-            "data_high":
-                None if data_high is None else pd.Timestamp(data_high),
-            "data_end": None if data_end is None else pd.Timestamp(data_end),
+            "data_start": maybe_timestamp(data_start),
+            "data_high": maybe_timestamp(data_high),
+            "data_end": maybe_timestamp(data_end),
         }
 
     def get_backtest(self,
