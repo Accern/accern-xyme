@@ -1162,10 +1162,13 @@ class XYMEClient:
             self,
             filename: str,
             name_multi: Optional[str],
+            ticker_column: str,
+            date_column: Optional[str],
             progress_bar: Optional[IO[Any]] = sys.stdout) -> 'SourceHandle':
         with self.bulk_operation():
             multi = self.create_multi_source(name_multi)
-            multi.add_new_source_file(filename, progress_bar)
+            multi.add_new_source_file(
+                filename, ticker_column, date_column, progress_bar)
             return multi
 
     def create_multi_source_df(
@@ -1173,10 +1176,13 @@ class XYMEClient:
             df: pd.DataFrame,
             name_csv: str,
             name_multi: Optional[str],
+            ticker_column: str,
+            date_column: Optional[str],
             progress_bar: Optional[IO[Any]] = sys.stdout) -> 'SourceHandle':
         with self.bulk_operation():
             multi = self.create_multi_source(name_multi)
-            multi.add_new_source_df(df, name_csv, progress_bar)
+            multi.add_new_source_df(
+                df, name_csv, ticker_column, date_column, progress_bar)
             return multi
 
     def get_source(self, source_id: str) -> 'SourceHandle':
@@ -2251,22 +2257,28 @@ class SourceHandle:
 
     def add_new_source_file(self,
                             filename: str,
+                            ticker_column: str,
+                            date_column: Optional[str],
                             progress_bar: Optional[IO[Any]] = sys.stdout,
                             ) -> 'SourceHandle':
         with self.bulk_operation():
             source = self.add_new_source(
                 SOURCE_TYPE_CSV, os.path.basename(filename))
-            source.set_input_file(filename, progress_bar)
+            source.set_input_file(
+                filename, ticker_column, date_column, progress_bar)
             return source
 
     def add_new_source_df(self,
                           df: pd.DataFrame,
                           name: str,
+                          ticker_column: str,
+                          date_column: Optional[str],
                           progress_bar: Optional[IO[Any]] = sys.stdout,
                           ) -> 'SourceHandle':
         with self.bulk_operation():
             source = self.add_new_source(SOURCE_TYPE_CSV, name)
-            source.set_input_df(df, name, progress_bar)
+            source.set_input_df(
+                df, name, ticker_column, date_column, progress_bar)
             return source
 
     def add_source(self, source: 'SourceHandle') -> None:
@@ -2280,7 +2292,10 @@ class SourceHandle:
                     config["sources"] = []
                 config["sources"].append(source.get_source_id())
 
-    def set_input(self, input_obj: 'InputHandle') -> None:
+    def set_input(self,
+                  input_obj: 'InputHandle',
+                  ticker_column: Optional[str],
+                  date_column: Optional[str]) -> None:
         with self.bulk_operation():
             self._ensure_csv_source()
             with self.update_schema() as schema_obj:
@@ -2291,23 +2306,31 @@ class SourceHandle:
                     config["filename"] = \
                         f"{input_obj.get_input_id()}" \
                         f".{input_obj.get_extension()}"
+                    if ticker_column is not None:
+                        config["ticker"] = ticker_column
+                    if date_column is not None:
+                        config["date"] = date_column
 
     def set_input_file(self,
                        filename: str,
+                       ticker_column: str,
+                       date_column: Optional[str],
                        progress_bar: Optional[IO[Any]] = sys.stdout) -> None:
         with self.bulk_operation():
             self._ensure_csv_source()
             input_obj = self._client.input_from_file(filename, progress_bar)
-            self.set_input(input_obj)
+            self.set_input(input_obj, ticker_column, date_column)
 
     def set_input_df(self,
                      df: pd.DataFrame,
                      name: str,
+                     ticker_column: str,
+                     date_column: Optional[str],
                      progress_bar: Optional[IO[Any]] = sys.stdout) -> None:
         with self.bulk_operation():
             self._ensure_csv_source()
             input_obj = self._client.input_from_df(df, name, progress_bar)
-            self.set_input(input_obj)
+            self.set_input(input_obj, ticker_column, date_column)
 
     def get_sources(self) -> Iterable['SourceHandle']:
         with self.bulk_operation():
