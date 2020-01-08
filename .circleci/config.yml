@@ -179,12 +179,6 @@ jobs:
             . venv/bin/activate
             make lint-type-check
 
-      # - run:
-      #     name: Lint Code (pylint)
-      #     command: |
-      #       . venv/bin/activate
-      #       make lint-pylint
-
       - store_artifacts:
           path: test-reports
           destination: test-reports
