@@ -16,11 +16,10 @@ import sys
 import copy
 import json
 import time
-import urllib
-import requests
 import contextlib
 import collections
 from io import BytesIO, TextIOWrapper
+import requests
 import pandas as pd
 from typing_extensions import TypedDict, Literal, overload
 import quick_server
@@ -590,7 +589,7 @@ class AggregatePlot:
         res = self._df[["date", "vmean"]].copy()
         if self._is_cat:
             assert self._cat_values is not None
-            mapping = {ix: val for (ix, val) in enumerate(self._cat_values)}
+            mapping = dict(enumerate(self._cat_values))
             res["vmean"] = res["vmean"].map(mapping)
         if self._ticker is None:
             res = res.set_index(["date"])
@@ -653,10 +652,12 @@ class MetricPlot(MetricWrapper):
         self._plots = [AggregatePlot(plot) for plot in plot["lines"]]
 
     @overload
-    def __getitem__(self, index: int) -> AggregatePlot: ...
+    def __getitem__(self, index: int) -> AggregatePlot:
+        ...
 
     @overload
-    def __getitem__(self, index: slice) -> List[AggregatePlot]: ...
+    def __getitem__(self, index: slice) -> List[AggregatePlot]:
+        ...
 
     def __getitem__(self,
                     index: Union[int, slice],
@@ -722,10 +723,12 @@ class MetricCoords(MetricWrapper):
         self._plots = [CoordinatePlot(plot) for plot in plot["coords"]]
 
     @overload
-    def __getitem__(self, index: int) -> CoordinatePlot: ...
+    def __getitem__(self, index: int) -> CoordinatePlot:
+        ...
 
     @overload
-    def __getitem__(self, index: slice) -> List[CoordinatePlot]: ...
+    def __getitem__(self, index: slice) -> List[CoordinatePlot]:
+        ...
 
     def __getitem__(self,
                     index: Union[int, slice],
@@ -829,7 +832,7 @@ class XYMEClient:
                 return json.loads(req.text)
             raise ValueError(
                 f"error {req.status_code} in worker request:\n{req.text}")
-        elif method == METHOD_FILE:
+        if method == METHOD_FILE:
             if files is None:
                 raise ValueError(f"file method must have files: {files}")
             # FIXME: should we reset the streams?
@@ -850,7 +853,7 @@ class XYMEClient:
                 return json.loads(req.text)
             raise ValueError(
                 f"error {req.status_code} in worker request:\n{req.text}")
-        elif method == METHOD_POST:
+        if method == METHOD_POST:
             req = requests.post(url, json=args)
             if req.status_code == 403:
                 raise AccessDenied()
@@ -858,7 +861,7 @@ class XYMEClient:
                 return json.loads(req.text)
             raise ValueError(
                 f"error {req.status_code} in worker request:\n{req.text}")
-        elif method == METHOD_PUT:
+        if method == METHOD_PUT:
             req = requests.put(url, json=args)
             if req.status_code == 403:
                 raise AccessDenied()
@@ -866,7 +869,7 @@ class XYMEClient:
                 return json.loads(req.text)
             raise ValueError(
                 f"error {req.status_code} in worker request:\n{req.text}")
-        elif method == METHOD_DELETE:
+        if method == METHOD_DELETE:
             req = requests.delete(url, json=args)
             if req.status_code == 403:
                 raise AccessDenied()
@@ -874,15 +877,14 @@ class XYMEClient:
                 return json.loads(req.text)
             raise ValueError(
                 f"error {req.status_code} in worker request:\n{req.text}")
-        elif method == METHOD_LONGPOST:
+        if method == METHOD_LONGPOST:
             try:
                 return quick_server.worker_request(url, args)
             except quick_server.WorkerError as e:
                 if e.get_status_code() == 403:
                     raise AccessDenied()
                 raise e
-        else:
-            raise ValueError(f"unknown method {method}")
+        raise ValueError(f"unknown method {method}")
 
     def _login(self) -> None:
         if self._user is None or self._password is None:
@@ -1208,12 +1210,13 @@ class XYMEClient:
                      ext: str,
                      size: int,
                      hash_str: Optional[str]) -> 'InputHandle':
+        hash_str = None  # FIXME: use hash_str
         res = cast(CreateInputResponse, self._request_json(
             METHOD_LONGPOST, "/create_input_id", {
                 "name": name,
                 "extension": ext,
                 "size": size,
-                "hash": None,  # FIXME: use hash_str,
+                "hash": hash_str,
             }, capture_err=False))
         return InputHandle(self, res["inputId"], name=name, ext=ext, size=size)
 
@@ -1260,7 +1263,7 @@ class XYMEClient:
                       progress_bar: Optional[IO[Any]] = sys.stdout,
                       ) -> 'InputHandle':
         io_in = df_to_csv(df)
-        return self.input_from_io(io_in, name, "csv")
+        return self.input_from_io(io_in, name, "csv", progress_bar)
 
     def get_inputs(self,
                    filter_by: Optional[str] = None) -> Iterable['InputHandle']:
@@ -1633,7 +1636,7 @@ class JobHandle:
                 "job": self._job_id,
                 "kind": kind,
             }, capture_err=False))
-        return [(metric, group) for (metric, group) in res["metrics"]]
+        return res["metrics"]
 
     def get_metric(self,
                    metric: str,
