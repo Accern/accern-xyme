@@ -32,7 +32,7 @@ jobs:
       # Download and cache dependencies
       - restore_cache:
           keys:
-          - v1-py36-dependencies-{{ checksum "requirements.lint.txt" }}-{{ checksum "requirements.txt" }}
+          - v1-dependencies-{{ checksum "requirements.lint.txt" }}-{{ checksum "requirements.txt" }}
 
       - run:
           name: Install Dependencies
@@ -40,13 +40,12 @@ jobs:
             python3 -m venv venv
             . venv/bin/activate
             pip install --upgrade pip | cat
-            pip install --upgrade numpy==1.17.3 | cat
             pip install --upgrade -r requirements.lint.txt | cat
 
       - save_cache:
           paths:
             - ./venv
-          key: v1-py36-dependencies-{{ checksum "requirements.lint.txt" }}-{{ checksum "requirements.txt" }}
+          key: v1-dependencies-{{ checksum "requirements.lint.txt" }}-{{ checksum "requirements.txt" }}
 
       - run:
           name: Run Tests
@@ -134,7 +133,7 @@ jobs:
       # Download and cache dependencies
       - restore_cache:
           keys:
-          - v1-py38-dependencies-{{ checksum "requirements.py38.txt" }}
+          - v1-dependencies-{{ checksum "requirements.lint.txt" }}-{{ checksum "requirements.txt" }}
 
       - run:
           name: Install Dependencies
@@ -142,25 +141,12 @@ jobs:
             python3 -m venv venv
             . venv/bin/activate
             pip install --upgrade pip | cat
-            pip install --upgrade numpy==1.17.3 | cat
-            pip install --upgrade -r requirements.py38.txt | cat
+            pip install --upgrade -r requirements.lint.txt | cat
 
       - save_cache:
           paths:
             - ./venv
-          key: v1-py38-dependencies-{{ checksum "requirements.py38.txt" }}
-
-  #     - run:
-  #         name: Run Tests
-  #         command: |
-  #           . venv/bin/activate
-  #           make pytest
-
-  #     - run:
-  #         name: Git Check (tests may not alter any git visible files)
-  #         command: |
-  #           git status -sb --porcelain
-  #           [ -z "$(git status --porcelain)" ]
+          key: v1-dependencies-{{ checksum "requirements.lint.txt" }}-{{ checksum "requirements.txt" }}
 
       - run:
           name: Lint Code (use uppercase TODO, XXX, FIXME, NOTE and explain nopep8)
