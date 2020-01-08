@@ -76,7 +76,7 @@ def plot(
         *args: Any,
         scalex: bool = True,
         scaley: bool = True,
-        data: Optional[Any]=None,
+        data: Optional[Any] = None,
         **kwargs: Any) -> Any:
     ...
 
