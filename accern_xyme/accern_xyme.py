@@ -419,6 +419,16 @@ NotesInfo = TypedDict('NotesInfo', {
 PreviewNotesResponse = TypedDict('PreviewNotesResponse', {
     "notes": NotesResponse,
 })
+StrategyResponse = TypedDict('StrategyResponse', {
+    "strategies": List[str],
+    "pollHint": float,
+})
+BacktestResponse = TypedDict('BacktestResponse', {
+    "pyfolio": Optional[Dict[str, Any]],
+    "output": Optional[List[StdoutLine]],
+    "errMessage": Optional[str],
+    "pollHint": float,
+})
 
 
 FILE_UPLOAD_CHUNK_SIZE = 8 * 1024 * 1024  # 8MB
@@ -788,7 +798,7 @@ class XYMEClient:
         res = cast(UserLogin, self._request_json(
             METHOD_GET, "/init", {}, capture_err=False))
         if not res["success"]:
-            raise AccessDenied()
+            raise AccessDenied("init was not successful")
         self._token = res["token"]
         self._permissions = res["permissions"]
 
@@ -805,11 +815,11 @@ class XYMEClient:
         return self._auto_refresh
 
     @contextlib.contextmanager
-    def bulk_operation(self) -> Iterator[None]:
+    def bulk_operation(self) -> Iterator[bool]:
         old_refresh = self.is_auto_refresh()
         try:
             self.set_auto_refresh(False)
-            yield
+            yield old_refresh
         finally:
             self.set_auto_refresh(old_refresh)
 
@@ -833,7 +843,7 @@ class XYMEClient:
         if method == METHOD_GET:
             req = requests.get(url, params=args)
             if req.status_code == 403:
-                raise AccessDenied()
+                raise AccessDenied(req.text)
             if req.status_code == 200:
                 return json.loads(req.text)
             raise ValueError(
@@ -854,7 +864,7 @@ class XYMEClient:
                 ) for (key, value) in files.items()
             })
             if req.status_code == 403:
-                raise AccessDenied()
+                raise AccessDenied(req.text)
             if req.status_code == 200:
                 return json.loads(req.text)
             raise ValueError(
@@ -862,7 +872,7 @@ class XYMEClient:
         elif method == METHOD_POST:
             req = requests.post(url, json=args)
             if req.status_code == 403:
-                raise AccessDenied()
+                raise AccessDenied(req.text)
             if req.status_code == 200:
                 return json.loads(req.text)
             raise ValueError(
@@ -870,7 +880,7 @@ class XYMEClient:
         elif method == METHOD_PUT:
             req = requests.put(url, json=args)
             if req.status_code == 403:
-                raise AccessDenied()
+                raise AccessDenied(req.text)
             if req.status_code == 200:
                 return json.loads(req.text)
             raise ValueError(
@@ -878,7 +888,7 @@ class XYMEClient:
         elif method == METHOD_DELETE:
             req = requests.delete(url, json=args)
             if req.status_code == 403:
-                raise AccessDenied()
+                raise AccessDenied(req.text)
             if req.status_code == 200:
                 return json.loads(req.text)
             raise ValueError(
@@ -888,7 +898,7 @@ class XYMEClient:
                 return quick_server.worker_request(url, args)
             except quick_server.WorkerError as e:
                 if e.get_status_code() == 403:
-                    raise AccessDenied()
+                    raise AccessDenied(e.args)
                 raise e
         else:
             raise ValueError(f"unknown method {method}")
@@ -901,7 +911,7 @@ class XYMEClient:
             "pw": self._password,
         }))
         if not res["success"]:
-            raise AccessDenied()
+            raise AccessDenied("login was not successful")
         self._token = res["token"]
         self._permissions = res["permissions"]
 
@@ -1135,10 +1145,31 @@ class XYMEClient:
             "source": SourceHandle(self, res["sourceId"], source_type),
         }
 
-    def create_source(self, name: Optional[str]) -> 'SourceHandle':
+    def create_multi_source(self, name: Optional[str]) -> 'SourceHandle':
         res = self._raw_create_source(
             SOURCE_TYPE_MULTI, name, None, None, None)
         return res["multi_source"]
+
+    def create_multi_source_file(
+            self,
+            filename: str,
+            name_multi: Optional[str],
+            progress_bar: Optional[IO[Any]] = sys.stdout) -> 'SourceHandle':
+        with self.bulk_operation():
+            multi = self.create_multi_source(name_multi)
+            multi.add_new_source_file(filename, progress_bar)
+            return multi
+
+    def create_multi_source_df(
+            self,
+            df: pd.DataFrame,
+            name_csv: str,
+            name_multi: Optional[str],
+            progress_bar: Optional[IO[Any]] = sys.stdout) -> 'SourceHandle':
+        with self.bulk_operation():
+            multi = self.create_multi_source(name_multi)
+            multi.add_new_source_df(df, name_csv, progress_bar)
+            return multi
 
     def get_source(self, source_id: str) -> 'SourceHandle':
         return SourceHandle(self, source_id, None, infer_type=True)
@@ -1301,6 +1332,11 @@ class XYMEClient:
         if filter_by is None or filter_by == FILTER_USER:
             yield from respond(res["userFiles"])
 
+    def get_strategies(self) -> List[str]:
+        res = cast(StrategyResponse, self._request_json(
+            METHOD_GET, "/strategies", {}, capture_err=False))
+        return res["strategies"]
+
 # *** XYMEClient ***
 
 
@@ -1417,10 +1453,11 @@ class JobHandle:
         self.set_schema(self._schema_obj)
 
     @contextlib.contextmanager
-    def bulk_operation(self) -> Iterator[None]:
-        with self._client.bulk_operation():
-            self.refresh()
-            yield
+    def bulk_operation(self) -> Iterator[bool]:
+        with self._client.bulk_operation() as do_refresh:
+            if do_refresh:
+                self.refresh()
+            yield do_refresh
 
     def get_notes(self, force: bool) -> NotesInfo:
         res = cast(PreviewNotesResponse, self._client._request_json(
@@ -1653,6 +1690,21 @@ class JobHandle:
             source_type, name, self, None, None)
         return res["source"]
 
+    def get_schema_sources(self) -> List['SourceHandle']:
+        schema_obj = self.get_schema()
+        x_obj = schema_obj.get("X", {})
+        res = []
+        main_source_id = x_obj.get("source", None)
+        if main_source_id:
+            res.append(SourceHandle(
+                self._client, main_source_id, None, infer_type=True))
+        for progress in x_obj.get("source_progress", []):
+            cur_source_ix = progress.get("source", None)
+            if cur_source_ix:
+                res.append(SourceHandle(
+                    self._client, cur_source_ix, None, infer_type=True))
+        return res
+
     def get_source(self, ticker: Optional[str] = None) -> 'SourceHandle':
         self._maybe_refresh()
         if self._source is not None:
@@ -1747,6 +1799,32 @@ class JobHandle:
                 None if data_high is None else pd.Timestamp(data_high),
             "data_end": None if data_end is None else pd.Timestamp(data_end),
         }
+
+    def get_backtest(self,
+                     strategy: Optional[str],
+                     base_strategy: Optional[str],
+                     price_source: Optional[SourceHandle],
+                     prediction_feature: Optional[str],
+                     ticker: Optional[str] = None,
+                     ) -> Tuple[Optional[Dict[str, Any]], StdoutWrapper]:
+        res = cast(BacktestResponse, self._client._request_json(
+            METHOD_LONGPOST, "/summary", {
+                "job": self._job_id,
+                "ticker": ticker,
+                "predictionFeature": prediction_feature,
+                "strategy": strategy,
+                "baseStrategy": base_strategy,
+                "priceSourceId": price_source,
+            }, capture_err=False))
+        output = res.get("output", [])
+        stdout = StdoutWrapper({
+            "lines": output if output is not None else [],
+            "messages": {},
+            "exceptions": [],
+        })
+        if res.get("errMessage", None):
+            raise ValueError(res["errMessage"], stdout)
+        return res.get("pyfolio", None), stdout
 
     def __repr__(self) -> str:
         name = ""
@@ -2054,10 +2132,11 @@ class SourceHandle:
         return self._help
 
     @contextlib.contextmanager
-    def bulk_operation(self) -> Iterator[None]:
-        with self._client.bulk_operation():
-            self.refresh()
-            yield
+    def bulk_operation(self) -> Iterator[bool]:
+        with self._client.bulk_operation() as do_refresh:
+            if do_refresh:
+                self.refresh()
+            yield do_refresh
 
     @contextlib.contextmanager
     def update_schema(self) -> Iterator[Dict[str, Any]]:
@@ -2115,6 +2194,26 @@ class SourceHandle:
         self.refresh()
         return res["source"]
 
+    def add_new_source_file(self,
+                            filename: str,
+                            progress_bar: Optional[IO[Any]] = sys.stdout,
+                            ) -> 'SourceHandle':
+        with self.bulk_operation():
+            source = self.add_new_source(
+                SOURCE_TYPE_CSV, os.path.basename(filename))
+            source.set_input_file(filename, progress_bar)
+            return source
+
+    def add_new_source_df(self,
+                          df: pd.DataFrame,
+                          name: str,
+                          progress_bar: Optional[IO[Any]] = sys.stdout,
+                          ) -> 'SourceHandle':
+        with self.bulk_operation():
+            source = self.add_new_source(SOURCE_TYPE_CSV, name)
+            source.set_input_df(df, name, progress_bar)
+            return source
+
     def add_source(self, source: 'SourceHandle') -> None:
         with self.bulk_operation():
             self._ensure_multi_source()
@@ -2165,6 +2264,19 @@ class SourceHandle:
             for source_id in sources:
                 yield SourceHandle(
                     self._client, source_id, None, infer_type=True)
+
+    def get_input(self) -> Optional['InputHandle']:
+        with self.bulk_operation():
+            self._ensure_csv_source()
+            if self._schema_obj is None:
+                self._fetch_info()
+            assert self._schema_obj is not None
+            fname = self._schema_obj.get("config", {}).get("filename", None)
+            if fname is None:
+                return None
+            dot = fname.find(".")
+            input_id = fname[:dot] if dot >= 0 else fname
+            return InputHandle(self._client, input_id)
 
     def __repr__(self) -> str:
         name = ""
@@ -2272,10 +2384,11 @@ class InputHandle:
         return self.get_progress() == UPLOAD_DONE
 
     @contextlib.contextmanager
-    def bulk_operation(self) -> Iterator[None]:
-        with self._client.bulk_operation():
-            self.refresh()
-            yield
+    def bulk_operation(self) -> Iterator[bool]:
+        with self._client.bulk_operation() as do_refresh:
+            if do_refresh:
+                self.refresh()
+            yield do_refresh
 
     def upload_partial(self, chunk_content: IO[bytes]) -> bool:
         if self._last_byte_offset is None or self._name is None:
