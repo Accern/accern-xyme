@@ -1592,7 +1592,7 @@ class JobHandle:
     def dynamic_predict(self,
                         method: str,
                         fbuff: Optional[IO[bytes]],
-                        source: Optional[SourceHandle],
+                        source: Optional['SourceHandle'],
                         ) -> DynamicPredictionResponse:
         if fbuff is not None:
             res = cast(DynamicPredictionResponse, self._client._request_json(
@@ -1858,7 +1858,7 @@ class JobHandle:
     def get_backtest(self,
                      strategy: Optional[str],
                      base_strategy: Optional[str],
-                     price_source: Optional[SourceHandle],
+                     price_source: Optional['SourceHandle'],
                      prediction_feature: Optional[str],
                      ticker: Optional[str] = None,
                      ) -> Tuple[Optional[Dict[str, Any]], StdoutWrapper]:
