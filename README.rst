@@ -3,7 +3,10 @@ Accern-XYME
 
 *accern\_xyme* is a python library for accessing XYME functionality.
 
-[![CircleCI](https://circleci.com/gh/Accern/accern-xyme.svg?style=svg)](https://circleci.com/gh/Accern/accern-xyme)
+|CircleCI|
+
+.. |CircleCI| image:: https://circleci.com/gh/Accern/accern-xyme.svg?style=svg
+   :target: https://circleci.com/gh/Accern/accern-xyme
 
 Usage
 -----
