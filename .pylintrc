@@ -7,8 +7,11 @@ disable=
   fixme,
   global-statement,
   import-outside-toplevel,
+  invalid-name,
   invalid-unary-operand-type,
   missing-docstring,
+  protected-access,
+  too-many-ancestors,
   too-many-arguments,
   too-many-branches,
   too-many-instance-attributes,
@@ -18,6 +21,7 @@ disable=
   too-many-return-statements,
   too-many-statements,
   unsubscriptable-object,
+  unused-wildcard-import,
 
 [IMPORT]
 allow-wildcard-with-all=yes
