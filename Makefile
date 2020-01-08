@@ -2,6 +2,7 @@ help:
 	@echo "The following make targets are available:"
 	@echo "lint-comment	run linter check over regular comments"
 	@echo "lint-emptyinit	main inits must be empty"
+	@echo "lint-forgottonformat	ensures format strings are used"
 	@echo "lint-flake8  run flake8 checker to detect missing trailing comma"
 	@echo "lint-pycodestyle	run linter check using pycodestyle standard"
 	@echo "lint-pycodestyle-debug	run linter in debug mode"
