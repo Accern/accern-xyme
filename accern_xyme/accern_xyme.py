@@ -1308,7 +1308,7 @@ class XYMEClient:
                       progress_bar: Optional[IO[Any]] = sys.stdout,
                       ) -> 'InputHandle':
         io_in = df_to_csv(df)
-        return self.input_from_io(io_in, name, "csv")
+        return self.input_from_io(io_in, name, "csv", progress_bar)
 
     def get_inputs(self,
                    filter_by: Optional[str] = None) -> Iterable['InputHandle']:
