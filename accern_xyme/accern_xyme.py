@@ -30,7 +30,8 @@ __version__ = "0.0.8"
 # FIXME: async calls, documentation, auth, summary – time it took etc.
 
 
-API_VERSION = 0
+API_VERSION = 1
+LEGACY_XYME = False
 
 
 METHOD_DELETE = "DELETE"
@@ -75,6 +76,7 @@ PLOT_META = "meta"
 
 
 VersionInfo = TypedDict('VersionInfo', {
+    "apiVersion": str,
     "time": str,
     "version": str,
     "xymeVersion": str,
@@ -771,6 +773,13 @@ class XYMEClient:
         self._auto_refresh = True
         self._permissions: Optional[List[str]] = None
         self._init()
+        # NOTE determining whether we are dealing with a legacy xyme server
+        # FIXME remove this bit once we have all servers on at least v1
+        api_version = self.get_server_version().get("apiVersion", "v0")
+        version_num = int(api_version.lstrip("v"))
+        if version_num < 1:
+            global LEGACY_XYME
+            LEGACY_XYME = True
 
     def _init(self) -> None:
         if self._token is None:
@@ -1213,7 +1222,7 @@ class XYMEClient:
                 "name": name,
                 "extension": ext,
                 "size": size,
-                "hash": hash_str,
+                "hash": None if LEGACY_XYME else hash_str,
             }, capture_err=False))
         return InputHandle(self, res["inputId"], name=name, ext=ext, size=size)
 
