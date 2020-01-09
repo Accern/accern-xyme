@@ -2552,20 +2552,27 @@ class InputHandle:
                     progress_bar: Optional[IO[Any]] = sys.stdout) -> int:
         if file_name is not None:
             self._name = file_name
-        if progress_bar is not None and hasattr(file_content, "seek"):
-            init_pos = 0
-            if hasattr(file_content, "tell"):
-                init_pos = file_content.tell()
-            total_size: Optional[int] = \
-                file_content.seek(0, os.SEEK_END) - init_pos
-            file_content.seek(init_pos, os.SEEK_SET)
-        else:
-            total_size = None
+        total_size: Optional[int] = None
+        if progress_bar is not None:
+            if hasattr(file_content, "seek"):
+                init_pos = 0
+                if hasattr(file_content, "tell"):
+                    init_pos = file_content.tell()
+                total_size = file_content.seek(0, os.SEEK_END) - init_pos
+                file_content.seek(init_pos, os.SEEK_SET)
+                end = ":"
+            else:
+                end = "."
+            if file_name is None:
+                msg = f"Uploading unnamed file{end}\n"
+            else:
+                msg = f"Uploading file {file_name}{end}\n"
+            progress_bar.write(msg)
         print_progress = get_progress_bar(out=progress_bar)
         cur_size = 0
         while True:
             if total_size is not None:
-                print_progress(cur_size / total_size, final=False)
+                print_progress(cur_size / total_size, False)
             buff = file_content.read(FILE_UPLOAD_CHUNK_SIZE)
             if not buff:
                 break
@@ -2573,7 +2580,7 @@ class InputHandle:
             if self.upload_partial(BytesIO(buff)):
                 break
         if total_size is not None:
-            print_progress(cur_size / total_size, final=True)
+            print_progress(cur_size / total_size, True)
         return cur_size
 
     def __repr__(self) -> str:
@@ -2615,6 +2622,8 @@ def get_progress_bar(out: Optional[IO[Any]]) -> Callable[[float, bool], None]:
     if out is None:
         return no_bar
 
+    io_out: IO[Any] = out
+
     if is_jupyter():
         from IPython.display import ProgressBar
 
@@ -2624,10 +2633,10 @@ def get_progress_bar(out: Optional[IO[Any]]) -> Callable[[float, bool], None]:
 
         def jupyter_bar(progress: float, final: bool) -> None:
             bar.progress = int(progress * mul)
+            end = "\n" if final else "\r"
+            io_out.write(f"{progress * 100.0:.2f}%{end}")
 
         return jupyter_bar
-
-    io_out: IO[Any] = out
 
     def stdout_bar(progress: float, final: bool) -> None:
         print_progress_bar(progress, final, io_out)
