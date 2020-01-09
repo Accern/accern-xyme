@@ -12,8 +12,7 @@ with codecs.open(os.path.join(here, "README.rst"), encoding="utf-8") as f:
     long_description = f.read()
 
 # NOTE! steps to distribute:
-# $ python setup.py sdist bdist_wheel
-# $ twine upload dist/... <- here be the new version!
+# $ make publish
 
 setup(
     name="accern_xyme",
