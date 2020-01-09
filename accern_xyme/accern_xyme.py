@@ -1705,7 +1705,7 @@ class JobHandle:
                         method: Optional[str],
                         ticker: Optional[str],
                         date: Optional[str],
-                        last_n: Optional[int],
+                        last_n: int,
                         filters: Optional[Dict[str, Any]],
                         ) -> Optional[pd.DataFrame]:
         if filters is None:
@@ -1879,6 +1879,13 @@ class JobHandle:
                 "after": after,
             }, capture_err=False))
         return res["lines"]
+
+    def get_logs(self) -> StdoutWrapper:
+        return StdoutWrapper({
+            "lines": self._raw_stdout(None, False, None, None, 0, None, None),
+            "messages": {},
+            "exceptions": [],
+        })
 
     def get_summary(self, ticker: Optional[str]) -> SummaryInfo:
         res = cast(SummaryResponse, self._client._request_json(
