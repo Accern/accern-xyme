@@ -1540,7 +1540,8 @@ class JobHandle:
 
     def can_start(self, force: bool) -> bool:
         notes = self.get_notes(force)
-        # FIXME notes is None if the job has been started -- this is a bug right now
+        # FIXME: notes is None if the job has been started
+        # this is a bug right now
         if notes is None:
             return True
         return notes["is_runnable"] and not notes["error"]
