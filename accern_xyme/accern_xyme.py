@@ -17,6 +17,7 @@ import sys
 import copy
 import json
 import time
+import shutil
 import contextlib
 import collections
 from io import BytesIO, TextIOWrapper
@@ -454,6 +455,26 @@ SimplePredictionsResponse = TypedDict('SimplePredictionsResponse', {
 
 FILE_UPLOAD_CHUNK_SIZE = 8 * 1024 * 1024  # 8MB
 FILE_HASH_CHUNK_SIZE = FILE_UPLOAD_CHUNK_SIZE
+
+
+def set_file_upload_chunk_size(size: int) -> None:
+    global FILE_UPLOAD_CHUNK_SIZE
+
+    FILE_UPLOAD_CHUNK_SIZE = size
+
+
+def get_file_upload_chunk_size() -> int:
+    return FILE_UPLOAD_CHUNK_SIZE
+
+
+def set_file_hash_chunk_size(size: int) -> None:
+    global FILE_HASH_CHUNK_SIZE
+
+    FILE_HASH_CHUNK_SIZE = size
+
+
+def get_file_hash_chunk_size() -> int:
+    return FILE_HASH_CHUNK_SIZE
 
 
 def maybe_timestamp(timestamp: Optional[str]) -> Optional[pd.Timestamp]:
@@ -2638,27 +2659,22 @@ def get_progress_bar(out: Optional[IO[Any]]) -> Callable[[float, bool], None]:
 
         return jupyter_bar
 
+    cols, _ = shutil.get_terminal_size((80, 20))
+    max_len = len(" 100.00%")
+    border = "|"
+
     def stdout_bar(progress: float, final: bool) -> None:
-        print_progress_bar(progress, final, io_out)
+        pstr = f" {progress * 100.0:.2f}%"
+        cur_len = len(pstr)
+        if cur_len < max_len:
+            pstr = f"{' ' * (max_len - cur_len)}{pstr}"
+        end = "\n" if final else "\r"
+        bar = "█" * int(progress * cols)
+        full_len = len(border) * 2 + len(bar) + len(pstr) + len(end)
+        mid = ' ' * max(0, cols - full_len)
+        io_out.write(f"{border}{bar}{mid}{border}{pstr}{end}")
 
     return stdout_bar
-
-
-def print_progress_bar(progress: float, final: bool, out: IO[Any]) -> None:
-    import shutil
-
-    cols, _ = shutil.get_terminal_size((80, 20))
-    pstr = f" {progress * 100.0:.2f}%"
-    max_len = len(" 100.00%")
-    cur_len = len(pstr)
-    if cur_len < max_len:
-        pstr = f"{' ' * (max_len - cur_len)}{pstr}"
-    border = "|"
-    end = "\n" if final else "\r"
-    bar = "█" * int(progress * cols)
-    full_len = len(border) * 2 + len(bar) + len(pstr) + len(end)
-    mid = ' ' * max(0, cols - full_len)
-    out.write(f"{border}{bar}{mid}{border}{pstr}{end}")
 
 
 def get_file_hash(buff: IO[bytes]) -> str:
