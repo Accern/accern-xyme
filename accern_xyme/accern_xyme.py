@@ -441,7 +441,7 @@ SegmentResponse = TypedDict('SegmentResponse', {
     "segments": List[Tuple[int, Optional[str], Optional[str]]],
     "pollHint": float,
 })
-PredictionsResponse = TypedDict('PredictionsResponse', {
+SimplePredictionsResponse = TypedDict('SimplePredictionsResponse', {
     "isClf": bool,
     "columns": List[str],
     "predsName": str,
@@ -1708,7 +1708,7 @@ class JobHandle:
                         last_n: Optional[int],
                         filters: Optional[Dict[str, Any]],
                         ) -> Optional[pd.DataFrame]:
-        res = cast(PredictionsResponse, self._client._request_json(
+        res = cast(SimplePredictionsResponse, self._client._request_json(
             METHOD_LONGPOST, "/predictions", {
                 "job": self._job_id,
                 "method": method,
