@@ -1708,6 +1708,8 @@ class JobHandle:
                         last_n: Optional[int],
                         filters: Optional[Dict[str, Any]],
                         ) -> Optional[pd.DataFrame]:
+        if filters is None:
+            filters = {}
         res = cast(SimplePredictionsResponse, self._client._request_json(
             METHOD_LONGPOST, "/predictions", {
                 "job": self._job_id,
