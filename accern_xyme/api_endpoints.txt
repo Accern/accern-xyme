@@ -31,7 +31,7 @@ X - implemented
 [ ] GET /xyme/schemas
 [X] GET /xyme/source_schema
 [X] GET /xyme/sources
-[ ] GET /xyme/strategies
+[X] GET /xyme/strategies
 [ ] GET /xyme/suggestion
 [ ] GET /xyme/tickers
 [X] GET /xyme/user_files
@@ -39,7 +39,7 @@ X - implemented
 [ ] GET /xyme/xy_definition
 [X] POST /xyme/afterupdate
 [ ] POST /xyme/alpha
-[ ] POST /xyme/backtest
+[X] POST /xyme/backtest
 [X] POST /xyme/create_input_id
 [X] POST /xyme/create_job_id
 [X] POST /xyme/create_source_id
@@ -62,10 +62,11 @@ X - implemented
 [X] POST /xyme/pause
 [D] POST /xyme/pause_deploy
 [ ] POST /xyme/pdp
-[ ] POST /xyme/predictions
+[X] POST /xyme/predictions
 [P] POST /xyme/preview
 [ ] POST /xyme/redisout
 [ ] POST /xyme/resume
+[X] POST /xyme/segments
 [X] POST /xyme/share
 [ ] POST /xyme/source_data
 [X] POST /xyme/start

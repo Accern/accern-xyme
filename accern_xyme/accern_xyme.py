@@ -1,5 +1,6 @@
 from typing import (
     Any,
+    Callable,
     cast,
     Dict,
     IO,
@@ -16,6 +17,7 @@ import sys
 import copy
 import json
 import time
+import shutil
 import contextlib
 import collections
 from io import BytesIO, TextIOWrapper
@@ -25,11 +27,12 @@ from typing_extensions import TypedDict, Literal, overload
 import quick_server
 
 
-__version__ = "0.0.7"
+__version__ = "0.0.8"
 # FIXME: async calls, documentation, auth, summary – time it took etc.
 
 
-API_VERSION = 0
+API_VERSION = 1
+LEGACY_XYME = False
 
 
 METHOD_DELETE = "DELETE"
@@ -72,8 +75,18 @@ PLOT_CSV = "csv"
 PLOT_OUTPUT = "output"
 PLOT_META = "meta"
 
+PRED_LATEST = "latest"  # using the current snapshot of the model
+PRED_HISTORIC = "historic"  # using the historic data
+PRED_PREDICTED = "predicted"  # using csv
+PRED_PROBA = "proba_outcome"  # using historic probabilities
+# using filtered historic probabilities
+PRED_PROBA_FILTERED = "proba_outcome_filter"
+PRED_PROBS = "probs"  # using historic probabilities
+PRED_VALID = "validation"  # using validation data
+
 
 VersionInfo = TypedDict('VersionInfo', {
+    "apiVersion": str,
     "time": str,
     "version": str,
     "xymeVersion": str,
@@ -414,12 +427,58 @@ NotesInfo = TypedDict('NotesInfo', {
     "error": bool,
 })
 PreviewNotesResponse = TypedDict('PreviewNotesResponse', {
-    "notes": NotesResponse,
+    "notes": Optional[NotesResponse],
+})
+StrategyResponse = TypedDict('StrategyResponse', {
+    "strategies": List[str],
+    "pollHint": float,
+})
+BacktestResponse = TypedDict('BacktestResponse', {
+    "pyfolio": Optional[Dict[str, Any]],
+    "output": Optional[List[StdoutLine]],
+    "errMessage": Optional[str],
+    "pollHint": float,
+})
+SegmentResponse = TypedDict('SegmentResponse', {
+    "segments": List[Tuple[int, Optional[str], Optional[str]]],
+    "pollHint": float,
+})
+SimplePredictionsResponse = TypedDict('SimplePredictionsResponse', {
+    "isClf": bool,
+    "columns": List[str],
+    "predsName": str,
+    "predictions": List[List[Union[str, float, int]]],
+    "allPredictions": List[List[Union[str, float, int]]],
+    "pollHint": float,
 })
 
 
 FILE_UPLOAD_CHUNK_SIZE = 8 * 1024 * 1024  # 8MB
 FILE_HASH_CHUNK_SIZE = FILE_UPLOAD_CHUNK_SIZE
+
+
+def set_file_upload_chunk_size(size: int) -> None:
+    global FILE_UPLOAD_CHUNK_SIZE
+
+    FILE_UPLOAD_CHUNK_SIZE = size
+
+
+def get_file_upload_chunk_size() -> int:
+    return FILE_UPLOAD_CHUNK_SIZE
+
+
+def set_file_hash_chunk_size(size: int) -> None:
+    global FILE_HASH_CHUNK_SIZE
+
+    FILE_HASH_CHUNK_SIZE = size
+
+
+def get_file_hash_chunk_size() -> int:
+    return FILE_HASH_CHUNK_SIZE
+
+
+def maybe_timestamp(timestamp: Optional[str]) -> Optional[pd.Timestamp]:
+    return None if timestamp is None else pd.Timestamp(timestamp)
 
 
 def df_to_csv(df: pd.DataFrame) -> BytesIO:
@@ -774,6 +833,13 @@ class XYMEClient:
         self._auto_refresh = True
         self._permissions: Optional[List[str]] = None
         self._init()
+        # NOTE determining whether we are dealing with a legacy xyme server
+        # FIXME remove this bit once we have all servers on at least v1
+        api_version = self.get_server_version().get("apiVersion", "v0")
+        version_num = int(api_version.lstrip("v"))
+        if version_num < 1:
+            global LEGACY_XYME
+            LEGACY_XYME = True
 
     def _init(self) -> None:
         if self._token is None:
@@ -782,7 +848,7 @@ class XYMEClient:
         res = cast(UserLogin, self._request_json(
             METHOD_GET, "/init", {}, capture_err=False))
         if not res["success"]:
-            raise AccessDenied()
+            raise AccessDenied("init was not successful")
         self._token = res["token"]
         self._permissions = res["permissions"]
 
@@ -799,11 +865,11 @@ class XYMEClient:
         return self._auto_refresh
 
     @contextlib.contextmanager
-    def bulk_operation(self) -> Iterator[None]:
+    def bulk_operation(self) -> Iterator[bool]:
         old_refresh = self.is_auto_refresh()
         try:
             self.set_auto_refresh(False)
-            yield
+            yield old_refresh
         finally:
             self.set_auto_refresh(old_refresh)
 
@@ -827,7 +893,7 @@ class XYMEClient:
         if method == METHOD_GET:
             req = requests.get(url, params=args)
             if req.status_code == 403:
-                raise AccessDenied()
+                raise AccessDenied(req.text)
             if req.status_code == 200:
                 return json.loads(req.text)
             raise ValueError(
@@ -848,7 +914,7 @@ class XYMEClient:
                 ) for (key, value) in files.items()
             })
             if req.status_code == 403:
-                raise AccessDenied()
+                raise AccessDenied(req.text)
             if req.status_code == 200:
                 return json.loads(req.text)
             raise ValueError(
@@ -856,7 +922,7 @@ class XYMEClient:
         if method == METHOD_POST:
             req = requests.post(url, json=args)
             if req.status_code == 403:
-                raise AccessDenied()
+                raise AccessDenied(req.text)
             if req.status_code == 200:
                 return json.loads(req.text)
             raise ValueError(
@@ -864,7 +930,7 @@ class XYMEClient:
         if method == METHOD_PUT:
             req = requests.put(url, json=args)
             if req.status_code == 403:
-                raise AccessDenied()
+                raise AccessDenied(req.text)
             if req.status_code == 200:
                 return json.loads(req.text)
             raise ValueError(
@@ -872,7 +938,7 @@ class XYMEClient:
         if method == METHOD_DELETE:
             req = requests.delete(url, json=args)
             if req.status_code == 403:
-                raise AccessDenied()
+                raise AccessDenied(req.text)
             if req.status_code == 200:
                 return json.loads(req.text)
             raise ValueError(
@@ -882,7 +948,7 @@ class XYMEClient:
                 return quick_server.worker_request(url, args)
             except quick_server.WorkerError as e:
                 if e.get_status_code() == 403:
-                    raise AccessDenied()
+                    raise AccessDenied(e.args)
                 raise e
         raise ValueError(f"unknown method {method}")
 
@@ -894,7 +960,7 @@ class XYMEClient:
             "pw": self._password,
         }))
         if not res["success"]:
-            raise AccessDenied()
+            raise AccessDenied("login was not successful")
         self._token = res["token"]
         self._permissions = res["permissions"]
 
@@ -1128,10 +1194,37 @@ class XYMEClient:
             "source": SourceHandle(self, res["sourceId"], source_type),
         }
 
-    def create_source(self, name: Optional[str]) -> 'SourceHandle':
+    def create_multi_source(self, name: Optional[str]) -> 'SourceHandle':
         res = self._raw_create_source(
             SOURCE_TYPE_MULTI, name, None, None, None)
         return res["multi_source"]
+
+    def create_multi_source_file(
+            self,
+            filename: str,
+            ticker_column: str,
+            date_column: Optional[str],
+            name_multi: Optional[str] = None,
+            progress_bar: Optional[IO[Any]] = sys.stdout) -> 'SourceHandle':
+        with self.bulk_operation():
+            multi = self.create_multi_source(name_multi)
+            multi.add_new_source_file(
+                filename, ticker_column, date_column, progress_bar)
+            return multi
+
+    def create_multi_source_df(
+            self,
+            df: pd.DataFrame,
+            name_csv: str,
+            ticker_column: str,
+            date_column: Optional[str],
+            name_multi: Optional[str] = None,
+            progress_bar: Optional[IO[Any]] = sys.stdout) -> 'SourceHandle':
+        with self.bulk_operation():
+            multi = self.create_multi_source(name_multi)
+            multi.add_new_source_df(
+                df, name_csv, ticker_column, date_column, progress_bar)
+            return multi
 
     def get_source(self, source_id: str) -> 'SourceHandle':
         return SourceHandle(self, source_id, None, infer_type=True)
@@ -1210,13 +1303,12 @@ class XYMEClient:
                      ext: str,
                      size: int,
                      hash_str: Optional[str]) -> 'InputHandle':
-        hash_str = None  # FIXME: use hash_str
         res = cast(CreateInputResponse, self._request_json(
             METHOD_LONGPOST, "/create_input_id", {
                 "name": name,
                 "extension": ext,
                 "size": size,
-                "hash": hash_str,
+                "hash": None if LEGACY_XYME else hash_str,
             }, capture_err=False))
         return InputHandle(self, res["inputId"], name=name, ext=ext, size=size)
 
@@ -1294,6 +1386,11 @@ class XYMEClient:
             yield from respond(res["systemFiles"])
         if filter_by is None or filter_by == FILTER_USER:
             yield from respond(res["userFiles"])
+
+    def get_strategies(self) -> List[str]:
+        res = cast(StrategyResponse, self._request_json(
+            METHOD_GET, "/strategies", {}, capture_err=False))
+        return res["strategies"]
 
 # *** XYMEClient ***
 
@@ -1411,12 +1508,13 @@ class JobHandle:
         self.set_schema(self._schema_obj)
 
     @contextlib.contextmanager
-    def bulk_operation(self) -> Iterator[None]:
-        with self._client.bulk_operation():
-            self.refresh()
-            yield
+    def bulk_operation(self) -> Iterator[bool]:
+        with self._client.bulk_operation() as do_refresh:
+            if do_refresh:
+                self.refresh()
+            yield do_refresh
 
-    def get_notes(self, force: bool) -> NotesInfo:
+    def get_notes(self, force: bool) -> Optional[NotesInfo]:
         res = cast(PreviewNotesResponse, self._client._request_json(
             METHOD_LONGPOST, "/preview", {
                 "job": self._job_id,
@@ -1426,6 +1524,8 @@ class JobHandle:
                 "batch": None,
             }, capture_err=False))
         notes = res["notes"]
+        if notes is None:
+            return None
         return {
             "usage": notes.get("usage", {}),
             "roles": notes.get("roles", {}),
@@ -1440,6 +1540,10 @@ class JobHandle:
 
     def can_start(self, force: bool) -> bool:
         notes = self.get_notes(force)
+        # FIXME: notes is None if the job has been started
+        # this is a bug right now
+        if notes is None:
+            return True
         return notes["is_runnable"] and not notes["error"]
 
     def start(self,
@@ -1540,19 +1644,52 @@ class JobHandle:
 
     def dynamic_predict(self,
                         method: str,
-                        fbuff: IO[bytes]) -> DynamicPredictionResponse:
-        res = cast(DynamicPredictionResponse, self._client._request_json(
-            METHOD_FILE, "/dynamic_predict", {
-                "job": self._job_id,
-                "method": method,
-            }, capture_err=True, files={"file": fbuff}))
+                        fbuff: Optional[IO[bytes]],
+                        source: Optional['SourceHandle'],
+                        ) -> DynamicPredictionResponse:
+        if fbuff is not None:
+            res = cast(DynamicPredictionResponse, self._client._request_json(
+                METHOD_FILE, "/dynamic_predict", {
+                    "job": self._job_id,
+                    "method": method,
+                }, capture_err=True, files={"file": fbuff}))
+        elif source is not None:
+            if LEGACY_XYME:
+                raise ValueError("the XYME version does not "
+                                 "support dynamic predict sources")
+            res = cast(DynamicPredictionResponse, self._client._request_json(
+                METHOD_POST, "/dynamic_predict", {
+                    "job": self._job_id,
+                    "method": method,
+                    "multiSourceId": source.get_source_id(),
+                }, capture_err=True))
+        else:
+            raise ValueError("one of fbuff or source must not be None")
         return res
+
+    def predict_source(self,
+                       source: 'SourceHandle',
+                       ) -> Tuple[Optional[pd.DataFrame], StdoutWrapper]:
+        res = self.dynamic_predict("dyn_pred", fbuff=None, source=source)
+        return (
+            maybe_predictions_to_df(res["predictions"]),
+            StdoutWrapper(res["stdout"]),
+        )
+
+    def predict_proba_source(self,
+                             source: 'SourceHandle',
+                             ) -> Tuple[Optional[pd.DataFrame], StdoutWrapper]:
+        res = self.dynamic_predict("dyn_prob", fbuff=None, source=source)
+        return (
+            maybe_predictions_to_df(res["predictions"]),
+            StdoutWrapper(res["stdout"]),
+        )
 
     def predict(self,
                 df: pd.DataFrame,
                 ) -> Tuple[Optional[pd.DataFrame], StdoutWrapper]:
         buff = df_to_csv(df)
-        res = self.dynamic_predict("dyn_pred", buff)
+        res = self.dynamic_predict("dyn_pred", fbuff=buff, source=None)
         return (
             maybe_predictions_to_df(res["predictions"]),
             StdoutWrapper(res["stdout"]),
@@ -1562,7 +1699,7 @@ class JobHandle:
                       df: pd.DataFrame,
                       ) -> Tuple[Optional[pd.DataFrame], StdoutWrapper]:
         buff = df_to_csv(df)
-        res = self.dynamic_predict("dyn_prob", buff)
+        res = self.dynamic_predict("dyn_prob", fbuff=buff, source=None)
         return (
             maybe_predictions_to_df(res["predictions"]),
             StdoutWrapper(res["stdout"]),
@@ -1572,7 +1709,7 @@ class JobHandle:
                      csv: str,
                      ) -> Tuple[Optional[pd.DataFrame], StdoutWrapper]:
         with open(csv, "rb") as f_in:
-            res = self.dynamic_predict("dyn_pred", f_in)
+            res = self.dynamic_predict("dyn_pred", fbuff=f_in, source=None)
             return (
                 maybe_predictions_to_df(res["predictions"]),
                 StdoutWrapper(res["stdout"]),
@@ -1582,11 +1719,35 @@ class JobHandle:
                            csv: str,
                            ) -> Tuple[Optional[pd.DataFrame], StdoutWrapper]:
         with open(csv, "rb") as f_in:
-            res = self.dynamic_predict("dyn_prob", f_in)
+            res = self.dynamic_predict("dyn_prob", fbuff=f_in, source=None)
             return (
                 maybe_predictions_to_df(res["predictions"]),
                 StdoutWrapper(res["stdout"]),
             )
+
+    def get_predictions(self,
+                        method: Optional[str],
+                        ticker: Optional[str],
+                        date: Optional[str],
+                        last_n: int,
+                        filters: Optional[Dict[str, Any]],
+                        ) -> Optional[pd.DataFrame]:
+        if filters is None:
+            filters = {}
+        res = cast(SimplePredictionsResponse, self._client._request_json(
+            METHOD_LONGPOST, "/predictions", {
+                "job": self._job_id,
+                "method": method,
+                "ticker": ticker,
+                "date": date,
+                "last_n": last_n,
+                "filters": filters,
+            }, capture_err=False))
+        columns = res.get("columns", None)
+        predictions = res.get("predictions", None)
+        if columns is not None and predictions is not None:
+            return pd.DataFrame(predictions, columns=columns)
+        return None
 
     def share(self, path: str) -> 'JobHandle':
         shared = cast(ShareResponse, self._client._request_json(
@@ -1614,7 +1775,48 @@ class JobHandle:
             source_type, name, self, None, None)
         return res["source"]
 
-    def get_source(self, ticker: Optional[str] = None) -> 'SourceHandle':
+    def get_sources(self) -> List['SourceHandle']:
+        schema_obj = self.get_schema()
+        x_obj = schema_obj.get("X", {})
+        res = []
+        main_source_id = x_obj.get("source", None)
+        if main_source_id:
+            res.append(SourceHandle(
+                self._client, main_source_id, None, infer_type=True))
+        for progress in x_obj.get("source_progress", []):
+            cur_source_ix = progress.get("source", None)
+            if cur_source_ix:
+                res.append(SourceHandle(
+                    self._client, cur_source_ix, None, infer_type=True))
+        return res
+
+    def get_fast_segments(self) -> List[
+            Tuple[Optional[pd.Timestamp], Optional[pd.Timestamp]]]:
+        schema_obj = self.get_schema()
+        x_obj = schema_obj.get("X", {})
+        res: List[Tuple[Optional[pd.Timestamp], Optional[pd.Timestamp]]] = \
+            [(None, None)]
+        res.extend((
+            maybe_timestamp(progress.get("start_time")),
+            maybe_timestamp(progress.get("end_time")),
+        ) for progress in x_obj.get("source_progress", []))
+        return res
+
+    def get_segments(self,
+                     ticker: Optional[str] = None,
+                     ) -> List[Tuple[
+                         int, Optional[pd.Timestamp], Optional[pd.Timestamp]]]:
+        res = cast(SegmentResponse, self._client._request_json(
+            METHOD_LONGPOST, "/segments", {
+                "job": self._job_id,
+                "ticker": ticker,
+            }, capture_err=False))
+        return [
+            (rows, maybe_timestamp(start_time), maybe_timestamp(end_time))
+            for (rows, start_time, end_time) in res.get("segments", [])
+        ]
+
+    def get_main_source(self, ticker: Optional[str] = None) -> 'SourceHandle':
         self._maybe_refresh()
         if self._source is not None:
             return self._source
@@ -1626,6 +1828,29 @@ class JobHandle:
         self._source = SourceHandle(
             self._client, res["sourceId"], None, infer_type=True)
         return self._source
+
+    def set_main_source(self, source: 'SourceHandle') -> None:
+        with self.update_schema() as obj:
+            x_obj = obj.get("X", {})
+            x_obj["source"] = source.get_source_id()
+            obj["X"] = x_obj
+
+    def append_source(self,
+                      source: 'SourceHandle',
+                      start_time: Optional[Union[str, pd.Timestamp]],
+                      end_time: Optional[Union[str, pd.Timestamp]],
+                      change_set: Optional[Dict[str, Any]] = None) -> None:
+        with self.update_schema() as obj:
+            x_obj = obj.get("X", {})
+            progress = x_obj.get("source_progress", [])
+            progress.append({
+                "source": source.get_source_id(),
+                "start_time": None if start_time is None else f"{start_time}",
+                "end_time": None if end_time is None else f"{end_time}",
+                "change_set": {} if change_set is None else change_set,
+            })
+            x_obj["source_progress"] = progress
+            obj["X"] = x_obj
 
     def inspect(self, ticker: Optional[str]) -> 'InspectHandle':
         return InspectHandle(self._client, self, ticker)
@@ -1667,7 +1892,7 @@ class JobHandle:
                     before: Optional[int],
                     after: Optional[int]) -> List[StdoutLine]:
         res = cast(JobStdoutResponse, self._client._request_json(
-            METHOD_POST, "/summary", {
+            METHOD_POST, "/stdout", {
                 "job": self._job_id,
                 "ticker": ticker,
                 "filter": do_filter,
@@ -1678,6 +1903,13 @@ class JobHandle:
                 "after": after,
             }, capture_err=False))
         return res["lines"]
+
+    def get_logs(self) -> StdoutWrapper:
+        return StdoutWrapper({
+            "lines": self._raw_stdout(None, False, None, None, 0, None, None),
+            "messages": {},
+            "exceptions": [],
+        })
 
     def get_summary(self, ticker: Optional[str]) -> SummaryInfo:
         res = cast(SummaryResponse, self._client._request_json(
@@ -1702,12 +1934,36 @@ class JobHandle:
             "rows_total": res.get("rowsTotal"),
             "features": res.get("features"),
             "dropped_features": res.get("droppedFeatures"),
-            "data_start":
-                None if data_start is None else pd.Timestamp(data_start),
-            "data_high":
-                None if data_high is None else pd.Timestamp(data_high),
-            "data_end": None if data_end is None else pd.Timestamp(data_end),
+            "data_start": maybe_timestamp(data_start),
+            "data_high": maybe_timestamp(data_high),
+            "data_end": maybe_timestamp(data_end),
         }
+
+    def get_backtest(self,
+                     strategy: Optional[str],
+                     base_strategy: Optional[str],
+                     price_source: Optional['SourceHandle'],
+                     prediction_feature: Optional[str],
+                     ticker: Optional[str] = None,
+                     ) -> Tuple[Optional[Dict[str, Any]], StdoutWrapper]:
+        res = cast(BacktestResponse, self._client._request_json(
+            METHOD_LONGPOST, "/summary", {
+                "job": self._job_id,
+                "ticker": ticker,
+                "predictionFeature": prediction_feature,
+                "strategy": strategy,
+                "baseStrategy": base_strategy,
+                "priceSourceId": price_source,
+            }, capture_err=False))
+        output = res.get("output", [])
+        stdout = StdoutWrapper({
+            "lines": output if output is not None else [],
+            "messages": {},
+            "exceptions": [],
+        })
+        if res.get("errMessage", None):
+            raise ValueError(res["errMessage"], stdout)
+        return res.get("pyfolio", None), stdout
 
     def __repr__(self) -> str:
         name = ""
@@ -2015,10 +2271,11 @@ class SourceHandle:
         return self._help
 
     @contextlib.contextmanager
-    def bulk_operation(self) -> Iterator[None]:
-        with self._client.bulk_operation():
-            self.refresh()
-            yield
+    def bulk_operation(self) -> Iterator[bool]:
+        with self._client.bulk_operation() as do_refresh:
+            if do_refresh:
+                self.refresh()
+            yield do_refresh
 
     @contextlib.contextmanager
     def update_schema(self) -> Iterator[Dict[str, Any]]:
@@ -2076,6 +2333,32 @@ class SourceHandle:
         self.refresh()
         return res["source"]
 
+    def add_new_source_file(self,
+                            filename: str,
+                            ticker_column: str,
+                            date_column: Optional[str],
+                            progress_bar: Optional[IO[Any]] = sys.stdout,
+                            ) -> 'SourceHandle':
+        with self.bulk_operation():
+            source = self.add_new_source(
+                SOURCE_TYPE_CSV, os.path.basename(filename))
+            source.set_input_file(
+                filename, ticker_column, date_column, progress_bar)
+            return source
+
+    def add_new_source_df(self,
+                          df: pd.DataFrame,
+                          name: str,
+                          ticker_column: str,
+                          date_column: Optional[str],
+                          progress_bar: Optional[IO[Any]] = sys.stdout,
+                          ) -> 'SourceHandle':
+        with self.bulk_operation():
+            source = self.add_new_source(SOURCE_TYPE_CSV, name)
+            source.set_input_df(
+                df, name, ticker_column, date_column, progress_bar)
+            return source
+
     def add_source(self, source: 'SourceHandle') -> None:
         with self.bulk_operation():
             self._ensure_multi_source()
@@ -2087,7 +2370,10 @@ class SourceHandle:
                     config["sources"] = []
                 config["sources"].append(source.get_source_id())
 
-    def set_input(self, input_obj: 'InputHandle') -> None:
+    def set_input(self,
+                  input_obj: 'InputHandle',
+                  ticker_column: Optional[str],
+                  date_column: Optional[str]) -> None:
         with self.bulk_operation():
             self._ensure_csv_source()
             with self.update_schema() as schema_obj:
@@ -2098,23 +2384,31 @@ class SourceHandle:
                     config["filename"] = \
                         f"{input_obj.get_input_id()}" \
                         f".{input_obj.get_extension()}"
+                    if ticker_column is not None:
+                        config["ticker"] = ticker_column
+                    if date_column is not None:
+                        config["date"] = date_column
 
     def set_input_file(self,
                        filename: str,
+                       ticker_column: str,
+                       date_column: Optional[str],
                        progress_bar: Optional[IO[Any]] = sys.stdout) -> None:
         with self.bulk_operation():
             self._ensure_csv_source()
             input_obj = self._client.input_from_file(filename, progress_bar)
-            self.set_input(input_obj)
+            self.set_input(input_obj, ticker_column, date_column)
 
     def set_input_df(self,
                      df: pd.DataFrame,
                      name: str,
+                     ticker_column: str,
+                     date_column: Optional[str],
                      progress_bar: Optional[IO[Any]] = sys.stdout) -> None:
         with self.bulk_operation():
             self._ensure_csv_source()
             input_obj = self._client.input_from_df(df, name, progress_bar)
-            self.set_input(input_obj)
+            self.set_input(input_obj, ticker_column, date_column)
 
     def get_sources(self) -> Iterable['SourceHandle']:
         with self.bulk_operation():
@@ -2126,6 +2420,19 @@ class SourceHandle:
             for source_id in sources:
                 yield SourceHandle(
                     self._client, source_id, None, infer_type=True)
+
+    def get_input(self) -> Optional['InputHandle']:
+        with self.bulk_operation():
+            self._ensure_csv_source()
+            if self._schema_obj is None:
+                self._fetch_info()
+            assert self._schema_obj is not None
+            fname = self._schema_obj.get("config", {}).get("filename", None)
+            if fname is None:
+                return None
+            dot = fname.find(".")
+            input_id = fname[:dot] if dot >= 0 else fname
+            return InputHandle(self._client, input_id)
 
     def __repr__(self) -> str:
         name = ""
@@ -2233,10 +2540,11 @@ class InputHandle:
         return self.get_progress() == UPLOAD_DONE
 
     @contextlib.contextmanager
-    def bulk_operation(self) -> Iterator[None]:
-        with self._client.bulk_operation():
-            self.refresh()
-            yield
+    def bulk_operation(self) -> Iterator[bool]:
+        with self._client.bulk_operation() as do_refresh:
+            if do_refresh:
+                self.refresh()
+            yield do_refresh
 
     def upload_partial(self, chunk_content: IO[bytes]) -> bool:
         if self._last_byte_offset is None or self._name is None:
@@ -2267,29 +2575,35 @@ class InputHandle:
                     progress_bar: Optional[IO[Any]] = sys.stdout) -> int:
         if file_name is not None:
             self._name = file_name
-        if progress_bar is not None and hasattr(file_content, "seek"):
-            init_pos = 0
-            if hasattr(file_content, "tell"):
-                init_pos = file_content.tell()
-            total_size: Optional[int] = \
-                file_content.seek(0, os.SEEK_END) - init_pos
-            file_content.seek(init_pos, os.SEEK_SET)
-        else:
-            total_size = None
+        total_size: Optional[int] = None
+        if progress_bar is not None:
+            if hasattr(file_content, "seek"):
+                init_pos = 0
+                if hasattr(file_content, "tell"):
+                    init_pos = file_content.tell()
+                total_size = file_content.seek(0, os.SEEK_END) - init_pos
+                file_content.seek(init_pos, os.SEEK_SET)
+                end = ":"
+            else:
+                end = "."
+            if file_name is None:
+                msg = f"Uploading unnamed file{end}\n"
+            else:
+                msg = f"Uploading file {file_name}{end}\n"
+            progress_bar.write(msg)
+        print_progress = get_progress_bar(out=progress_bar)
         cur_size = 0
         while True:
-            if total_size is not None and progress_bar is not None:
-                print_progress_bar(
-                    cur_size / total_size, final=False, out=progress_bar)
+            if total_size is not None:
+                print_progress(cur_size / total_size, False)
             buff = file_content.read(FILE_UPLOAD_CHUNK_SIZE)
             if not buff:
                 break
             cur_size += len(buff)
             if self.upload_partial(BytesIO(buff)):
                 break
-        if total_size is not None and progress_bar is not None:
-            print_progress_bar(
-                cur_size / total_size, final=True, out=progress_bar)
+        if total_size is not None:
+            print_progress(cur_size / total_size, True)
         return cur_size
 
     def __repr__(self) -> str:
@@ -2304,21 +2618,65 @@ class InputHandle:
 # *** InputHandle ***
 
 
-def print_progress_bar(progress: float, final: bool, out: IO[Any]) -> None:
-    import shutil
+IS_JUPYTER: Optional[bool] = None
+
+
+def is_jupyter() -> bool:
+    global IS_JUPYTER
+
+    if IS_JUPYTER is not None:
+        return IS_JUPYTER
+
+    try:
+        from IPython import get_ipython
+
+        IS_JUPYTER = get_ipython() is not None
+    except (NameError, ModuleNotFoundError) as _:
+        IS_JUPYTER = False
+    return IS_JUPYTER
+
+
+def get_progress_bar(out: Optional[IO[Any]]) -> Callable[[float, bool], None]:
+    # pylint: disable=unused-argument
+
+    def no_bar(progress: float, final: bool) -> None:
+        return
+
+    if out is None:
+        return no_bar
+
+    io_out: IO[Any] = out
+
+    if is_jupyter():
+        from IPython.display import ProgressBar
+
+        mul = 1000
+        bar = ProgressBar(mul)
+        bar.display()
+
+        def jupyter_bar(progress: float, final: bool) -> None:
+            bar.progress = int(progress * mul)
+            end = "\n" if final else "\r"
+            io_out.write(f"{progress * 100.0:.2f}%{end}")
+
+        return jupyter_bar
 
     cols, _ = shutil.get_terminal_size((80, 20))
-    pstr = f" {progress * 100.0:.2f}%"
     max_len = len(" 100.00%")
-    cur_len = len(pstr)
-    if cur_len < max_len:
-        pstr = f"{' ' * (max_len - cur_len)}{pstr}"
     border = "|"
-    end = "\n" if final else "\r"
-    bar = "█" * int(progress * cols)
-    full_len = len(border) * 2 + len(bar) + len(pstr) + len(end)
-    mid = ' ' * max(0, cols - full_len)
-    out.write(f"{border}{bar}{mid}{border}{pstr}{end}")
+
+    def stdout_bar(progress: float, final: bool) -> None:
+        pstr = f" {progress * 100.0:.2f}%"
+        cur_len = len(pstr)
+        if cur_len < max_len:
+            pstr = f"{' ' * (max_len - cur_len)}{pstr}"
+        end = "\n" if final else "\r"
+        bar = "█" * int(progress * cols)
+        full_len = len(border) * 2 + len(bar) + len(pstr) + len(end)
+        mid = ' ' * max(0, cols - full_len)
+        io_out.write(f"{border}{bar}{mid}{border}{pstr}{end}")
+
+    return stdout_bar
 
 
 def get_file_hash(buff: IO[bytes]) -> str:
