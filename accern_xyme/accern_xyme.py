@@ -1202,9 +1202,9 @@ class XYMEClient:
     def create_multi_source_file(
             self,
             filename: str,
-            name_multi: Optional[str],
             ticker_column: str,
             date_column: Optional[str],
+            name_multi: Optional[str] = None,
             progress_bar: Optional[IO[Any]] = sys.stdout) -> 'SourceHandle':
         with self.bulk_operation():
             multi = self.create_multi_source(name_multi)
@@ -1216,9 +1216,9 @@ class XYMEClient:
             self,
             df: pd.DataFrame,
             name_csv: str,
-            name_multi: Optional[str],
             ticker_column: str,
             date_column: Optional[str],
+            name_multi: Optional[str] = None,
             progress_bar: Optional[IO[Any]] = sys.stdout) -> 'SourceHandle':
         with self.bulk_operation():
             multi = self.create_multi_source(name_multi)
