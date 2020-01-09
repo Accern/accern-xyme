@@ -1701,7 +1701,13 @@ class JobHandle:
                 StdoutWrapper(res["stdout"]),
             )
 
-    def get_predictions(self, method: Optional[str]) -> Optional[pd.DataFrame]:
+    def get_predictions(self,
+                        method: Optional[str],
+                        ticker: Optional[str],
+                        date: Optional[str],
+                        last_n: Optional[int],
+                        filters: Optional[Dict[str, Any]],
+                        ) -> Optional[pd.DataFrame]:
         res = cast(PredictionsResponse, self._client._request_json(
             METHOD_LONGPOST, "/predictions", {
                 "job": self._job_id,
