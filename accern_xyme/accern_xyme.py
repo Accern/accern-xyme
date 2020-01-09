@@ -1,5 +1,6 @@
 from typing import (
     Any,
+    Callable,
     cast,
     Dict,
     IO,
@@ -2560,20 +2561,19 @@ class InputHandle:
             file_content.seek(init_pos, os.SEEK_SET)
         else:
             total_size = None
+        print_progress = get_progress_bar(out=progress_bar)
         cur_size = 0
         while True:
-            if total_size is not None and progress_bar is not None:
-                print_progress_bar(
-                    cur_size / total_size, final=False, out=progress_bar)
+            if total_size is not None:
+                print_progress(cur_size / total_size, final=False)
             buff = file_content.read(FILE_UPLOAD_CHUNK_SIZE)
             if not buff:
                 break
             cur_size += len(buff)
             if self.upload_partial(BytesIO(buff)):
                 break
-        if total_size is not None and progress_bar is not None:
-            print_progress_bar(
-                cur_size / total_size, final=True, out=progress_bar)
+        if total_size is not None:
+            print_progress(cur_size / total_size, final=True)
         return cur_size
 
     def __repr__(self) -> str:
@@ -2586,6 +2586,53 @@ class InputHandle:
         return repr(self)
 
 # *** InputHandle ***
+
+
+IS_JUPYTER: Optional[bool] = None
+
+
+def is_jupyter() -> bool:
+    global IS_JUPYTER
+
+    if IS_JUPYTER is not None:
+        return IS_JUPYTER
+
+    try:
+        from IPython import get_ipython
+
+        IS_JUPYTER = get_ipython() is not None
+    except (NameError, ModuleNotFoundError) as _:
+        IS_JUPYTER = False
+    return IS_JUPYTER
+
+
+def get_progress_bar(out: Optional[IO[Any]]) -> Callable[[float, bool], None]:
+    # pylint: disable=unused-argument
+
+    def no_bar(progress: float, final: bool) -> None:
+        return
+
+    if out is None:
+        return no_bar
+
+    if is_jupyter():
+        from IPython.display import ProgressBar
+
+        mul = 1000
+        bar = ProgressBar(mul)
+        bar.display()
+
+        def jupyter_bar(progress: float, final: bool) -> None:
+            bar.progress = int(progress * mul)
+
+        return jupyter_bar
+
+    io_out: IO[Any] = out
+
+    def stdout_bar(progress: float, final: bool) -> None:
+        print_progress_bar(progress, final, io_out)
+
+    return stdout_bar
 
 
 def print_progress_bar(progress: float, final: bool, out: IO[Any]) -> None:
