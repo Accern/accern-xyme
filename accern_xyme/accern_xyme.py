@@ -1868,7 +1868,7 @@ class JobHandle:
                     before: Optional[int],
                     after: Optional[int]) -> List[StdoutLine]:
         res = cast(JobStdoutResponse, self._client._request_json(
-            METHOD_POST, "/summary", {
+            METHOD_POST, "/stdout", {
                 "job": self._job_id,
                 "ticker": ticker,
                 "filter": do_filter,
