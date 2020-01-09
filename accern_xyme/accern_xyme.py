@@ -73,6 +73,15 @@ PLOT_CSV = "csv"
 PLOT_OUTPUT = "output"
 PLOT_META = "meta"
 
+PRED_LATEST = "latest"  # using the current snapshot of the model
+PRED_HISTORIC = "historic"  # using the historic data
+PRED_PREDICTED = "predicted"  # using csv
+PRED_PROBA = "proba_outcome"  # using historic probabilities
+# using filtered historic probabilities
+PRED_PROBA_FILTERED = "proba_outcome_filter"
+PRED_PROBS = "probs"  # using historic probabilities
+PRED_VALID = "validation"  # using validation data
+
 
 VersionInfo = TypedDict('VersionInfo', {
     "apiVersion": str,
@@ -430,6 +439,14 @@ BacktestResponse = TypedDict('BacktestResponse', {
 })
 SegmentResponse = TypedDict('SegmentResponse', {
     "segments": List[Tuple[int, Optional[str], Optional[str]]],
+    "pollHint": float,
+})
+PredictionsResponse = TypedDict('PredictionsResponse', {
+    "isClf": bool,
+    "columns": List[str],
+    "predsName": str,
+    "predictions": List[List[Union[str, float, int]]],
+    "allPredictions": List[List[Union[str, float, int]]],
     "pollHint": float,
 })
 
@@ -1683,6 +1700,22 @@ class JobHandle:
                 maybe_predictions_to_df(res["predictions"]),
                 StdoutWrapper(res["stdout"]),
             )
+
+    def get_predictions(self, method: Optional[str]) -> Optional[pd.DataFrame]:
+        res = cast(PredictionsResponse, self._client._request_json(
+            METHOD_LONGPOST, "/predictions", {
+                "job": self._job_id,
+                "method": method,
+                "ticker": ticker,
+                "date": date,
+                "last_n": last_n,
+                "filters": filters,
+            }, capture_err=False))
+        columns = res.get("columns", None)
+        predictions = res.get("predictions", None)
+        if columns is not None and predictions is not None:
+            return pd.DataFrame(predictions, columns=columns)
+        return None
 
     def share(self, path: str) -> 'JobHandle':
         shared = cast(ShareResponse, self._client._request_json(
