@@ -3,6 +3,10 @@
 # Check https://circleci.com/docs/2.0/language-python/ for more details
 #
 version: 2
+
+experimental:
+  pipelines: true
+
 workflows:
   version: 2
   test:
@@ -96,6 +100,12 @@ jobs:
             . venv/bin/activate
             make lint-pylint
 
+      - run:
+          name: Lint Code (docstring)
+          command: |
+            . venv/bin/activate
+            make lint-docstring
+
       - store_artifacts:
           path: test-reports
           destination: test-reports
@@ -178,7 +188,7 @@ jobs:
           command: |
             . venv/bin/activate
             make lint-type-check
-            
+
       # - run:
       #     name: Lint Code (pylint)
       #     command: |
