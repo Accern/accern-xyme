@@ -2691,7 +2691,7 @@ def get_file_hash(buff: IO[bytes]) -> str:
     """Return sha224 hash of data files
 
     Args:
-        buff: Data used to generate the hash.
+        buff (IO[bytes]): Data used to generate the hash.
 
     Returns:
         str: A sha224 hashed string.
