@@ -1013,9 +1013,10 @@ class XYMEClient:
         """Set the maintenance mode of the server
 
         Args:
-            is_maintenance: If the server should be in maintenance mode
+            is_maintenance (bool): If the server should be in maintenance mode.
 
         Returns:
+            MaintenanceInfo: MaintenanceInfo object.
         """
         return cast(MaintenanceInfo, self._request_json(
             METHOD_PUT, "/maintenance", {
@@ -2690,10 +2691,10 @@ def get_file_hash(buff: IO[bytes]) -> str:
     """Return sha224 hash of data files
 
     Args:
-        buff: Data used to generate the hash
+        buff: Data used to generate the hash.
 
     Returns:
-        str: A sha224 hashed string
+        str: A sha224 hashed string.
     """
     import hashlib
 
