@@ -1010,6 +1010,13 @@ class XYMEClient:
             METHOD_POST, "/afterupdate", {}, capture_err=False))
 
     def set_maintenance_mode(self, is_maintenance: bool) -> MaintenanceInfo:
+        """Set the maintenance mode of the server
+
+        Args:
+            is_maintenance: If the server should be in maintenance mode
+
+        Returns:
+        """
         return cast(MaintenanceInfo, self._request_json(
             METHOD_PUT, "/maintenance", {
                 "isMaintenance": is_maintenance,
@@ -2683,7 +2690,7 @@ def get_file_hash(buff: IO[bytes]) -> str:
     """Return sha224 hash of data files
 
     Args:
-        buff (IO[bytes]): Data used to generate the hash
+        buff: Data used to generate the hash
 
     Returns:
         str: A sha224 hashed string
