@@ -96,6 +96,12 @@ jobs:
             . venv/bin/activate
             make lint-pylint
 
+      - run:
+          name: Lint Code (docstring)
+          command: |
+            . venv/bin/activate
+            make lint-docstring
+
       - store_artifacts:
           path: test-reports
           destination: test-reports
@@ -178,7 +184,7 @@ jobs:
           command: |
             . venv/bin/activate
             make lint-type-check
-            
+
       # - run:
       #     name: Lint Code (pylint)
       #     command: |

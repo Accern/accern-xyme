@@ -1,4 +1,5 @@
 -r requirements.txt
+darglint==1.1.0
 flake8-commas==2.0.0
 flake8==3.7.9
 ipython==7.9.0
