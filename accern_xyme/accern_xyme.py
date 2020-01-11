@@ -27,7 +27,7 @@ from typing_extensions import TypedDict, Literal, overload
 import quick_server
 
 
-__version__ = "0.0.8"
+__version__ = "0.0.9"
 # FIXME: async calls, documentation, auth, summary – time it took etc.
 
 
@@ -833,12 +833,11 @@ class XYMEClient:
         self._auto_refresh = True
         self._permissions: Optional[List[str]] = None
         self._init()
-        self._api_version = API_VERSION
-        # NOTE determining whether we are dealing with a legacy xyme server
-        # FIXME remove this bit once we have all servers on at least v1
         api_version = self.get_server_version().get("apiVersion", "v0")
         version_num = int(api_version.lstrip("v"))
-        self._api_version = version_num
+        self._api_version = min(version_num, API_VERSION)
+        # NOTE determining whether we are dealing with a legacy xyme server
+        # FIXME remove this bit once we have all servers on at least v1
         if version_num < 1:
             global LEGACY_XYME
             LEGACY_XYME = True
