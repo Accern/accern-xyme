@@ -1008,7 +1008,7 @@ class XYMEClient:
     def get_server_version(self) -> VersionInfo:
         # FIXME should be call without version eventually
         return cast(VersionInfo, self._raw_request_json(
-            METHOD_GET, "/version", {}, api_version=0, add_prefix=True))
+            METHOD_GET, "/xyme/version", {}, add_prefix=False))
 
     def afterupdate(self) -> MaintenanceInfo:
         return cast(MaintenanceInfo, self._request_json(
