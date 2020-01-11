@@ -27,12 +27,11 @@ from typing_extensions import TypedDict, Literal, overload
 import quick_server
 
 
-__version__ = "0.0.9"
+__version__ = "0.0.10"
 # FIXME: async calls, documentation, auth, summary – time it took etc.
 
 
 API_VERSION = 1
-LEGACY_XYME = False
 
 
 METHOD_DELETE = "DELETE"
@@ -832,15 +831,13 @@ class XYMEClient:
         self._last_action = time.monotonic()
         self._auto_refresh = True
         self._permissions: Optional[List[str]] = None
-        self._init()
         api_version = self.get_server_version().get("apiVersion", "v0")
         version_num = int(api_version.lstrip("v"))
         self._api_version = min(version_num, API_VERSION)
-        # NOTE determining whether we are dealing with a legacy xyme server
-        # FIXME remove this bit once we have all servers on at least v1
-        if version_num < 1:
-            global LEGACY_XYME
-            LEGACY_XYME = True
+        self._init()
+
+    def get_api_version(self) -> int:
+        return self._api_version
 
     def _init(self) -> None:
         if self._token is None:
@@ -891,67 +888,73 @@ class XYMEClient:
         if method != METHOD_FILE and files is not None:
             raise ValueError(
                 f"files are only allow for post (got {method}): {files}")
-        if method == METHOD_GET:
-            req = requests.get(url, params=args)
-            if req.status_code == 403:
-                raise AccessDenied(req.text)
-            if req.status_code == 200:
-                return json.loads(req.text)
-            raise ValueError(
-                f"error {req.status_code} in worker request:\n{req.text}")
-        if method == METHOD_FILE:
-            if files is None:
-                raise ValueError(f"file method must have files: {files}")
-            # FIXME: should we reset the streams?
-            # this might be unexpected behavior
-            # for fbuff in files.values():
-            #     if hasattr(fbuff, "seek"):
-            #         fbuff.seek(0)
-            req = requests.post(url, data=args, files={
-                key: (
-                    getattr(value, "name", key),
-                    value,
-                    "application/octet-stream",
-                ) for (key, value) in files.items()
-            })
-            if req.status_code == 403:
-                raise AccessDenied(req.text)
-            if req.status_code == 200:
-                return json.loads(req.text)
-            raise ValueError(
-                f"error {req.status_code} in worker request:\n{req.text}")
-        if method == METHOD_POST:
-            req = requests.post(url, json=args)
-            if req.status_code == 403:
-                raise AccessDenied(req.text)
-            if req.status_code == 200:
-                return json.loads(req.text)
-            raise ValueError(
-                f"error {req.status_code} in worker request:\n{req.text}")
-        if method == METHOD_PUT:
-            req = requests.put(url, json=args)
-            if req.status_code == 403:
-                raise AccessDenied(req.text)
-            if req.status_code == 200:
-                return json.loads(req.text)
-            raise ValueError(
-                f"error {req.status_code} in worker request:\n{req.text}")
-        if method == METHOD_DELETE:
-            req = requests.delete(url, json=args)
-            if req.status_code == 403:
-                raise AccessDenied(req.text)
-            if req.status_code == 200:
-                return json.loads(req.text)
-            raise ValueError(
-                f"error {req.status_code} in worker request:\n{req.text}")
-        if method == METHOD_LONGPOST:
-            try:
-                return quick_server.worker_request(url, args)
-            except quick_server.WorkerError as e:
-                if e.get_status_code() == 403:
-                    raise AccessDenied(e.args)
-                raise e
-        raise ValueError(f"unknown method {method}")
+        req = None
+        try:
+            if method == METHOD_GET:
+                req = requests.get(url, params=args)
+                if req.status_code == 403:
+                    raise AccessDenied(req.text)
+                if req.status_code == 200:
+                    return json.loads(req.text)
+                raise ValueError(
+                    f"error {req.status_code} in worker request:\n{req.text}")
+            if method == METHOD_FILE:
+                if files is None:
+                    raise ValueError(f"file method must have files: {files}")
+                # FIXME: should we reset the streams?
+                # this might be unexpected behavior
+                # for fbuff in files.values():
+                #     if hasattr(fbuff, "seek"):
+                #         fbuff.seek(0)
+                req = requests.post(url, data=args, files={
+                    key: (
+                        getattr(value, "name", key),
+                        value,
+                        "application/octet-stream",
+                    ) for (key, value) in files.items()
+                })
+                if req.status_code == 403:
+                    raise AccessDenied(req.text)
+                if req.status_code == 200:
+                    return json.loads(req.text)
+                raise ValueError(
+                    f"error {req.status_code} in worker request:\n{req.text}")
+            if method == METHOD_POST:
+                req = requests.post(url, json=args)
+                if req.status_code == 403:
+                    raise AccessDenied(req.text)
+                if req.status_code == 200:
+                    return json.loads(req.text)
+                raise ValueError(
+                    f"error {req.status_code} in worker request:\n{req.text}")
+            if method == METHOD_PUT:
+                req = requests.put(url, json=args)
+                if req.status_code == 403:
+                    raise AccessDenied(req.text)
+                if req.status_code == 200:
+                    return json.loads(req.text)
+                raise ValueError(
+                    f"error {req.status_code} in worker request:\n{req.text}")
+            if method == METHOD_DELETE:
+                req = requests.delete(url, json=args)
+                if req.status_code == 403:
+                    raise AccessDenied(req.text)
+                if req.status_code == 200:
+                    return json.loads(req.text)
+                raise ValueError(
+                    f"error {req.status_code} in worker request:\n{req.text}")
+            if method == METHOD_LONGPOST:
+                try:
+                    return quick_server.worker_request(url, args)
+                except quick_server.WorkerError as e:
+                    if e.get_status_code() == 403:
+                        raise AccessDenied(e.args)
+                    raise e
+            raise ValueError(f"unknown method {method}")
+        except json.decoder.JSONDecodeError:
+            if req is None:
+                raise
+            raise ValueError(req.text)
 
     def _login(self) -> None:
         if self._user is None or self._password is None:
@@ -1003,8 +1006,9 @@ class XYMEClient:
             METHOD_POST, "/username", {}, capture_err=False))
 
     def get_server_version(self) -> VersionInfo:
+        # FIXME should be call without version eventually
         return cast(VersionInfo, self._raw_request_json(
-            METHOD_GET, "/version", {}, add_prefix=False))
+            METHOD_GET, "/version", {}, api_version=0, add_prefix=True))
 
     def afterupdate(self) -> MaintenanceInfo:
         return cast(MaintenanceInfo, self._request_json(
@@ -1317,7 +1321,7 @@ class XYMEClient:
                 "name": name,
                 "extension": ext,
                 "size": size,
-                "hash": None if LEGACY_XYME else hash_str,
+                "hash": None if self.get_api_version() < 1 else hash_str,
             }, capture_err=False))
         return InputHandle(self, res["inputId"], name=name, ext=ext, size=size)
 
@@ -1663,7 +1667,7 @@ class JobHandle:
                     "method": method,
                 }, capture_err=True, files={"file": fbuff}))
         elif source is not None:
-            if LEGACY_XYME:
+            if self.get_api_version() < 1:
                 raise ValueError("the XYME version does not "
                                  "support dynamic predict sources")
             res = cast(DynamicPredictionResponse, self._client._request_json(
