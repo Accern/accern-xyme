@@ -27,7 +27,7 @@ from typing_extensions import TypedDict, Literal, overload
 import quick_server
 
 
-__version__ = "0.0.10"
+__version__ = "0.0.11"
 # FIXME: async calls, documentation, auth, summary – time it took etc.
 
 
@@ -831,9 +831,15 @@ class XYMEClient:
         self._last_action = time.monotonic()
         self._auto_refresh = True
         self._permissions: Optional[List[str]] = None
-        api_version = self.get_server_version().get("apiVersion", "v0")
-        version_num = int(api_version.lstrip("v"))
-        self._api_version = min(version_num, API_VERSION)
+
+        def get_version(legacy: bool) -> int:
+            server_version = self.get_server_version(legacy)
+            return int(server_version.get("apiVersion", "v0").lstrip("v"))
+
+        try:
+            self._api_version = min(get_version(False), API_VERSION)
+        except ValueError:
+            self._api_version = min(get_version(True), API_VERSION)
         self._init()
 
     def get_api_version(self) -> int:
@@ -1005,8 +1011,10 @@ class XYMEClient:
         return cast(UserInfo, self._request_json(
             METHOD_POST, "/username", {}, capture_err=False))
 
-    def get_server_version(self) -> VersionInfo:
-        # FIXME should be call without version eventually
+    def get_server_version(self, legacy: bool = False) -> VersionInfo:
+        if legacy:
+            return cast(VersionInfo, self._raw_request_json(
+                METHOD_GET, "/version", {}, api_version=0))
         return cast(VersionInfo, self._raw_request_json(
             METHOD_GET, "/xyme/version", {}, add_prefix=False))
 
@@ -1667,7 +1675,7 @@ class JobHandle:
                     "method": method,
                 }, capture_err=True, files={"file": fbuff}))
         elif source is not None:
-            if self.get_api_version() < 1:
+            if self._client.get_api_version() < 1:
                 raise ValueError("the XYME version does not "
                                  "support dynamic predict sources")
             res = cast(DynamicPredictionResponse, self._client._request_json(
