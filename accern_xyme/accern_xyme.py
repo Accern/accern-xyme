@@ -27,7 +27,7 @@ from typing_extensions import TypedDict, Literal, overload
 import quick_server
 
 
-__version__ = "0.0.11"
+__version__ = "0.0.12"
 # FIXME: async calls, documentation, auth, summary – time it took etc.
 
 
@@ -85,7 +85,8 @@ PRED_VALID = "validation"  # using validation data
 
 
 VersionInfo = TypedDict('VersionInfo', {
-    "apiVersion": str,
+    "apiVersion": Union[str, int],
+    "callerApiVersion": str,
     "time": str,
     "version": str,
     "xymeVersion": str,
@@ -834,7 +835,10 @@ class XYMEClient:
 
         def get_version(legacy: bool) -> int:
             server_version = self.get_server_version(legacy)
-            return int(server_version.get("apiVersion", "v0").lstrip("v"))
+            version = server_version.get("apiVersion", "v0")
+            if isinstance(version, str):
+                version = int(version.lstrip("v"))
+            return int(version)
 
         try:
             self._api_version = min(get_version(False), API_VERSION)
