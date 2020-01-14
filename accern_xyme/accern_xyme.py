@@ -1664,15 +1664,15 @@ class JobHandle:
         """Returns the status of the job.
 
         Args:
-            fast_return (bool) -- If set the function is non-blocking and
-                will fetch the current status in the background. The function
-                will return some previous status value and a future call will
-                eventually return the status returned by the call. This
-                guarantees that the function call does not block for a long
-                time for freshly started jobs. (default: {True})
+            fast_return (bool, optional): If set the function is non-blocking
+                and will fetch the current status in the background. The
+                function will return some previous status value and a future
+                call will eventually return the status returned by the call.
+                This guarantees that the function call does not block for a
+                long time for freshly started jobs. Defaults to True.
 
         Returns:
-            str -- The status of the job. Most common statuses are:
+            str: The status of the job. Most common statuses are:
                 unknown, draft, waiting, running, killed, error, paused, done
         """
         status = self._status
