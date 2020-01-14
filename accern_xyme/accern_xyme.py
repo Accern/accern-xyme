@@ -18,6 +18,7 @@ import copy
 import json
 import time
 import shutil
+import threading
 import contextlib
 import collections
 from io import BytesIO, TextIOWrapper
@@ -27,7 +28,7 @@ from typing_extensions import TypedDict, Literal, overload
 import quick_server
 
 
-__version__ = "0.0.12"
+__version__ = "0.0.13"
 # FIXME: async calls, documentation, auth, summary – time it took etc.
 
 
@@ -1454,6 +1455,8 @@ class JobHandle:
         self._tabs: Optional[List[str]] = None
         self._tickers: Optional[List[str]] = None
         self._source: Optional[SourceHandle] = None
+        self._is_async_fetch = False
+        self._async_lock = threading.RLock()
 
     def refresh(self) -> None:
         self._name = None
@@ -1461,7 +1464,6 @@ class JobHandle:
         self._schema_obj = None
         self._kinds = None
         self._permalink = None
-        self._status = None
         self._time_total = None
         self._time_start = None
         self._time_end = None
@@ -1474,6 +1476,8 @@ class JobHandle:
         self._tabs = None
         self._tickers = None
         self._source = None
+        if not self._is_async_fetch:
+            self._status = None
 
     def _maybe_refresh(self) -> None:
         if self._client.is_auto_refresh():
@@ -1602,12 +1606,51 @@ class JobHandle:
         assert self._path is not None
         return self._path
 
-    def get_status(self) -> str:
-        self._maybe_refresh()
-        if self._status is None:
-            self._fetch_info()
-        assert self._status is not None
-        return self._status
+    def get_status(self, fast_return: bool = True) -> str:
+        """Returns the status of the job.
+
+        Keyword Arguments:
+            fast_return {bool} -- If set the function is non-blocking and
+                will fetch the current status in the background. The function
+                will return some previous status value and a future call will
+                eventually return the status returned by the call. This
+                guarantees that the function call does not block for a long
+                time for freshly started jobs. (default: {True})
+
+        Returns:
+            str -- The status of the job. Most common statuses are:
+                unknown, draft, waiting, running, error, paused, done
+        """
+        status = self._status
+        res: str = status if status is not None else "unknown"
+
+        def retrieve() -> None:
+            if self._client.is_auto_refresh() or self._status is None:
+                self.refresh()
+                self._status = res
+                self._fetch_info()
+
+        def async_retrieve() -> None:
+            retrieve()
+            self._is_async_fetch = False
+
+        if not fast_return:
+            retrieve()
+            status = self._status
+            assert status is not None
+            return status
+
+        if self._is_async_fetch:
+            return res
+
+        with self._async_lock:
+            if self._is_async_fetch:
+                return res
+            self._is_async_fetch = True
+
+            th = threading.Thread(target=async_retrieve)
+            th.start()
+        return res
 
     def can_rename(self) -> bool:
         self._maybe_refresh()
