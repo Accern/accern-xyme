@@ -2406,9 +2406,10 @@ class SourceHandle:
                     if "config" not in schema_obj:
                         schema_obj["config"] = {}
                     config = schema_obj["config"]
-                    config["filename"] = \
-                        f"{input_obj.get_input_id()}" \
-                        f".{input_obj.get_extension()}"
+                    ext = input_obj.get_extension()
+                    if ext is None:
+                        ext = "csv"  # should be correct in 99% of the cases
+                    config["filename"] = f"{input_obj.get_input_id()}.{ext}"
                     if ticker_column is not None:
                         config["ticker"] = ticker_column
                     if date_column is not None:
@@ -2515,15 +2516,16 @@ class InputHandle:
         self._last_byte_offset = res["lastByteOffset"]
         self._size = res["size"]
         self._progress = res["progress"]
+        if self._progress is None:
+            self._progress = "unknown"
 
     def get_input_id(self) -> str:
         return self._input_id
 
-    def get_name(self) -> str:
+    def get_name(self) -> Optional[str]:
         self._maybe_refresh()
         if self._name is None:
             self._fetch_info()
-        assert self._name is not None
         return self._name
 
     def get_path(self) -> str:
@@ -2533,25 +2535,22 @@ class InputHandle:
         assert self._path is not None
         return self._path
 
-    def get_extension(self) -> str:
+    def get_extension(self) -> Optional[str]:
         self._maybe_refresh()
         if self._ext is None:
             self._fetch_info()
-        assert self._ext is not None
         return self._ext
 
-    def get_last_byte_offset(self) -> int:
+    def get_last_byte_offset(self) -> Optional[int]:
         self._maybe_refresh()
         if self._last_byte_offset is None:
             self._fetch_info()
-        assert self._last_byte_offset is not None
         return self._last_byte_offset
 
-    def get_size(self) -> int:
+    def get_size(self) -> Optional[int]:
         self._maybe_refresh()
         if self._size is None:
             self._fetch_info()
-        assert self._size is not None
         return self._size
 
     def get_progress(self) -> str:
