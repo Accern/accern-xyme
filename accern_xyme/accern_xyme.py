@@ -1663,8 +1663,8 @@ class JobHandle:
     def get_status(self, fast_return: bool = True) -> str:
         """Returns the status of the job.
 
-        Arguments:
-            fast_return {bool} -- If set the function is non-blocking and
+        Keyword Arguments:
+            fast_return (bool) -- If set the function is non-blocking and
                 will fetch the current status in the background. The function
                 will return some previous status value and a future call will
                 eventually return the status returned by the call. This
