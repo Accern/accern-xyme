@@ -12,6 +12,7 @@ from typing import (
     Tuple,
     Union,
 )
+import io
 import os
 import sys
 import copy
@@ -456,6 +457,8 @@ SimplePredictionsResponse = TypedDict('SimplePredictionsResponse', {
 
 FILE_UPLOAD_CHUNK_SIZE = 8 * 1024 * 1024  # 8MB
 FILE_HASH_CHUNK_SIZE = FILE_UPLOAD_CHUNK_SIZE
+MAX_RETRY = 5
+RETRY_SLEEP = 5.0
 
 
 def set_file_upload_chunk_size(size: int) -> None:
@@ -476,6 +479,19 @@ def set_file_hash_chunk_size(size: int) -> None:
 
 def get_file_hash_chunk_size() -> int:
     return FILE_HASH_CHUNK_SIZE
+
+
+def get_max_retry() -> int:
+    """Returns the maximum number of retries on connection errors.
+
+    Returns:
+        int -- The number of times a connection tries to be established.
+    """
+    return MAX_RETRY
+
+
+def get_retry_sleep() -> float:
+    return RETRY_SLEEP
 
 
 def maybe_timestamp(timestamp: Optional[str]) -> Optional[pd.Timestamp]:
@@ -882,14 +898,58 @@ class XYMEClient:
         finally:
             self.set_auto_refresh(old_refresh)
 
-    def _raw_request_json(self,
-                          method: str,
-                          path: str,
-                          args: Dict[str, Any],
-                          add_prefix: bool = True,
-                          files: Optional[Dict[str, IO[bytes]]] = None,
-                          api_version: Optional[int] = None,
-                          ) -> Dict[str, Any]:
+    def _raw_request_json(
+            self,
+            method: str,
+            path: str,
+            args: Dict[str, Any],
+            add_prefix: bool = True,
+            files: Optional[Dict[str, IO[bytes]]] = None,
+            api_version: Optional[int] = None) -> Dict[str, Any]:
+        file_resets = {}
+        can_reset = True
+        if files is not None:
+            for (fname, fbuff) in files.items():
+                if hasattr(fbuff, "seek"):
+                    file_resets[fname] = fbuff.seek(0, io.SEEK_CUR)
+                else:
+                    can_reset = False
+
+        def reset_files() -> bool:
+            if files is None:
+                return True
+            if not can_reset:
+                return False
+            for (fname, pos) in file_resets.items():
+                files[fname].seek(pos, io.SEEK_SET)
+            return True
+
+        retry = 0
+        while True:
+            try:
+                return self._fallible_raw_request_json(
+                    method, path, args, add_prefix, files, api_version)
+            except requests.ConnectionError:
+                if retry >= MAX_RETRY:
+                    raise
+                if not reset_files():
+                    raise
+                time.sleep(RETRY_SLEEP)
+            except AccessDenied as adex:
+                if not reset_files():
+                    raise ValueError(
+                        "cannot reset file buffers for retry") from adex
+                raise adex
+            retry += 1
+
+    def _fallible_raw_request_json(
+            self,
+            method: str,
+            path: str,
+            args: Dict[str, Any],
+            add_prefix: bool,
+            files: Optional[Dict[str, IO[bytes]]],
+            api_version: Optional[int]) -> Dict[str, Any]:
         prefix = ""
         if add_prefix:
             if api_version is None:
@@ -912,11 +972,6 @@ class XYMEClient:
             if method == METHOD_FILE:
                 if files is None:
                     raise ValueError(f"file method must have files: {files}")
-                # FIXME: should we reset the streams?
-                # this might be unexpected behavior
-                # for fbuff in files.values():
-                #     if hasattr(fbuff, "seek"):
-                #         fbuff.seek(0)
                 req = requests.post(url, data=args, files={
                     key: (
                         getattr(value, "name", key),
@@ -1347,11 +1402,9 @@ class XYMEClient:
                       ext: str,
                       progress_bar: Optional[IO[Any]] = sys.stdout,
                       ) -> 'InputHandle':
-        from_pos = 0
-        if hasattr(io_in, "tell"):
-            from_pos = io_in.tell()
-        size = io_in.seek(0, os.SEEK_END) - from_pos
-        io_in.seek(from_pos, os.SEEK_SET)
+        from_pos = io_in.seek(0, io.SEEK_CUR)
+        size = io_in.seek(0, io.SEEK_END) - from_pos
+        io_in.seek(from_pos, io.SEEK_SET)
         hash_str = get_file_hash(io_in)
         with self.bulk_operation():
             res: InputHandle = self.create_input(name, ext, size, hash_str)
@@ -1584,6 +1637,7 @@ class JobHandle:
         res = self._client.start_job(
             self._job_id, user=user, company=company, nowait=nowait)
         self.refresh()
+        self._status = "waiting"
         return res
 
     def delete(self) -> None:
@@ -2645,11 +2699,9 @@ class InputHandle:
         total_size: Optional[int] = None
         if progress_bar is not None:
             if hasattr(file_content, "seek"):
-                init_pos = 0
-                if hasattr(file_content, "tell"):
-                    init_pos = file_content.tell()
-                total_size = file_content.seek(0, os.SEEK_END) - init_pos
-                file_content.seek(init_pos, os.SEEK_SET)
+                init_pos = file_content.seek(0, io.SEEK_CUR)
+                total_size = file_content.seek(0, io.SEEK_END) - init_pos
+                file_content.seek(init_pos, io.SEEK_SET)
                 end = ":"
             else:
                 end = "."
@@ -2759,15 +2811,13 @@ def get_file_hash(buff: IO[bytes]) -> str:
 
     sha = hashlib.sha224()
     chunk_size = FILE_HASH_CHUNK_SIZE
-    init_pos = 0
-    if hasattr(buff, "tell"):
-        init_pos = buff.tell()
+    init_pos = buff.seek(0, io.SEEK_CUR)
     while True:
         chunk = buff.read(chunk_size)
         if not chunk:
             break
         sha.update(chunk)
-    buff.seek(init_pos, os.SEEK_SET)
+    buff.seek(init_pos, io.SEEK_SET)
     return sha.hexdigest()
 
 
