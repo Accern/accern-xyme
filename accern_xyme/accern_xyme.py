@@ -29,7 +29,7 @@ from typing_extensions import TypedDict, Literal, overload
 import quick_server
 
 
-__version__ = "0.0.13"
+__version__ = "0.0.14"
 # FIXME: async calls, documentation, auth, summary – time it took etc.
 
 
@@ -2684,6 +2684,8 @@ class InputHandle:
             self._fetch_info()
             if self._last_byte_offset is None:
                 self._last_byte_offset = 0
+            if self._name is None:
+                self._name = "unnamed file"
         res = cast(UploadResponse, self._client._request_json(
             METHOD_FILE, "/upload", {
                 "inputId": self._input_id,
@@ -2802,9 +2804,9 @@ def get_progress_bar(out: Optional[IO[Any]]) -> Callable[[float, bool], None]:
         if cur_len < max_len:
             pstr = f"{' ' * (max_len - cur_len)}{pstr}"
         end = "\n" if final else "\r"
-        bar = "█" * int(progress * cols)
-        full_len = len(border) * 2 + len(bar) + len(pstr) + len(end)
-        mid = ' ' * max(0, cols - full_len)
+        full_len = len(border) * 2 + len(pstr) + len(end)
+        bar = "█" * int(progress * (cols - full_len))
+        mid = ' ' * max(0, cols - full_len - len(bar))
         io_out.write(f"{border}{bar}{mid}{border}{pstr}{end}")
 
     return stdout_bar
