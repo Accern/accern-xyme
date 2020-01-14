@@ -77,6 +77,7 @@ X - implemented
 [X] POST /xyme/unpause
 [P] POST /xyme/upload
 [X] POST /xyme/username
+[X] PUT /xyme/force_flush
 [ ] PUT /xyme/hide_source
 [X] PUT /xyme/lock_source
 [X] PUT /xyme/maintenance

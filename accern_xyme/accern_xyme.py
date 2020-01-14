@@ -453,6 +453,9 @@ SimplePredictionsResponse = TypedDict('SimplePredictionsResponse', {
     "allPredictions": List[List[Union[str, float, int]]],
     "pollHint": float,
 })
+ForceFlushResponse = TypedDict('ForceFlushResponse', {
+    "success": bool,
+})
 
 
 FILE_UPLOAD_CHUNK_SIZE = 8 * 1024 * 1024  # 8MB
@@ -2086,6 +2089,15 @@ class JobHandle:
         if res.get("errMessage", None):
             raise ValueError(res["errMessage"], stdout)
         return res.get("pyfolio", None), stdout
+
+    def force_flush(self) -> None:
+        res = cast(ForceFlushResponse, self._client._request_json(
+            METHOD_PUT, "/force_flush", {
+                "job": self._job_id,
+            }, capture_err=False))
+        if not res["success"]:
+            raise AccessDenied(f"cannot access job {self._job_id}")
+        self.refresh()
 
     def __repr__(self) -> str:
         name = ""
