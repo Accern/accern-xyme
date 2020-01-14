@@ -1609,7 +1609,7 @@ class JobHandle:
     def get_status(self, fast_return: bool = True) -> str:
         """Returns the status of the job.
 
-        Keyword Arguments:
+        Arguments:
             fast_return {bool} -- If set the function is non-blocking and
                 will fetch the current status in the background. The function
                 will return some previous status value and a future call will
@@ -1619,7 +1619,7 @@ class JobHandle:
 
         Returns:
             str -- The status of the job. Most common statuses are:
-                unknown, draft, waiting, running, error, paused, done
+                unknown, draft, waiting, running, killed, error, paused, done
         """
         status = self._status
         res: str = status if status is not None else "unknown"
