@@ -1664,7 +1664,7 @@ class JobHandle:
         """Returns the status of the job.
 
         Args:
-            fast_return (bool, optional): If set the function is non-blocking
+            fast_return (bool): If set the function is non-blocking
                 and will fetch the current status in the background. The
                 function will return some previous status value and a future
                 call will eventually return the status returned by the call.
