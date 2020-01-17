@@ -456,7 +456,14 @@ SimplePredictionsResponse = TypedDict('SimplePredictionsResponse', {
 ForceFlushResponse = TypedDict('ForceFlushResponse', {
     "success": bool,
 })
-
+OperatorDefinition = TypedDict('OperatorDefinition', {
+    "operator": str,
+    "args": Dict[str, str],
+    "help": str,
+})
+OperatorResponse = TypedDict('OperatorResponse', {
+    "operators": List[OperatorDefinition]
+})
 
 FILE_UPLOAD_CHUNK_SIZE = 8 * 1024 * 1024  # 8MB
 FILE_HASH_CHUNK_SIZE = FILE_UPLOAD_CHUNK_SIZE
@@ -1473,6 +1480,11 @@ class XYMEClient:
         res = cast(StrategyResponse, self._request_json(
             METHOD_GET, "/strategies", {}, capture_err=False))
         return res["strategies"]
+
+    def get_operators(self) -> List[OperatorResponse]:
+        res = cast(OperatorResponse, self._request_json(
+            METHOD_GET, "/operators", {}, capture_err=False))
+        return res["operators"]
 
 # *** XYMEClient ***
 
@@ -2551,10 +2563,11 @@ class SourceHandle:
             if self._schema_obj is None:
                 self._fetch_info()
             assert self._schema_obj is not None
-            sources = self._schema_obj.get("config", {}).get("sources", [])
-            for source_id in sources:
-                yield SourceHandle(
-                    self._client, source_id, None, infer_type=True)
+            ops = self._schema_obj.get("config", {}).get("operations", [])
+            for op in ops:
+                if op.get("source") is not None:
+                    yield SourceHandle(
+                        self._client, op.get("source"), None, infer_type=True)
 
     def get_input(self) -> Optional['InputHandle']:
         with self.bulk_operation():
