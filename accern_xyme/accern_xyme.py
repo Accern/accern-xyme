@@ -462,7 +462,7 @@ OperatorDefinition = TypedDict('OperatorDefinition', {
     "help": str,
 })
 OperatorResponse = TypedDict('OperatorResponse', {
-    "operators": List[OperatorDefinition]
+    "operators": List[OperatorDefinition],
 })
 
 FILE_UPLOAD_CHUNK_SIZE = 8 * 1024 * 1024  # 8MB
@@ -1481,7 +1481,7 @@ class XYMEClient:
             METHOD_GET, "/strategies", {}, capture_err=False))
         return res["strategies"]
 
-    def get_operators(self) -> List[OperatorResponse]:
+    def get_operators(self) -> List[OperatorDefinition]:
         res = cast(OperatorResponse, self._request_json(
             METHOD_GET, "/operators", {}, capture_err=False))
         return res["operators"]
