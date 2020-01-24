@@ -1096,13 +1096,14 @@ class XYMEClient:
             "token": self._token,
         })
 
-    def _request_bytes(self,
-                      method: str,
-                      path: str,
-                      args: Dict[str, Any],
-                      add_prefix: bool = True,
-                      api_version: Optional[int] = None,
-                      ) -> BytesIO:
+    def _request_bytes(
+            self,
+            method: str,
+            path: str,
+            args: Dict[str, Any],
+            add_prefix: bool = True,
+            api_version: Optional[int] = None,
+            ) -> BytesIO:
         if self._token is None:
             self._login()
 
