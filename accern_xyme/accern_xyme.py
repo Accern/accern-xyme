@@ -904,7 +904,7 @@ class XYMEClient:
         finally:
             self.set_auto_refresh(old_refresh)
 
-    def _raw_request_text(
+    def _raw_request_bytes(
             self,
             method: str,
             path: str,
@@ -914,7 +914,7 @@ class XYMEClient:
         retry = 0
         while True:
             try:
-                return self._fallible_raw_request_text(
+                return self._fallible_raw_request_bytes(
                     method, path, args, add_prefix, api_version)
             except requests.ConnectionError:
                 if retry >= MAX_RETRY:
@@ -966,7 +966,7 @@ class XYMEClient:
                 raise adex
             retry += 1
 
-    def _fallible_raw_request_text(
+    def _fallible_raw_request_bytes(
             self,
             method: str,
             path: str,
@@ -1096,7 +1096,7 @@ class XYMEClient:
             "token": self._token,
         })
 
-    def _request_text(self,
+    def _request_bytes(self,
                       method: str,
                       path: str,
                       args: Dict[str, Any],
@@ -1108,7 +1108,7 @@ class XYMEClient:
 
         def execute() -> BytesIO:
             args["token"] = self._token
-            return self._raw_request_text(
+            return self._raw_request_bytes(
                 method, path, args, add_prefix, api_version)
 
         try:
@@ -2173,7 +2173,7 @@ class JobHandle:
 
     def get_data(
             self, ticker: Optional[str], columns: List[str]) -> pd.DataFrame:
-        resp = self._client._request_text(
+        resp = self._client._request_bytes(
             METHOD_POST, "/job_data", {
                 "job": self._job_id,
                 "ticker": ticker,
