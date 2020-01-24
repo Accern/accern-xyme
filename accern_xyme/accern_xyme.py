@@ -1102,8 +1102,7 @@ class XYMEClient:
             path: str,
             args: Dict[str, Any],
             add_prefix: bool = True,
-            api_version: Optional[int] = None,
-            ) -> BytesIO:
+            api_version: Optional[int] = None) -> BytesIO:
         if self._token is None:
             self._login()
 
