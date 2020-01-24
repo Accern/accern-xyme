@@ -22,7 +22,7 @@ import shutil
 import threading
 import contextlib
 import collections
-from io import BytesIO, StringIO, TextIOWrapper
+from io import BytesIO, TextIOWrapper
 import requests
 import pandas as pd
 from typing_extensions import TypedDict, Literal, overload
@@ -910,7 +910,7 @@ class XYMEClient:
             path: str,
             args: Dict[str, Any],
             add_prefix: bool = True,
-            api_version: Optional[int] = None) -> StringIO:
+            api_version: Optional[int] = None) -> BytesIO:
         retry = 0
         while True:
             try:
@@ -972,7 +972,7 @@ class XYMEClient:
             path: str,
             args: Dict[str, Any],
             add_prefix: bool,
-            api_version: Optional[int]) -> StringIO:
+            api_version: Optional[int]) -> BytesIO:
         prefix = ""
         if add_prefix:
             if api_version is None:
@@ -984,7 +984,7 @@ class XYMEClient:
             if req.status_code == 403:
                 raise AccessDenied(req.text)
             if req.status_code == 200:
-                return StringIO(req.text)
+                return BytesIO(req.content)
             raise ValueError(
                 f"error {req.status_code} in worker request:\n{req.text}")
         if method == METHOD_POST:
@@ -992,7 +992,7 @@ class XYMEClient:
             if req.status_code == 403:
                 raise AccessDenied(req.text)
             if req.status_code == 200:
-                return StringIO(req.text)
+                return BytesIO(req.content)
             raise ValueError(
                 f"error {req.status_code} in worker request:\n{req.text}")
         raise ValueError(f"unknown method {method}")
@@ -1102,11 +1102,11 @@ class XYMEClient:
                       args: Dict[str, Any],
                       add_prefix: bool = True,
                       api_version: Optional[int] = None,
-                      ) -> StringIO:
+                      ) -> BytesIO:
         if self._token is None:
             self._login()
 
-        def execute() -> StringIO:
+        def execute() -> BytesIO:
             args["token"] = self._token
             return self._raw_request_text(
                 method, path, args, add_prefix, api_version)
