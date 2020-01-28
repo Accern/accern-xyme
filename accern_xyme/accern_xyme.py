@@ -461,6 +461,7 @@ JobColumnsResponse = TypedDict('JobColumnsResponse', {
 })
 JobRegisterResponse = TypedDict('JobRegisterResponse', {
     "success": bool,
+    "errMessage": Optional[str],
 })
 
 
