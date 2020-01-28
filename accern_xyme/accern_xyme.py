@@ -459,6 +459,9 @@ ForceFlushResponse = TypedDict('ForceFlushResponse', {
 JobColumnsResponse = TypedDict('JobColumnsResponse', {
     "columns": List[str],
 })
+JobRegisterResponse = TypedDict('JobRegisterResponse', {
+    "success": bool,
+})
 
 
 FILE_UPLOAD_CHUNK_SIZE = 8 * 1024 * 1024  # 8MB
@@ -2190,6 +2193,13 @@ class JobHandle:
         if not res["success"]:
             raise AccessDenied(f"cannot access job {self._job_id}")
         self.refresh()
+
+    def register(self) -> None:
+        res = cast(JobRegisterResponse, self._client._request_json(
+            METHOD_PUT, "/register_job", {
+                "job": self._job_id,
+            }, capture_err=True))
+        print(res)
 
     def __repr__(self) -> str:
         name = ""
