@@ -1554,7 +1554,7 @@ class XYMEClient:
     def register(self, user_folder: str) -> None:
         res = cast(JobRegisterResponse, self._request_json(
             METHOD_PUT, "/register_job", {
-                "user_folder": user_folder,
+                "userFolder": user_folder,
             }, capture_err=True))
         print(res)
 
