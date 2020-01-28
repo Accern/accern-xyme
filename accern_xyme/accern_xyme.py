@@ -1551,6 +1551,13 @@ class XYMEClient:
             METHOD_GET, "/strategies", {}, capture_err=False))
         return res["strategies"]
 
+    def register(self, user_folder: str) -> None:
+        res = cast(JobRegisterResponse, self._client._request_json(
+            METHOD_PUT, "/register_job", {
+                "user_folder": user_folder,
+            }, capture_err=True))
+
+
 # *** XYMEClient ***
 
 
@@ -2194,13 +2201,6 @@ class JobHandle:
         if not res["success"]:
             raise AccessDenied(f"cannot access job {self._job_id}")
         self.refresh()
-
-    def register(self) -> None:
-        res = cast(JobRegisterResponse, self._client._request_json(
-            METHOD_PUT, "/register_job", {
-                "job": self._job_id,
-            }, capture_err=True))
-        print(res)
 
     def __repr__(self) -> str:
         name = ""
