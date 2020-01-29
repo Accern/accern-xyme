@@ -1551,12 +1551,11 @@ class XYMEClient:
             METHOD_GET, "/strategies", {}, capture_err=False))
         return res["strategies"]
 
-    def register(self, user_folder: str) -> None:
-        res = cast(JobRegisterResponse, self._request_json(
+    def register(self, user_folder: str) -> JobRegisterResponse:
+        return cast(JobRegisterResponse, self._request_json(
             METHOD_PUT, "/register_job", {
                 "userFolder": user_folder,
             }, capture_err=True))
-        print(res)
 
 # *** XYMEClient ***
 
