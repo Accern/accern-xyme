@@ -5,3 +5,4 @@ __pycache__
 /dist/
 /accern_xyme.egg-info
 /.mypy_cache
+.vscode
