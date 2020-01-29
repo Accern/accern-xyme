@@ -461,7 +461,6 @@ JobColumnsResponse = TypedDict('JobColumnsResponse', {
 })
 JobRegisterResponse = TypedDict('JobRegisterResponse', {
     "success": bool,
-    "errMessage": Optional[str],
 })
 
 
@@ -1551,11 +1550,11 @@ class XYMEClient:
             METHOD_GET, "/strategies", {}, capture_err=False))
         return res["strategies"]
 
-    def register(self, user_folder: str) -> JobRegisterResponse:
+    def register(self, user_folder: str) -> bool:
         return cast(JobRegisterResponse, self._request_json(
             METHOD_PUT, "/register_job", {
                 "userFolder": user_folder,
-            }, capture_err=True))
+            }, capture_err=True)).get("success", False)
 
 # *** XYMEClient ***
 
