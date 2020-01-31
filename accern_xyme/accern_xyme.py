@@ -1367,6 +1367,14 @@ class XYMEClient:
             SOURCE_TYPE_MULTI, name, None, None, None)
         return res["multi_source"]
 
+    def create_source(self,
+                      name: Optional[str],
+                      source_type: str) -> 'SourceHandle':
+        if source_type == "multi":
+            return self.create_multi_source(name)
+        res = self._raw_create_source(source_type, name, None, None, None)
+        return res["source"]
+
     def create_multi_source_file(
             self,
             filename: str,
