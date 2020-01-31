@@ -29,7 +29,7 @@ from typing_extensions import TypedDict, Literal, overload
 import quick_server
 
 
-__version__ = "0.0.14"
+__version__ = "0.0.16"
 # FIXME: async calls, documentation, auth, summary – time it took etc.
 
 
@@ -456,6 +456,12 @@ SimplePredictionsResponse = TypedDict('SimplePredictionsResponse', {
 ForceFlushResponse = TypedDict('ForceFlushResponse', {
     "success": bool,
 })
+JobColumnsResponse = TypedDict('JobColumnsResponse', {
+    "columns": List[str],
+})
+JobRegisterResponse = TypedDict('JobRegisterResponse', {
+    "success": bool,
+})
 OperatorDefinition = TypedDict('OperatorDefinition', {
     "operator": str,
     "args": Dict[str, str],
@@ -464,6 +470,7 @@ OperatorDefinition = TypedDict('OperatorDefinition', {
 OperatorResponse = TypedDict('OperatorResponse', {
     "operators": List[OperatorDefinition],
 })
+
 
 FILE_UPLOAD_CHUNK_SIZE = 8 * 1024 * 1024  # 8MB
 FILE_HASH_CHUNK_SIZE = FILE_UPLOAD_CHUNK_SIZE
@@ -908,6 +915,24 @@ class XYMEClient:
         finally:
             self.set_auto_refresh(old_refresh)
 
+    def _raw_request_bytes(
+            self,
+            method: str,
+            path: str,
+            args: Dict[str, Any],
+            add_prefix: bool = True,
+            api_version: Optional[int] = None) -> BytesIO:
+        retry = 0
+        while True:
+            try:
+                return self._fallible_raw_request_bytes(
+                    method, path, args, add_prefix, api_version)
+            except requests.ConnectionError:
+                if retry >= MAX_RETRY:
+                    raise
+                time.sleep(RETRY_SLEEP)
+            retry += 1
+
     def _raw_request_json(
             self,
             method: str,
@@ -951,6 +976,37 @@ class XYMEClient:
                         "cannot reset file buffers for retry") from adex
                 raise adex
             retry += 1
+
+    def _fallible_raw_request_bytes(
+            self,
+            method: str,
+            path: str,
+            args: Dict[str, Any],
+            add_prefix: bool,
+            api_version: Optional[int]) -> BytesIO:
+        prefix = ""
+        if add_prefix:
+            if api_version is None:
+                api_version = self._api_version
+            prefix = f"{PREFIX}/v{api_version}"
+        url = f"{self._url}{prefix}{path}"
+        if method == METHOD_GET:
+            req = requests.get(url, params=args)
+            if req.status_code == 403:
+                raise AccessDenied(req.text)
+            if req.status_code == 200:
+                return BytesIO(req.content)
+            raise ValueError(
+                f"error {req.status_code} in worker request:\n{req.text}")
+        if method == METHOD_POST:
+            req = requests.post(url, json=args)
+            if req.status_code == 403:
+                raise AccessDenied(req.text)
+            if req.status_code == 200:
+                return BytesIO(req.content)
+            raise ValueError(
+                f"error {req.status_code} in worker request:\n{req.text}")
+        raise ValueError(f"unknown method {method}")
 
     def _fallible_raw_request_json(
             self,
@@ -1050,6 +1106,27 @@ class XYMEClient:
         self._raw_request_json(METHOD_POST, "/logout", {
             "token": self._token,
         })
+
+    def _request_bytes(
+            self,
+            method: str,
+            path: str,
+            args: Dict[str, Any],
+            add_prefix: bool = True,
+            api_version: Optional[int] = None) -> BytesIO:
+        if self._token is None:
+            self._login()
+
+        def execute() -> BytesIO:
+            args["token"] = self._token
+            return self._raw_request_bytes(
+                method, path, args, add_prefix, api_version)
+
+        try:
+            return execute()
+        except AccessDenied:
+            self._login()
+            return execute()
 
     def _request_json(self,
                       method: str,
@@ -1485,6 +1562,12 @@ class XYMEClient:
         res = cast(OperatorResponse, self._request_json(
             METHOD_GET, "/operators", {}, capture_err=False))
         return res["operators"]
+
+    def register(self, user_folder: str) -> bool:
+        return cast(JobRegisterResponse, self._request_json(
+            METHOD_PUT, "/register_job", {
+                "userFolder": user_folder,
+            }, capture_err=True)).get("success", False)
 
 # *** XYMEClient ***
 
@@ -2101,6 +2184,25 @@ class JobHandle:
         if res.get("errMessage", None):
             raise ValueError(res["errMessage"], stdout)
         return res.get("pyfolio", None), stdout
+
+    def get_columns(self, ticker: Optional[str]) -> List[str]:
+        res = cast(JobColumnsResponse, self._client._request_json(
+            METHOD_POST, "/job_columns", {
+                "job": self._job_id,
+                "ticker": ticker,
+            }, capture_err=True))
+        return res["columns"]
+
+    def get_data(
+            self, ticker: Optional[str], columns: List[str]) -> pd.DataFrame:
+        resp = self._client._request_bytes(
+            METHOD_POST, "/job_data", {
+                "job": self._job_id,
+                "ticker": ticker,
+                "columns": columns,
+                "format": "csv",
+            })
+        return pd.read_csv(resp)
 
     def force_flush(self) -> None:
         res = cast(ForceFlushResponse, self._client._request_json(
