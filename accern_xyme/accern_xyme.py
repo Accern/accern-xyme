@@ -29,11 +29,11 @@ from typing_extensions import TypedDict, Literal, overload
 import quick_server
 
 
-__version__ = "0.0.16"
+__version__ = "0.0.17"
 # FIXME: async calls, documentation, auth, summary – time it took etc.
 
 
-API_VERSION = 1
+API_VERSION = 2
 
 
 METHOD_DELETE = "DELETE"
@@ -1551,8 +1551,9 @@ class XYMEClient:
         return res["strategies"]
 
     def register(self, user_folder: str) -> bool:
+        method = METHOD_PUT if self._api_version < 2 else METHOD_LONGPOST
         return cast(JobRegisterResponse, self._request_json(
-            METHOD_PUT, "/register_job", {
+            method, "/register_job", {
                 "userFolder": user_folder,
             }, capture_err=True)).get("success", False)
 
