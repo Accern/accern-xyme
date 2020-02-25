@@ -580,7 +580,7 @@ class NodeHandle:
         node_id, out_key = self._inputs[key]
         return self.get_pipeline().get_node(node_id), out_key
 
-    def read(self, key: str, chunk: int) -> 'BlobHandle':
+    def read_blob(self, key: str, chunk: int) -> 'BlobHandle':
         res = cast(ReadNode, self._client._request_json(
             METHOD_LONGPOST, "/read_node", {
                 "pipeline": self.get_pipeline().get_id(),
@@ -593,6 +593,9 @@ class NodeHandle:
         if uri is None:
             raise ValueError(f"uri is None: {res}")
         return BlobHandle(self._client, uri, is_full=True)
+
+    def read(self, key: str, chunk: int) -> Optional[pd.DataFrame]:
+        return self.read_blob(key, chunk).get_content()
 
     def __hash__(self) -> int:
         return hash(self._node_id)
@@ -629,6 +632,9 @@ class BlobHandle:
     def is_empty(self) -> bool:
         return self._uri.startswith(EMPTY_BLOB_PREFIX)
 
+    def get_uri(self) -> str:
+        return self._uri
+
     def get_content(self) -> Optional[pd.DataFrame]:
         if not self.is_full():
             raise ValueError(f"URI must be full: {self}")
@@ -641,7 +647,7 @@ class BlobHandle:
             return pd.read_parquet(fin)
 
     def as_str(self) -> str:
-        return f"{self._uri}"
+        return f"{self.get_uri()}"
 
     def __hash__(self) -> int:
         return hash(self.as_str())
