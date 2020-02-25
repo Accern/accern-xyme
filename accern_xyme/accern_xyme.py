@@ -6,14 +6,19 @@ from typing import (
     Iterator,
     List,
     Optional,
+    Set,
+    Tuple,
+    TYPE_CHECKING,
 )
 import io
 import os
 import json
 import time
+import weakref
 import contextlib
 from io import BytesIO
 import requests
+import pandas as pd
 import quick_server
 
 from .util import (
@@ -21,10 +26,20 @@ from .util import (
     get_retry_sleep,
 )
 from .types import (
-    VersionResponse,
     MaintenanceResponse,
+    NodeDefInfo,
+    NodeInfo,
+    NodeTypes,
+    PipelineInfo,
     PipelineList,
+    ReadNode,
+    VersionResponse,
 )
+
+if TYPE_CHECKING:
+    WVD = weakref.WeakValueDictionary[str, 'PipelineHandle']
+else:
+    WVD = weakref.WeakValueDictionary
 
 
 __version__ = "0.1.0"
@@ -73,6 +88,7 @@ class XYMEClient:
         self._token: Optional[str] = token
         self._last_action = time.monotonic()
         self._auto_refresh = True
+        self._pipeline_cache: WVD = weakref.WeakValueDictionary()
         self._permissions: Optional[List[str]] = None
 
         def get_version() -> int:
@@ -396,169 +412,255 @@ class XYMEClient:
         return cast(PipelineList, self._request_json(
             METHOD_GET, "/pipelines", {}, capture_err=False))["pipelines"]
 
-    # @log_api_call(server.json_worker, prefix + '/:version/read_node')
-    # def _read_node(args: WorkerArgs) -> ReadNode:
+    def get_pipeline(self, pipe_id: str) -> 'PipelineHandle':
+        res = self._pipeline_cache.get(pipe_id)
+        if res is not None:
+            return res
+        res = PipelineHandle(self, pipe_id)
+        self._pipeline_cache[pipe_id] = res
+        return res
 
-    # @log_api_call(server.text_post, prefix + '/:version/uri')
-    # def _get_uri_content(_req: QSRH, rargs: ReqArgs) -> Optional[Response]:
-
-    # @log_api_call(server.json_get, prefix + '/:version/node_types')
-    # def _get_node_types(_req: QSRH, _rargs: ReqArgs) -> NodeTypes:
-
-    # @log_api_call(server.json_get, prefix + '/:version/pipeline_info')
-    # def _get_pipeline_info(_req: QSRH, rargs: ReqArgs) -> PipelineInfo:
-
+    def get_node_types(self) -> Dict[str, NodeDefInfo]:
+        res = cast(NodeTypes, self._request_json(
+            METHOD_GET, "/node_types", {}, capture_err=False))
+        return res["info"]
 
 # *** XYMEClient ***
 
 
-# class PipelineHandle:
-#     def __init__(self,
-#                  client: XYMEClient,
-#                  job_id: str,
-#                  path: Optional[str],
-#                  name: Optional[str],
-#                  schema_obj: Optional[Dict[str, Any]],
-#                  kinds: Optional[List[str]],
-#                  status: Optional[str],
-#                  permalink: Optional[str],
-#                  time_total: Optional[float],
-#                  time_start: Optional[str],
-#                  time_end: Optional[str],
-#                  time_estimate: Optional[str]) -> None:
-#         self._client = client
-#         self._job_id = job_id
-#         self._name = name
-#         self._path = path
-#         self._schema_obj = schema_obj
-#         self._kinds = kinds
-#         self._permalink = permalink
-#         self._status = status
-#         self._time_total = time_total
-#         self._time_start = time_start
-#         self._time_end = time_end
-#         self._time_estimate = time_estimate
-#         self._buttons: Optional[List[str]] = None
-#         self._can_rename: Optional[bool] = None
-#         self._is_symjob: Optional[bool] = None
-#         self._is_user_job: Optional[bool] = None
-#         self._plot_order_types: Optional[List[str]] = None
-#         self._tabs: Optional[List[str]] = None
-#         self._tickers: Optional[List[str]] = None
-#         self._source: Optional[SourceHandle] = None
-#         self._is_async_fetch = False
-#         self._async_lock = threading.RLock()
+class PipelineHandle:
+    def __init__(
+            self,
+            client: XYMEClient,
+            pipe_id: str) -> None:
+        self._client = client
+        self._pipe_id = pipe_id
+        self._name: Optional[str] = None
+        self._company: Optional[str] = None
+        self._state_publisher: Optional[str] = None
+        self._notify_publisher: Optional[str] = None
+        self._nodes: Dict[str, NodeHandle] = {}
 
-#     def refresh(self) -> None:
-#         self._name = None
-#         self._path = None
-#         self._schema_obj = None
-#         self._kinds = None
-#         self._permalink = None
-#         self._time_total = None
-#         self._time_start = None
-#         self._time_end = None
-#         self._time_estimate = None
-#         self._buttons = None
-#         self._can_rename = None
-#         self._is_symjob = None
-#         self._is_user_job = None
-#         self._plot_order_types = None
-#         self._tabs = None
-#         self._tickers = None
-#         self._source = None
-#         if not self._is_async_fetch:
-#             self._status = None
+    def refresh(self) -> None:
+        self._name = None
+        self._company = None
+        self._state_publisher = None
+        self._notify_publisher = None
+        # NOTE: we don't reset nodes
 
-#     def _maybe_refresh(self) -> None:
-#         if self._client.is_auto_refresh():
-#             self.refresh()
+    def _maybe_refresh(self) -> None:
+        if self._client.is_auto_refresh():
+            self.refresh()
 
-#     def _fetch_info(self) -> None:
-#         res = self._client._request_json(
-#             METHOD_LONGPOST, "/status", {
-#                 "job": self._job_id,
-#             }, capture_err=False)
-#         if res.get("empty", True) and "name" not in res:
-#             raise ValueError("could not update status")
-#         info = cast(JobStatusInfo, res)
-#         self._name = info["name"]
-#         self._path = info["path"]
-#         self._schema_obj = json.loads(info["schema"])
-#         self._buttons = info["buttons"]
-#         self._can_rename = info["canRename"]
-#         self._is_symjob = info["symjob"]
-#         self._is_user_job = info["isUserJob"]
-#         self._kinds = info["allKinds"]
-#         self._permalink = info["permalink"]
-#         self._plot_order_types = info["plotOrderTypes"]
-#         self._status = info["status"]
-#         self._tabs = info["allTabs"]
-#         self._tickers = info["tickers"]
-#         self._time_total = info["timeTotal"]
-#         self._time_start = info["timeStart"]
-#         self._time_end = info["timeEnd"]
-#         self._time_estimate = info["timeEstimate"]
+    def _maybe_fetch(self) -> None:
+        if self._name is None:
+            self._fetch_info()
 
-#     def get_job_id(self) -> str:
-#         return self._job_id
+    def _fetch_info(self) -> None:
+        info = cast(PipelineInfo, self._client._request_json(
+            METHOD_GET, "/pipeline_info", {
+                "pipeline": self._pipe_id,
+            }, capture_err=False))
+        self._name = info["name"]
+        self._company = info["company"]
+        self._state_publisher = info["state_publisher"]
+        self._notify_publisher = info["notify_publisher"]
+        old_nodes = {} if self._nodes is None else self._nodes
+        self._nodes = {
+            node["id"]: NodeHandle.from_node_info(
+                self._client, self, node, old_nodes.get(node["id"]))
+            for node in info["nodes"]
+        }
 
-#     def get_schema(self) -> Dict[str, Any]:
-#         self._maybe_refresh()
-#         if self._schema_obj is None:
-#             self._fetch_info()
-#         assert self._schema_obj is not None
-#         return copy.deepcopy(self._schema_obj)
+    def get_nodes(self) -> List[str]:
+        return list(self._nodes.keys())
 
-#     def set_schema(self, schema: Dict[str, Any]) -> None:
-#         res = cast(SchemaResponse, self._client._request_json(
-#             METHOD_PUT, "/update_job_schema", {
-#                 "job": self._job_id,
-#                 "schema": json.dumps(schema),
-#             }, capture_err=True))
-#         self._schema_obj = json.loads(res["schema"])
+    def get_node(self, node_id: str) -> 'NodeHandle':
+        return self._nodes[node_id]
 
-#     @contextlib.contextmanager
-#     def update_schema(self) -> Iterator[Dict[str, Any]]:
-#         self._maybe_refresh()
-#         if self._schema_obj is None:
-#             self._fetch_info()
-#         assert self._schema_obj is not None
-#         yield self._schema_obj
-#         self.set_schema(self._schema_obj)
+    def get_id(self) -> str:
+        return self._pipe_id
 
-#     @contextlib.contextmanager
-#     def bulk_operation(self) -> Iterator[bool]:
-#         with self._client.bulk_operation() as do_refresh:
-#             if do_refresh:
-#                 self.refresh()
-#             yield do_refresh
+    def get_name(self) -> str:
+        self._maybe_refresh()
+        self._maybe_fetch()
+        assert self._name is not None
+        return self._name
 
-#     def get_notes(self, force: bool) -> Optional[NotesInfo]:
-#         res = cast(PreviewNotesResponse, self._client._request_json(
-#             METHOD_LONGPOST, "/preview", {
-#                 "job": self._job_id,
-#                 "view": "summary",
-#                 "force": force,
-#                 "schema": None,
-#                 "batch": None,
-#             }, capture_err=False))
-#         notes = res["notes"]
-#         if notes is None:
-#             return None
-#         return {
-#             "usage": notes.get("usage", {}),
-#             "roles": notes.get("roles", {}),
-#             "roles_renamed": notes.get("rolesRenamed", {}),
-#             "dummy_columns": notes.get("dummyColumns", []),
-#             "stats": notes.get("stats", {}),
-#             "is_runnable": notes.get("isRunnable", False),
-#             "suggestions": notes.get("suggestions", {}),
-#             "is_preview": notes.get("isPreview", True),
-#             "error": notes.get("error", True),
-#         }
+    def get_company(self) -> str:
+        self._maybe_refresh()
+        self._maybe_fetch()
+        assert self._company is not None
+        return self._company
+
+    @contextlib.contextmanager
+    def bulk_operation(self) -> Iterator[bool]:
+        with self._client.bulk_operation() as do_refresh:
+            if do_refresh:
+                self.refresh()
+            yield do_refresh
+
+    def __hash__(self) -> int:
+        return hash(self._pipe_id)
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, self.__class__):
+            return False
+        return self.get_id() == other.get_id()
+
+    def __ne__(self, other: object) -> bool:
+        return not self.__eq__(other)
+
+    def __str__(self) -> str:
+        return self._pipe_id
+
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}[{self._pipe_id}]"
 
 # *** PipelineHandle ***
+
+
+class NodeHandle:
+    def __init__(
+            self,
+            client: XYMEClient,
+            pipeline: PipelineHandle,
+            node_id: str,
+            kind: str) -> None:
+        self._client = client
+        self._pipeline = pipeline
+        self._node_id = node_id
+        self._type = kind
+        self._state_key: Optional[str] = None
+        self._blobs: Dict[str, BlobHandle] = {}
+        self._inputs: Dict[str, Tuple[str, str]] = {}
+        self._state: Optional[int] = None
+
+    @staticmethod
+    def from_node_info(
+            client: XYMEClient,
+            pipeline: PipelineHandle,
+            node_info: NodeInfo,
+            prev: Optional['NodeHandle']) -> 'NodeHandle':
+        if prev is None:
+            res = NodeHandle(
+                client, pipeline, node_info["id"], node_info["type"])
+        else:
+            if prev.get_pipeline() != pipeline:
+                raise ValueError(f"{prev.get_pipeline()} != {pipeline}")
+            res = prev
+        res.update_info(node_info)
+        return res
+
+    def update_info(self, node_info: NodeInfo) -> None:
+        if self._node_id != node_info["id"]:
+            raise ValueError(f"{self._node_id} != {node_info['id']}")
+        self._state_key = node_info["state_key"]
+        self._type = node_info["type"]
+        self._blobs = {
+            key: BlobHandle(self._client, value, is_full=False)
+            for (key, value) in node_info["blobs"].items()
+        }
+        self._inputs = node_info["inputs"]
+        self._state = node_info["state"]
+
+    def get_pipeline(self) -> PipelineHandle:
+        return self._pipeline
+
+    def get_id(self) -> str:
+        return self._node_id
+
+    def get_type(self) -> str:
+        return self._type
+
+    def get_inputs(self) -> Set[str]:
+        return set(self._inputs.keys())
+
+    def get_input(self, key: str) -> Tuple['NodeHandle', str]:
+        node_id, out_key = self._inputs[key]
+        return self.get_pipeline().get_node(node_id), out_key
+
+    def read(self, key: str, chunk: int) -> 'BlobHandle':
+        res = cast(ReadNode, self._client._request_json(
+            METHOD_LONGPOST, "/read_node", {
+                "pipeline": self.get_pipeline().get_id(),
+                "node": self.get_id(),
+                "key": key,
+                "chunk": chunk,
+                "is_blocking": True,
+            }, capture_err=False))
+        uri = res["result_uri"]
+        if uri is None:
+            raise ValueError(f"uri is None: {res}")
+        return BlobHandle(self._client, uri, is_full=True)
+
+    def __hash__(self) -> int:
+        return hash(self._node_id)
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, self.__class__):
+            return False
+        return self.get_id() == other.get_id()
+
+    def __ne__(self, other: object) -> bool:
+        return not self.__eq__(other)
+
+    def __str__(self) -> str:
+        return self._node_id
+
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}[{self._node_id}]"
+
+# *** NodeHandle ***
+
+
+EMPTY_BLOB_PREFIX = "null://"
+
+
+class BlobHandle:
+    def __init__(self, client: XYMEClient, uri: str, is_full: bool) -> None:
+        self._client = client
+        self._uri = uri
+        self._is_full = is_full
+
+    def is_full(self) -> bool:
+        return self._is_full
+
+    def is_empty(self) -> bool:
+        return self._uri.startswith(EMPTY_BLOB_PREFIX)
+
+    def get_content(self) -> Optional[pd.DataFrame]:
+        if not self.is_full():
+            raise ValueError(f"URI must be full: {self}")
+        if self.is_empty():
+            return None
+        with self._client._raw_request_bytes(
+                METHOD_POST, "/uri", {
+                    "uri": self._uri,
+                }) as fin:
+            return pd.read_parquet(fin)
+
+    def as_str(self) -> str:
+        return f"{self._uri}"
+
+    def __hash__(self) -> int:
+        return hash(self.as_str())
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, self.__class__):
+            return False
+        return self.as_str() == other.as_str()
+
+    def __ne__(self, other: object) -> bool:
+        return not self.__eq__(other)
+
+    def __str__(self) -> str:
+        return self.as_str()
+
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}[{self.as_str()}]"
+
+# *** BlobHandle ***
 
 
 def create_xyme_client(
