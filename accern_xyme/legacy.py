@@ -784,7 +784,7 @@ class MetricCoords(MetricWrapper):
 # *** MetricCoords ***
 
 
-class XYMEClient:
+class XYMELegacyClient:
     def __init__(
             self,
             url: str,
@@ -1513,13 +1513,13 @@ class XYMEClient:
                 "userFolder": user_folder,
             }, capture_err=True)).get("success", False)
 
-# *** XYMEClient ***
+# *** XYMELegacyClient ***
 
 
 class JobHandle:
     def __init__(
             self,
-            client: XYMEClient,
+            client: XYMELegacyClient,
             job_id: str,
             path: Optional[str],
             name: Optional[str],
@@ -2266,7 +2266,7 @@ class InspectPath(collections.abc.Mapping):
 class InspectHandle(InspectPath):
     def __init__(
             self,
-            client: XYMEClient,
+            client: XYMELegacyClient,
             job: JobHandle,
             ticker: Optional[str]) -> None:
         super().__init__("uninitialized", self, [], "uninitialized")
@@ -2393,7 +2393,7 @@ class InspectHandle(InspectPath):
 class SourceHandle:
     def __init__(
             self,
-            client: XYMEClient,
+            client: XYMELegacyClient,
             source_id: str,
             source_type: Optional[str],
             infer_type: bool = False,
@@ -2667,7 +2667,7 @@ class SourceHandle:
 class InputHandle:
     def __init__(
             self,
-            client: XYMEClient,
+            client: XYMELegacyClient,
             input_id: str,
             name: Optional[str] = None,
             path: Optional[str] = None,
@@ -2836,22 +2836,22 @@ class InputHandle:
 # *** InputHandle ***
 
 
-def create_xyme_client(
+def create_legacy_client(
         url: str,
         user: Optional[str] = None,
         password: Optional[str] = None,
-        token: Optional[str] = None) -> XYMEClient:
-    return XYMEClient(url, user, password, token)
+        token: Optional[str] = None) -> XYMELegacyClient:
+    return XYMELegacyClient(url, user, password, token)
 
 
 @contextlib.contextmanager
-def create_xyme_session(
+def create_legacy_session(
         url: str,
         user: Optional[str] = None,
         password: Optional[str] = None,
-        token: Optional[str] = None) -> Iterator[XYMEClient]:
+        token: Optional[str] = None) -> Iterator[XYMELegacyClient]:
     try:
-        client = XYMEClient(url, user, password, token)
+        client = XYMELegacyClient(url, user, password, token)
         yield client
     finally:
         client.logout()
