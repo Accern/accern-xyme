@@ -23,6 +23,7 @@ from .util import (
 from .types import (
     VersionResponse,
     MaintenanceResponse,
+    PipelineList,
 )
 
 
@@ -369,7 +370,8 @@ class XYMEClient:
 
     def get_server_version(self) -> VersionResponse:
         return cast(VersionResponse, self._raw_request_json(
-            METHOD_GET, "/version", {}))
+            METHOD_GET, f"{PREFIX}/v{API_VERSION}/version", {
+            }, add_prefix=False))
 
     def set_maintenance_mode(
             self, is_maintenance: bool) -> MaintenanceResponse:
@@ -389,6 +391,10 @@ class XYMEClient:
     def get_maintenance_mode(self) -> MaintenanceResponse:
         return cast(MaintenanceResponse, self._request_json(
             METHOD_GET, "/maintenance", {}, capture_err=False))
+
+    def get_pipelines(self) -> List[str]:
+        return cast(PipelineList, self._request_json(
+            METHOD_GET, "/pipelines", {}, capture_err=False))["pipelines"]
 
     # @log_api_call(server.json_worker, prefix + '/:version/read_node')
     # def _read_node(args: WorkerArgs) -> ReadNode:

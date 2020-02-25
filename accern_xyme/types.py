@@ -51,6 +51,9 @@ NodeInfo = TypedDict('NodeInfo', {
     "inputs": Dict[str, Tuple[str, str]],
     "state": Optional[int],
 })
+PipelineList = TypedDict('PipelineList', {
+    "pipelines": List[str],
+})
 PipelineInfo = TypedDict('PipelineInfo', {
     "name": str,
     "state_publisher": Optional[str],
