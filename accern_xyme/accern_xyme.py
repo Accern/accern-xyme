@@ -2203,13 +2203,15 @@ class JobHandle:
         return res["columns"]
 
     def get_data(
-            self, ticker: Optional[str], columns: List[str]) -> pd.DataFrame:
+            self, ticker: Optional[str], columns: List[str],
+            is_preview: bool) -> pd.DataFrame:
         resp = self._client._request_bytes(
             METHOD_POST, "/job_data", {
                 "job": self._job_id,
                 "ticker": ticker,
                 "columns": columns,
                 "format": "csv",
+                "isPreview": is_preview,
             })
         return pd.read_csv(resp)
 
