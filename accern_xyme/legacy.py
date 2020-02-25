@@ -757,9 +757,10 @@ class MetricCoords(MetricWrapper):
     def __getitem__(self, index: slice) -> List[CoordinatePlot]:
         ...
 
-    def __getitem__(self,
-                    index: Union[int, slice],
-                    ) -> Union[CoordinatePlot, List[CoordinatePlot]]:
+    def __getitem__(
+            self,
+            index: Union[int, slice],
+                ) -> Union[CoordinatePlot, List[CoordinatePlot]]:
         return self._plots[index]
 
     def __len__(self) -> int:
@@ -784,11 +785,12 @@ class MetricCoords(MetricWrapper):
 
 
 class XYMEClient:
-    def __init__(self,
-                 url: str,
-                 user: Optional[str],
-                 password: Optional[str],
-                 token: Optional[str]) -> None:
+    def __init__(
+            self,
+            url: str,
+            user: Optional[str],
+            password: Optional[str],
+            token: Optional[str]) -> None:
         self._url = url.rstrip("/")
         if user is None:
             user = os.environ.get("ACCERN_USER")
@@ -1062,15 +1064,15 @@ class XYMEClient:
             self._login()
             return execute()
 
-    def _request_json(self,
-                      method: str,
-                      path: str,
-                      args: Dict[str, Any],
-                      capture_err: bool,
-                      add_prefix: bool = True,
-                      files: Optional[Dict[str, IO[bytes]]] = None,
-                      api_version: Optional[int] = None,
-                      ) -> Dict[str, Any]:
+    def _request_json(
+            self,
+            method: str,
+            path: str,
+            args: Dict[str, Any],
+            capture_err: bool,
+            add_prefix: bool = True,
+            files: Optional[Dict[str, IO[bytes]]] = None,
+            api_version: Optional[int] = None) -> Dict[str, Any]:
         if self._token is None:
             self._login()
 
@@ -1121,9 +1123,10 @@ class XYMEClient:
         return cast(HintedMaintenanceInfo, self._request_json(
             METHOD_GET, "/maintenance", {}, capture_err=False))
 
-    def get_system_logs(self,
-                        query: Optional[str] = None,
-                        context: Optional[int] = None) -> StdoutWrapper:
+    def get_system_logs(
+            self,
+            query: Optional[str] = None,
+            context: Optional[int] = None) -> StdoutWrapper:
         obj: Dict[str, Any] = {
             # FIXME: only regular for now -- other value is deploy
             "logsKind": "regular",
@@ -1144,11 +1147,12 @@ class XYMEClient:
         return cast(OverviewResponse, self._request_json(
             METHOD_GET, "/overview", {}, capture_err=False))
 
-    def create_job(self,
-                   schema: Optional[Dict[str, Any]] = None,
-                   from_job_id: Optional[str] = None,
-                   name: Optional[str] = None,
-                   is_system_preset: bool = False) -> 'JobHandle':
+    def create_job(
+            self,
+            schema: Optional[Dict[str, Any]] = None,
+            from_job_id: Optional[str] = None,
+            name: Optional[str] = None,
+            is_system_preset: bool = False) -> 'JobHandle':
         schema_str = json.dumps(schema) if schema is not None else None
         obj: Dict[str, Any] = {
             "schema": schema_str,
@@ -1161,40 +1165,43 @@ class XYMEClient:
             obj["name"] = name
         res = cast(JobCreateResponse, self._request_json(
             METHOD_LONGPOST, "/create_job_id", obj, capture_err=True))
-        return JobHandle(client=self,
-                         job_id=res["jobId"],
-                         path=res["path"],
-                         name=res["name"],
-                         schema_obj=json.loads(res["schema"]),
-                         kinds=None,
-                         status=None,
-                         permalink=None,
-                         time_total=None,
-                         time_start=None,
-                         time_end=None,
-                         time_estimate=None)
+        return JobHandle(
+            client=self,
+            job_id=res["jobId"],
+            path=res["path"],
+            name=res["name"],
+            schema_obj=json.loads(res["schema"]),
+            kinds=None,
+            status=None,
+            permalink=None,
+            time_total=None,
+            time_start=None,
+            time_end=None,
+            time_estimate=None)
 
     def get_job(self, job_id: str) -> 'JobHandle':
-        return JobHandle(client=self,
-                         job_id=job_id,
-                         path=None,
-                         name=None,
-                         schema_obj=None,
-                         kinds=None,
-                         status=None,
-                         permalink=None,
-                         time_total=None,
-                         time_start=None,
-                         time_end=None,
-                         time_estimate=None)
+        return JobHandle(
+            client=self,
+            job_id=job_id,
+            path=None,
+            name=None,
+            schema_obj=None,
+            kinds=None,
+            status=None,
+            permalink=None,
+            time_total=None,
+            time_start=None,
+            time_end=None,
+            time_estimate=None)
 
-    def start_job(self,
-                  job_id: Optional[str],
-                  job_name: Optional[str] = None,
-                  schema: Optional[Dict[str, Any]] = None,
-                  user: Optional[str] = None,
-                  company: Optional[str] = None,
-                  nowait: Optional[bool] = None) -> JobStartResponse:
+    def start_job(
+            self,
+            job_id: Optional[str],
+            job_name: Optional[str] = None,
+            schema: Optional[Dict[str, Any]] = None,
+            user: Optional[str] = None,
+            company: Optional[str] = None,
+            nowait: Optional[bool] = None) -> JobStartResponse:
         obj: Dict[str, Any] = {}
         if job_id is not None:
             if job_name is not None or schema is not None:
@@ -1214,11 +1221,12 @@ class XYMEClient:
         return cast(JobStartResponse, self._request_json(
             METHOD_LONGPOST, "/start", obj, capture_err=True))
 
-    def _raw_job_list(self,
-                      search: Optional[str] = None,
-                      selected_status: Optional[List[str]] = None,
-                      active_workspace: Optional[List[str]] = None,
-                      ) -> JobListResponse:
+    def _raw_job_list(
+            self,
+            search: Optional[str] = None,
+            selected_status: Optional[List[str]] = None,
+            active_workspace: Optional[List[str]] = None,
+                ) -> JobListResponse:
         obj: Dict[str, Any] = {}
         if search is not None:
             obj["search"] = search
@@ -1248,8 +1256,7 @@ class XYMEClient:
                 time_total=job["timeTotal"],
                 time_start=job["timeStart"],
                 time_end=job["timeEnd"],
-                time_estimate=job["timeEstimate"],
-            )
+                time_estimate=job["timeEstimate"])
             for job in res["jobs"][workspace]
         ]
 
@@ -1261,13 +1268,14 @@ class XYMEClient:
             "path": path,
         } for (name, path) in res["shareable"]]
 
-    def _raw_create_source(self,
-                           source_type: str,
-                           name: Optional[str],
-                           job: Optional['JobHandle'],
-                           multi_source: Optional['SourceHandle'],
-                           from_id: Optional['SourceHandle'],
-                           ) -> CreateSource:
+    def _raw_create_source(
+            self,
+            source_type: str,
+            name: Optional[str],
+            job: Optional['JobHandle'],
+            multi_source: Optional['SourceHandle'],
+            from_id: Optional['SourceHandle'],
+                ) -> CreateSource:
         if source_type not in ALL_SOURCE_TYPES:
             raise ValueError(
                 f"invalid source type: {source_type}\nmust be one of "
@@ -1275,8 +1283,9 @@ class XYMEClient:
         multi_source_id = None
         if multi_source is not None:
             if not multi_source.is_multi_source():
-                raise ValueError(f"source {multi_source.get_source_id()} "
-                                 "must be multi source")
+                raise ValueError(
+                    f"source {multi_source.get_source_id()} "
+                    "must be multi source")
             multi_source_id = multi_source.get_source_id()
         from_id_str = from_id.get_source_id() if from_id is not None else None
         res = cast(CreateSourceResponse, self._request_json(
@@ -1331,16 +1340,18 @@ class XYMEClient:
     def get_source(self, source_id: str) -> 'SourceHandle':
         return SourceHandle(self, source_id, None, infer_type=True)
 
-    def set_immutable_raw(self,
-                          source: 'SourceHandle',
-                          multi_source: Optional['SourceHandle'],
-                          job: Optional['JobHandle'],
-                          is_immutable: Optional[bool]) -> LockSource:
+    def set_immutable_raw(
+            self,
+            source: 'SourceHandle',
+            multi_source: Optional['SourceHandle'],
+            job: Optional['JobHandle'],
+            is_immutable: Optional[bool]) -> LockSource:
         multi_source_id = None
         if multi_source is not None:
             if not multi_source.is_multi_source():
-                raise ValueError(f"source {multi_source.get_source_id()} "
-                                 "must be multi source")
+                raise ValueError(
+                    f"source {multi_source.get_source_id()} "
+                    "must be multi source")
             multi_source_id = multi_source.get_source_id()
         res = cast(LockSourceResponse, self._request_json(
             METHOD_PUT, "/lock_source", {
@@ -1380,9 +1391,9 @@ class XYMEClient:
             "source_schema_map": res["sourceSchemaMap"],
         }
 
-    def get_sources(self,
-                    filter_by: Optional[str] = None,
-                    ) -> Iterable['SourceHandle']:
+    def get_sources(
+            self,
+            filter_by: Optional[str] = None) -> Iterable['SourceHandle']:
         if filter_by is not None and filter_by not in FILTERS:
             raise ValueError(f"invalid value for filter_by: {filter_by}")
         res = cast(SourcesResponse, self._request_json(
@@ -1400,11 +1411,12 @@ class XYMEClient:
         if filter_by is None or filter_by == FILTER_USER:
             yield from respond(res["userSources"])
 
-    def create_input(self,
-                     name: str,
-                     ext: str,
-                     size: int,
-                     hash_str: Optional[str]) -> 'InputHandle':
+    def create_input(
+            self,
+            name: str,
+            ext: str,
+            size: int,
+            hash_str: Optional[str]) -> 'InputHandle':
         res = cast(CreateInputResponse, self._request_json(
             METHOD_LONGPOST, "/create_input_id", {
                 "name": name,
@@ -1417,12 +1429,13 @@ class XYMEClient:
     def get_input(self, input_id: str) -> 'InputHandle':
         return InputHandle(self, input_id)
 
-    def input_from_io(self,
-                      io_in: IO[bytes],
-                      name: str,
-                      ext: str,
-                      progress_bar: Optional[IO[Any]] = sys.stdout,
-                      ) -> 'InputHandle':
+    def input_from_io(
+            self,
+            io_in: IO[bytes],
+            name: str,
+            ext: str,
+            progress_bar: Optional[IO[Any]] = sys.stdout,
+                ) -> 'InputHandle':
         from_pos = io_in.seek(0, io.SEEK_CUR)
         size = io_in.seek(0, io.SEEK_END) - from_pos
         io_in.seek(from_pos, io.SEEK_SET)
@@ -1433,10 +1446,10 @@ class XYMEClient:
                 res.upload_full(io_in, name, progress_bar)
             return res
 
-    def input_from_file(self,
-                        filename: str,
-                        progress_bar: Optional[IO[Any]] = sys.stdout,
-                        ) -> 'InputHandle':
+    def input_from_file(
+            self,
+            filename: str,
+            progress_bar: Optional[IO[Any]] = sys.stdout) -> 'InputHandle':
         if filename.endswith(f"{INPUT_CSV_EXT}{INPUT_ZIP_EXT}") \
                 or filename.endswith(f"{INPUT_TSV_EXT}{INPUT_ZIP_EXT}"):
             filename = filename[:-len(INPUT_ZIP_EXT)]
@@ -1449,16 +1462,16 @@ class XYMEClient:
         with open(filename, "rb") as fbuff:
             return self.input_from_io(fbuff, fname, ext, progress_bar)
 
-    def input_from_df(self,
-                      df: pd.DataFrame,
-                      name: str,
-                      progress_bar: Optional[IO[Any]] = sys.stdout,
-                      ) -> 'InputHandle':
+    def input_from_df(
+            self,
+            df: pd.DataFrame,
+            name: str,
+            progress_bar: Optional[IO[Any]] = sys.stdout) -> 'InputHandle':
         io_in = df_to_csv(df)
         return self.input_from_io(io_in, name, "csv", progress_bar)
 
-    def get_inputs(self,
-                   filter_by: Optional[str] = None) -> Iterable['InputHandle']:
+    def get_inputs(
+            self, filter_by: Optional[str] = None) -> Iterable['InputHandle']:
         if filter_by is not None and filter_by not in FILTERS:
             raise ValueError(f"invalid value for filter_by: {filter_by}")
         res = cast(InputsResponse, self._request_json(
@@ -1475,12 +1488,13 @@ class XYMEClient:
                     ext = None
                     input_id = filename
                 progress = UPLOAD_DONE if input_obj["immutable"] else None
-                yield InputHandle(self,
-                                  input_id,
-                                  name=input_obj["name"],
-                                  path=input_obj["path"],
-                                  ext=ext,
-                                  progress=progress)
+                yield InputHandle(
+                    self,
+                    input_id,
+                    name=input_obj["name"],
+                    path=input_obj["path"],
+                    ext=ext,
+                    progress=progress)
 
         if filter_by is None or filter_by == FILTER_SYSTEM:
             yield from respond(res["systemFiles"])
@@ -1503,19 +1517,20 @@ class XYMEClient:
 
 
 class JobHandle:
-    def __init__(self,
-                 client: XYMEClient,
-                 job_id: str,
-                 path: Optional[str],
-                 name: Optional[str],
-                 schema_obj: Optional[Dict[str, Any]],
-                 kinds: Optional[List[str]],
-                 status: Optional[str],
-                 permalink: Optional[str],
-                 time_total: Optional[float],
-                 time_start: Optional[str],
-                 time_end: Optional[str],
-                 time_estimate: Optional[str]) -> None:
+    def __init__(
+            self,
+            client: XYMEClient,
+            job_id: str,
+            path: Optional[str],
+            name: Optional[str],
+            schema_obj: Optional[Dict[str, Any]],
+            kinds: Optional[List[str]],
+            status: Optional[str],
+            permalink: Optional[str],
+            time_total: Optional[float],
+            time_start: Optional[str],
+            time_end: Optional[str],
+            time_estimate: Optional[str]) -> None:
         self._client = client
         self._job_id = job_id
         self._name = name
@@ -1656,10 +1671,11 @@ class JobHandle:
             return True
         return notes["is_runnable"] and not notes["error"]
 
-    def start(self,
-              user: Optional[str] = None,
-              company: Optional[str] = None,
-              nowait: Optional[bool] = None) -> JobStartResponse:
+    def start(
+            self,
+            user: Optional[str] = None,
+            company: Optional[str] = None,
+            nowait: Optional[bool] = None) -> JobStartResponse:
         if not self.can_start(force=False):
             raise ValueError("Cannot start job. Missing data or target?")
         res = self._client.start_job(
@@ -1792,11 +1808,12 @@ class JobHandle:
             }, capture_err=True))
         return is_pause if res["success"] else not is_pause
 
-    def dynamic_predict(self,
-                        method: str,
-                        fbuff: Optional[IO[bytes]],
-                        source: Optional['SourceHandle'],
-                        ) -> DynamicPredictionResponse:
+    def dynamic_predict(
+            self,
+            method: str,
+            fbuff: Optional[IO[bytes]],
+            source: Optional['SourceHandle'],
+                ) -> DynamicPredictionResponse:
         if fbuff is not None:
             res = cast(DynamicPredictionResponse, self._client._request_json(
                 METHOD_FILE, "/dynamic_predict", {
@@ -1817,26 +1834,29 @@ class JobHandle:
             raise ValueError("one of fbuff or source must not be None")
         return res
 
-    def predict_source(self,
-                       source: 'SourceHandle',
-                       ) -> Tuple[Optional[pd.DataFrame], StdoutWrapper]:
+    def predict_source(
+            self,
+            source: 'SourceHandle',
+                ) -> Tuple[Optional[pd.DataFrame], StdoutWrapper]:
         res = self.dynamic_predict("dyn_pred", fbuff=None, source=source)
         return (
             maybe_predictions_to_df(res["predictions"]),
             StdoutWrapper(res["stdout"]),
         )
 
-    def predict_proba_source(self,
-                             source: 'SourceHandle',
-                             ) -> Tuple[Optional[pd.DataFrame], StdoutWrapper]:
+    def predict_proba_source(
+            self,
+            source: 'SourceHandle',
+                ) -> Tuple[Optional[pd.DataFrame], StdoutWrapper]:
         res = self.dynamic_predict("dyn_prob", fbuff=None, source=source)
         return (
             maybe_predictions_to_df(res["predictions"]),
             StdoutWrapper(res["stdout"]),
         )
 
-    def predict(self,
-                df: pd.DataFrame,
+    def predict(
+            self,
+            df: pd.DataFrame,
                 ) -> Tuple[Optional[pd.DataFrame], StdoutWrapper]:
         buff = df_to_csv(df)
         res = self.dynamic_predict("dyn_pred", fbuff=buff, source=None)
@@ -1845,9 +1865,10 @@ class JobHandle:
             StdoutWrapper(res["stdout"]),
         )
 
-    def predict_proba(self,
-                      df: pd.DataFrame,
-                      ) -> Tuple[Optional[pd.DataFrame], StdoutWrapper]:
+    def predict_proba(
+            self,
+            df: pd.DataFrame,
+                ) -> Tuple[Optional[pd.DataFrame], StdoutWrapper]:
         buff = df_to_csv(df)
         res = self.dynamic_predict("dyn_prob", fbuff=buff, source=None)
         return (
@@ -1855,9 +1876,10 @@ class JobHandle:
             StdoutWrapper(res["stdout"]),
         )
 
-    def predict_file(self,
-                     csv: str,
-                     ) -> Tuple[Optional[pd.DataFrame], StdoutWrapper]:
+    def predict_file(
+            self,
+            csv: str,
+                ) -> Tuple[Optional[pd.DataFrame], StdoutWrapper]:
         with open(csv, "rb") as f_in:
             res = self.dynamic_predict("dyn_pred", fbuff=f_in, source=None)
             return (
@@ -1865,9 +1887,10 @@ class JobHandle:
                 StdoutWrapper(res["stdout"]),
             )
 
-    def predict_proba_file(self,
-                           csv: str,
-                           ) -> Tuple[Optional[pd.DataFrame], StdoutWrapper]:
+    def predict_proba_file(
+            self,
+            csv: str,
+                ) -> Tuple[Optional[pd.DataFrame], StdoutWrapper]:
         with open(csv, "rb") as f_in:
             res = self.dynamic_predict("dyn_prob", fbuff=f_in, source=None)
             return (
@@ -1875,13 +1898,14 @@ class JobHandle:
                 StdoutWrapper(res["stdout"]),
             )
 
-    def get_predictions(self,
-                        method: Optional[str],
-                        ticker: Optional[str],
-                        date: Optional[str],
-                        last_n: int,
-                        filters: Optional[Dict[str, Any]],
-                        ) -> Optional[pd.DataFrame]:
+    def get_predictions(
+            self,
+            method: Optional[str],
+            ticker: Optional[str],
+            date: Optional[str],
+            last_n: int,
+            filters: Optional[Dict[str, Any]],
+                ) -> Optional[pd.DataFrame]:
         if filters is None:
             filters = {}
         res = cast(SimplePredictionsResponse, self._client._request_json(
@@ -1905,22 +1929,24 @@ class JobHandle:
                 "job": self._job_id,
                 "with": path,
             }, capture_err=True))
-        return JobHandle(client=self._client,
-                         job_id=shared["job"],
-                         path=None,
-                         name=None,
-                         schema_obj=None,
-                         kinds=None,
-                         status=None,
-                         permalink=None,
-                         time_total=None,
-                         time_start=None,
-                         time_end=None,
-                         time_estimate=None)
+        return JobHandle(
+            client=self._client,
+            job_id=shared["job"],
+            path=None,
+            name=None,
+            schema_obj=None,
+            kinds=None,
+            status=None,
+            permalink=None,
+            time_total=None,
+            time_start=None,
+            time_end=None,
+            time_estimate=None)
 
-    def create_source(self,
-                      source_type: str,
-                      name: Optional[str] = None) -> 'SourceHandle':
+    def create_source(
+            self,
+            source_type: str,
+            name: Optional[str] = None) -> 'SourceHandle':
         res = self._client._raw_create_source(
             source_type, name, self, None, None)
         return res["source"]
@@ -1952,10 +1978,10 @@ class JobHandle:
         ) for progress in x_obj.get("source_progress", []))
         return res
 
-    def get_segments(self,
-                     ticker: Optional[str] = None,
-                     ) -> List[Tuple[
-                         int, Optional[pd.Timestamp], Optional[pd.Timestamp]]]:
+    def get_segments(
+            self,
+            ticker: Optional[str] = None) -> List[Tuple[
+                int, Optional[pd.Timestamp], Optional[pd.Timestamp]]]:
         res = cast(SegmentResponse, self._client._request_json(
             METHOD_LONGPOST, "/segments", {
                 "job": self._job_id,
@@ -1985,11 +2011,12 @@ class JobHandle:
             x_obj["source"] = source.get_source_id()
             obj["X"] = x_obj
 
-    def append_source(self,
-                      source: 'SourceHandle',
-                      start_time: Optional[Union[str, pd.Timestamp]],
-                      end_time: Optional[Union[str, pd.Timestamp]],
-                      change_set: Optional[Dict[str, Any]] = None) -> None:
+    def append_source(
+            self,
+            source: 'SourceHandle',
+            start_time: Optional[Union[str, pd.Timestamp]],
+            end_time: Optional[Union[str, pd.Timestamp]],
+            change_set: Optional[Dict[str, Any]] = None) -> None:
         with self.update_schema() as obj:
             x_obj = obj.get("X", {})
             progress = x_obj.get("source_progress", [])
@@ -2013,10 +2040,11 @@ class JobHandle:
             }, capture_err=False))
         return res["metrics"]
 
-    def get_metric(self,
-                   metric: str,
-                   ticker: Optional[str],
-                   kind: str = PLOT_PKL) -> Optional[MetricWrapper]:
+    def get_metric(
+            self,
+            metric: str,
+            ticker: Optional[str],
+            kind: str = PLOT_PKL) -> Optional[MetricWrapper]:
         res = cast(MetricResponse, self._client._request_json(
             METHOD_LONGPOST, "/metric", {
                 "job": self._job_id,
@@ -2033,14 +2061,15 @@ class JobHandle:
             return MetricCoords(plot)
         raise ValueError(f"invalid plot kind: {plot['kind']}")
 
-    def _raw_stdout(self,
-                    ticker: Optional[str],
-                    do_filter: bool,
-                    query_str: Optional[str],
-                    pos: Optional[int],
-                    context: int,
-                    before: Optional[int],
-                    after: Optional[int]) -> List[StdoutLine]:
+    def _raw_stdout(
+            self,
+            ticker: Optional[str],
+            do_filter: bool,
+            query_str: Optional[str],
+            pos: Optional[int],
+            context: int,
+            before: Optional[int],
+            after: Optional[int]) -> List[StdoutLine]:
         res = cast(JobStdoutResponse, self._client._request_json(
             METHOD_POST, "/stdout", {
                 "job": self._job_id,
@@ -2089,13 +2118,14 @@ class JobHandle:
             "data_end": maybe_timestamp(data_end),
         }
 
-    def get_backtest(self,
-                     strategy: Optional[str],
-                     base_strategy: Optional[str],
-                     price_source: Optional['SourceHandle'],
-                     prediction_feature: Optional[str],
-                     ticker: Optional[str] = None,
-                     ) -> Tuple[Optional[Dict[str, Any]], StdoutWrapper]:
+    def get_backtest(
+            self,
+            strategy: Optional[str],
+            base_strategy: Optional[str],
+            price_source: Optional['SourceHandle'],
+            prediction_feature: Optional[str],
+            ticker: Optional[str] = None,
+                ) -> Tuple[Optional[Dict[str, Any]], StdoutWrapper]:
         res = cast(BacktestResponse, self._client._request_json(
             METHOD_LONGPOST, "/summary", {
                 "job": self._job_id,
@@ -2159,11 +2189,12 @@ InspectValue = Union['InspectPath', bool, int, float, str, None]
 
 
 class InspectPath(collections.abc.Mapping):
-    def __init__(self,
-                 clazz: str,
-                 inspect: 'InspectHandle',
-                 path: List[str],
-                 summary: str):
+    def __init__(
+            self,
+            clazz: str,
+            inspect: 'InspectHandle',
+            path: List[str],
+            summary: str):
         self._clazz = clazz
         self._inspect = inspect
         self._path = path
@@ -2233,10 +2264,11 @@ class InspectPath(collections.abc.Mapping):
 
 
 class InspectHandle(InspectPath):
-    def __init__(self,
-                 client: XYMEClient,
-                 job: JobHandle,
-                 ticker: Optional[str]) -> None:
+    def __init__(
+            self,
+            client: XYMEClient,
+            job: JobHandle,
+            ticker: Optional[str]) -> None:
         super().__init__("uninitialized", self, [], "uninitialized")
         self._client = client
         self._job_id = job._job_id
@@ -2277,9 +2309,10 @@ class InspectHandle(InspectPath):
             do_query = True
             break
 
-        def maybe_set_cache(key: str,
-                            ipath: InspectPath,
-                            obj: InspectItem) -> Optional[InspectPath]:
+        def maybe_set_cache(
+                key: str,
+                ipath: InspectPath,
+                obj: InspectItem) -> Optional[InspectPath]:
             has_value = False
             res = None
             if obj["leaf"]:
@@ -2358,14 +2391,15 @@ class InspectHandle(InspectPath):
 
 
 class SourceHandle:
-    def __init__(self,
-                 client: XYMEClient,
-                 source_id: str,
-                 source_type: Optional[str],
-                 infer_type: bool = False,
-                 name: Optional[str] = None,
-                 immutable: Optional[bool] = None,
-                 help_message: Optional[str] = None):
+    def __init__(
+            self,
+            client: XYMEClient,
+            source_id: str,
+            source_type: Optional[str],
+            infer_type: bool = False,
+            name: Optional[str] = None,
+            immutable: Optional[bool] = None,
+            help_message: Optional[str] = None):
         if not source_id:
             raise ValueError("source id is not set!")
         if not infer_type and (
@@ -2511,12 +2545,13 @@ class SourceHandle:
         self.refresh()
         return res["source"]
 
-    def add_new_source_file(self,
-                            filename: str,
-                            ticker_column: str,
-                            date_column: Optional[str],
-                            progress_bar: Optional[IO[Any]] = sys.stdout,
-                            ) -> 'SourceHandle':
+    def add_new_source_file(
+            self,
+            filename: str,
+            ticker_column: str,
+            date_column: Optional[str],
+            progress_bar: Optional[IO[Any]] = sys.stdout,
+                ) -> 'SourceHandle':
         with self.bulk_operation():
             source = self.add_new_source(
                 SOURCE_TYPE_CSV, os.path.basename(filename))
@@ -2524,13 +2559,14 @@ class SourceHandle:
                 filename, ticker_column, date_column, progress_bar)
             return source
 
-    def add_new_source_df(self,
-                          df: pd.DataFrame,
-                          name: str,
-                          ticker_column: str,
-                          date_column: Optional[str],
-                          progress_bar: Optional[IO[Any]] = sys.stdout,
-                          ) -> 'SourceHandle':
+    def add_new_source_df(
+            self,
+            df: pd.DataFrame,
+            name: str,
+            ticker_column: str,
+            date_column: Optional[str],
+            progress_bar: Optional[IO[Any]] = sys.stdout,
+                ) -> 'SourceHandle':
         with self.bulk_operation():
             source = self.add_new_source(SOURCE_TYPE_CSV, name)
             source.set_input_df(
@@ -2548,10 +2584,11 @@ class SourceHandle:
                     config["sources"] = []
                 config["sources"].append(source.get_source_id())
 
-    def set_input(self,
-                  input_obj: 'InputHandle',
-                  ticker_column: Optional[str],
-                  date_column: Optional[str]) -> None:
+    def set_input(
+            self,
+            input_obj: 'InputHandle',
+            ticker_column: Optional[str],
+            date_column: Optional[str]) -> None:
         with self.bulk_operation():
             self._ensure_csv_source()
             with self.update_schema() as schema_obj:
@@ -2568,22 +2605,24 @@ class SourceHandle:
                     if date_column is not None:
                         config["date"] = date_column
 
-    def set_input_file(self,
-                       filename: str,
-                       ticker_column: str,
-                       date_column: Optional[str],
-                       progress_bar: Optional[IO[Any]] = sys.stdout) -> None:
+    def set_input_file(
+            self,
+            filename: str,
+            ticker_column: str,
+            date_column: Optional[str],
+            progress_bar: Optional[IO[Any]] = sys.stdout) -> None:
         with self.bulk_operation():
             self._ensure_csv_source()
             input_obj = self._client.input_from_file(filename, progress_bar)
             self.set_input(input_obj, ticker_column, date_column)
 
-    def set_input_df(self,
-                     df: pd.DataFrame,
-                     name: str,
-                     ticker_column: str,
-                     date_column: Optional[str],
-                     progress_bar: Optional[IO[Any]] = sys.stdout) -> None:
+    def set_input_df(
+            self,
+            df: pd.DataFrame,
+            name: str,
+            ticker_column: str,
+            date_column: Optional[str],
+            progress_bar: Optional[IO[Any]] = sys.stdout) -> None:
         with self.bulk_operation():
             self._ensure_csv_source()
             input_obj = self._client.input_from_df(df, name, progress_bar)
@@ -2626,14 +2665,15 @@ class SourceHandle:
 
 
 class InputHandle:
-    def __init__(self,
-                 client: XYMEClient,
-                 input_id: str,
-                 name: Optional[str] = None,
-                 path: Optional[str] = None,
-                 ext: Optional[str] = None,
-                 size: Optional[int] = None,
-                 progress: Optional[str] = None) -> None:
+    def __init__(
+            self,
+            client: XYMEClient,
+            input_id: str,
+            name: Optional[str] = None,
+            path: Optional[str] = None,
+            ext: Optional[str] = None,
+            size: Optional[int] = None,
+            progress: Optional[str] = None) -> None:
         if not input_id:
             raise ValueError("input id is not set!")
         self._client = client
@@ -2748,10 +2788,11 @@ class InputHandle:
         self._progress = res["progress"]
         return res["exists"]
 
-    def upload_full(self,
-                    file_content: IO[bytes],
-                    file_name: Optional[str],
-                    progress_bar: Optional[IO[Any]] = sys.stdout) -> int:
+    def upload_full(
+            self,
+            file_content: IO[bytes],
+            file_name: Optional[str],
+            progress_bar: Optional[IO[Any]] = sys.stdout) -> int:
         if file_name is not None:
             self._name = file_name
         total_size: Optional[int] = None
@@ -2795,18 +2836,20 @@ class InputHandle:
 # *** InputHandle ***
 
 
-def create_xyme_client(url: str,
-                       user: Optional[str] = None,
-                       password: Optional[str] = None,
-                       token: Optional[str] = None) -> XYMEClient:
+def create_xyme_client(
+        url: str,
+        user: Optional[str] = None,
+        password: Optional[str] = None,
+        token: Optional[str] = None) -> XYMEClient:
     return XYMEClient(url, user, password, token)
 
 
 @contextlib.contextmanager
-def create_xyme_session(url: str,
-                        user: Optional[str] = None,
-                        password: Optional[str] = None,
-                        token: Optional[str] = None) -> Iterator[XYMEClient]:
+def create_xyme_session(
+        url: str,
+        user: Optional[str] = None,
+        password: Optional[str] = None,
+        token: Optional[str] = None) -> Iterator[XYMEClient]:
     try:
         client = XYMEClient(url, user, password, token)
         yield client

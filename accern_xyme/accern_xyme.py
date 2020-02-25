@@ -56,11 +56,12 @@ class LegacyVersion(Exception):
 
 
 class XYMEClient:
-    def __init__(self,
-                 url: str,
-                 user: Optional[str],
-                 password: Optional[str],
-                 token: Optional[str]) -> None:
+    def __init__(
+            self,
+            url: str,
+            user: Optional[str],
+            password: Optional[str],
+            token: Optional[str]) -> None:
         self._url = url.rstrip("/")
         if user is None:
             user = os.environ.get("ACCERN_USER")
@@ -334,15 +335,16 @@ class XYMEClient:
             self._login()
             return execute()
 
-    def _request_json(self,
-                      method: str,
-                      path: str,
-                      args: Dict[str, Any],
-                      capture_err: bool,
-                      add_prefix: bool = True,
-                      files: Optional[Dict[str, IO[bytes]]] = None,
-                      api_version: Optional[int] = None,
-                      ) -> Dict[str, Any]:
+    def _request_json(
+            self,
+            method: str,
+            path: str,
+            args: Dict[str, Any],
+            capture_err: bool,
+            add_prefix: bool = True,
+            files: Optional[Dict[str, IO[bytes]]] = None,
+            api_version: Optional[int] = None,
+                ) -> Dict[str, Any]:
         if self._token is None:
             self._login()
 
@@ -404,18 +406,169 @@ class XYMEClient:
 # *** XYMEClient ***
 
 
-def create_xyme_client(url: str,
-                       user: Optional[str] = None,
-                       password: Optional[str] = None,
-                       token: Optional[str] = None) -> XYMEClient:
+# class PipelineHandle:
+#     def __init__(self,
+#                  client: XYMEClient,
+#                  job_id: str,
+#                  path: Optional[str],
+#                  name: Optional[str],
+#                  schema_obj: Optional[Dict[str, Any]],
+#                  kinds: Optional[List[str]],
+#                  status: Optional[str],
+#                  permalink: Optional[str],
+#                  time_total: Optional[float],
+#                  time_start: Optional[str],
+#                  time_end: Optional[str],
+#                  time_estimate: Optional[str]) -> None:
+#         self._client = client
+#         self._job_id = job_id
+#         self._name = name
+#         self._path = path
+#         self._schema_obj = schema_obj
+#         self._kinds = kinds
+#         self._permalink = permalink
+#         self._status = status
+#         self._time_total = time_total
+#         self._time_start = time_start
+#         self._time_end = time_end
+#         self._time_estimate = time_estimate
+#         self._buttons: Optional[List[str]] = None
+#         self._can_rename: Optional[bool] = None
+#         self._is_symjob: Optional[bool] = None
+#         self._is_user_job: Optional[bool] = None
+#         self._plot_order_types: Optional[List[str]] = None
+#         self._tabs: Optional[List[str]] = None
+#         self._tickers: Optional[List[str]] = None
+#         self._source: Optional[SourceHandle] = None
+#         self._is_async_fetch = False
+#         self._async_lock = threading.RLock()
+
+#     def refresh(self) -> None:
+#         self._name = None
+#         self._path = None
+#         self._schema_obj = None
+#         self._kinds = None
+#         self._permalink = None
+#         self._time_total = None
+#         self._time_start = None
+#         self._time_end = None
+#         self._time_estimate = None
+#         self._buttons = None
+#         self._can_rename = None
+#         self._is_symjob = None
+#         self._is_user_job = None
+#         self._plot_order_types = None
+#         self._tabs = None
+#         self._tickers = None
+#         self._source = None
+#         if not self._is_async_fetch:
+#             self._status = None
+
+#     def _maybe_refresh(self) -> None:
+#         if self._client.is_auto_refresh():
+#             self.refresh()
+
+#     def _fetch_info(self) -> None:
+#         res = self._client._request_json(
+#             METHOD_LONGPOST, "/status", {
+#                 "job": self._job_id,
+#             }, capture_err=False)
+#         if res.get("empty", True) and "name" not in res:
+#             raise ValueError("could not update status")
+#         info = cast(JobStatusInfo, res)
+#         self._name = info["name"]
+#         self._path = info["path"]
+#         self._schema_obj = json.loads(info["schema"])
+#         self._buttons = info["buttons"]
+#         self._can_rename = info["canRename"]
+#         self._is_symjob = info["symjob"]
+#         self._is_user_job = info["isUserJob"]
+#         self._kinds = info["allKinds"]
+#         self._permalink = info["permalink"]
+#         self._plot_order_types = info["plotOrderTypes"]
+#         self._status = info["status"]
+#         self._tabs = info["allTabs"]
+#         self._tickers = info["tickers"]
+#         self._time_total = info["timeTotal"]
+#         self._time_start = info["timeStart"]
+#         self._time_end = info["timeEnd"]
+#         self._time_estimate = info["timeEstimate"]
+
+#     def get_job_id(self) -> str:
+#         return self._job_id
+
+#     def get_schema(self) -> Dict[str, Any]:
+#         self._maybe_refresh()
+#         if self._schema_obj is None:
+#             self._fetch_info()
+#         assert self._schema_obj is not None
+#         return copy.deepcopy(self._schema_obj)
+
+#     def set_schema(self, schema: Dict[str, Any]) -> None:
+#         res = cast(SchemaResponse, self._client._request_json(
+#             METHOD_PUT, "/update_job_schema", {
+#                 "job": self._job_id,
+#                 "schema": json.dumps(schema),
+#             }, capture_err=True))
+#         self._schema_obj = json.loads(res["schema"])
+
+#     @contextlib.contextmanager
+#     def update_schema(self) -> Iterator[Dict[str, Any]]:
+#         self._maybe_refresh()
+#         if self._schema_obj is None:
+#             self._fetch_info()
+#         assert self._schema_obj is not None
+#         yield self._schema_obj
+#         self.set_schema(self._schema_obj)
+
+#     @contextlib.contextmanager
+#     def bulk_operation(self) -> Iterator[bool]:
+#         with self._client.bulk_operation() as do_refresh:
+#             if do_refresh:
+#                 self.refresh()
+#             yield do_refresh
+
+#     def get_notes(self, force: bool) -> Optional[NotesInfo]:
+#         res = cast(PreviewNotesResponse, self._client._request_json(
+#             METHOD_LONGPOST, "/preview", {
+#                 "job": self._job_id,
+#                 "view": "summary",
+#                 "force": force,
+#                 "schema": None,
+#                 "batch": None,
+#             }, capture_err=False))
+#         notes = res["notes"]
+#         if notes is None:
+#             return None
+#         return {
+#             "usage": notes.get("usage", {}),
+#             "roles": notes.get("roles", {}),
+#             "roles_renamed": notes.get("rolesRenamed", {}),
+#             "dummy_columns": notes.get("dummyColumns", []),
+#             "stats": notes.get("stats", {}),
+#             "is_runnable": notes.get("isRunnable", False),
+#             "suggestions": notes.get("suggestions", {}),
+#             "is_preview": notes.get("isPreview", True),
+#             "error": notes.get("error", True),
+#         }
+
+# *** PipelineHandle ***
+
+
+def create_xyme_client(
+        url: str,
+        user: Optional[str] = None,
+        password: Optional[str] = None,
+        token: Optional[str] = None) -> XYMEClient:
     return XYMEClient(url, user, password, token)
 
 
 @contextlib.contextmanager
-def create_xyme_session(url: str,
-                        user: Optional[str] = None,
-                        password: Optional[str] = None,
-                        token: Optional[str] = None) -> Iterator[XYMEClient]:
+def create_xyme_session(
+        url: str,
+        user: Optional[str] = None,
+        password: Optional[str] = None,
+        token: Optional[str] = None) -> Iterator[XYMEClient]:
     try:
         client = XYMEClient(url, user, password, token)
         yield client
