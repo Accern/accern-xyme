@@ -874,8 +874,10 @@ def create_xyme_session(
         user: Optional[str] = None,
         password: Optional[str] = None,
         token: Optional[str] = None) -> Iterator[XYMEClient]:
+    client = None
     try:
         client = XYMEClient(url, user, password, token)
         yield client
     finally:
-        client.logout()
+        if client is not None:
+            client.logout()

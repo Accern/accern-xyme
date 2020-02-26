@@ -2850,8 +2850,10 @@ def create_legacy_session(
         user: Optional[str] = None,
         password: Optional[str] = None,
         token: Optional[str] = None) -> Iterator[XYMELegacyClient]:
+    client = None
     try:
         client = XYMELegacyClient(url, user, password, token)
         yield client
     finally:
-        client.logout()
+        if client is not None:
+            client.logout()
