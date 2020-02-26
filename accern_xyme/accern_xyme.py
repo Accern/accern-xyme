@@ -30,10 +30,12 @@ from .types import (
     MaintenanceResponse,
     NodeDefInfo,
     NodeInfo,
+    NodeStatus,
     NodeTypes,
     PipelineInfo,
     PipelineList,
     ReadNode,
+    TaskStatus,
     VersionResponse,
 )
 
@@ -633,6 +635,13 @@ class NodeHandle:
     def get_input(self, key: str) -> Tuple['NodeHandle', str]:
         node_id, out_key = self._inputs[key]
         return self.get_pipeline().get_node(node_id), out_key
+
+    def get_status(self) -> TaskStatus:
+        return cast(NodeStatus, self._client._request_json(
+            METHOD_GET, "/node_status", {
+                "pipeline": self.get_pipeline().get_id(),
+                "node": self.get_id(),
+            }, capture_err=False))["status"]
 
     def get_logs(self) -> str:
         with self._client._raw_request_str(

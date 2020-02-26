@@ -3,6 +3,16 @@ from typing import Any, Optional, List, Dict, Tuple
 from typing_extensions import TypedDict, Literal
 
 
+TaskStatus = Literal[
+    "blocked",
+    "waiting",
+    "running",
+    "complete",
+    "eos",
+    "paused",
+    "error",
+    "unknown",
+]
 ParamType = Literal[
     "str",
     "int",
@@ -38,6 +48,9 @@ NodeDefInfo = TypedDict('NodeDefInfo', {
     "task_type": Optional[str],
     "blob_types": Dict[str, str],
     "params": ParamDefs,
+})
+NodeStatus = TypedDict('NodeStatus', {
+    "status": TaskStatus,
 })
 NodeTypes = TypedDict('NodeTypes', {
     "types": List[str],
