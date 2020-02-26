@@ -7,6 +7,7 @@ from typing import (
     List,
     Optional,
     Set,
+    TextIO,
     Tuple,
     TYPE_CHECKING,
 )
@@ -16,7 +17,7 @@ import json
 import time
 import weakref
 import contextlib
-from io import BytesIO
+from io import BytesIO, StringIO
 import requests
 import pandas as pd
 import quick_server
@@ -155,6 +156,24 @@ class XYMEClient:
                 time.sleep(get_retry_sleep())
             retry += 1
 
+    def _raw_request_str(
+            self,
+            method: str,
+            path: str,
+            args: Dict[str, Any],
+            add_prefix: bool = True,
+            api_version: Optional[int] = None) -> TextIO:
+        retry = 0
+        while True:
+            try:
+                return self._fallible_raw_request_str(
+                    method, path, args, add_prefix, api_version)
+            except requests.ConnectionError:
+                if retry >= get_max_retry():
+                    raise
+                time.sleep(get_retry_sleep())
+            retry += 1
+
     def _raw_request_json(
             self,
             method: str,
@@ -226,6 +245,37 @@ class XYMEClient:
                 raise AccessDenied(req.text)
             if req.status_code == 200:
                 return BytesIO(req.content)
+            raise ValueError(
+                f"error {req.status_code} in worker request:\n{req.text}")
+        raise ValueError(f"unknown method {method}")
+
+    def _fallible_raw_request_str(
+            self,
+            method: str,
+            path: str,
+            args: Dict[str, Any],
+            add_prefix: bool,
+            api_version: Optional[int]) -> TextIO:
+        prefix = ""
+        if add_prefix:
+            if api_version is None:
+                api_version = self._api_version
+            prefix = f"{PREFIX}/v{api_version}"
+        url = f"{self._url}{prefix}{path}"
+        if method == METHOD_GET:
+            req = requests.get(url, params=args)
+            if req.status_code == 403:
+                raise AccessDenied(req.text)
+            if req.status_code == 200:
+                return StringIO(req.text)
+            raise ValueError(
+                f"error {req.status_code} in worker request:\n{req.text}")
+        if method == METHOD_POST:
+            req = requests.post(url, json=args)
+            if req.status_code == 403:
+                raise AccessDenied(req.text)
+            if req.status_code == 200:
+                return StringIO(req.text)
             raise ValueError(
                 f"error {req.status_code} in worker request:\n{req.text}")
         raise ValueError(f"unknown method {method}")
@@ -473,9 +523,13 @@ class PipelineHandle:
         }
 
     def get_nodes(self) -> List[str]:
+        self._maybe_refresh()
+        self._maybe_fetch()
         return list(self._nodes.keys())
 
     def get_node(self, node_id: str) -> 'NodeHandle':
+        self._maybe_refresh()
+        self._maybe_fetch()
         return self._nodes[node_id]
 
     def get_id(self) -> str:
@@ -579,6 +633,14 @@ class NodeHandle:
     def get_input(self, key: str) -> Tuple['NodeHandle', str]:
         node_id, out_key = self._inputs[key]
         return self.get_pipeline().get_node(node_id), out_key
+
+    def get_log(self) -> str:
+        with self._client._raw_request_str(
+                METHOD_GET, "/node_log", {
+                    "pipeline": self.get_pipeline().get_id(),
+                    "node": self.get_id(),
+                }) as fin:
+            return fin.read()
 
     def read_blob(self, key: str, chunk: int) -> 'BlobHandle':
         res = cast(ReadNode, self._client._request_json(
