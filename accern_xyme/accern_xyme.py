@@ -634,9 +634,9 @@ class NodeHandle:
         node_id, out_key = self._inputs[key]
         return self.get_pipeline().get_node(node_id), out_key
 
-    def get_log(self) -> str:
+    def get_logs(self) -> str:
         with self._client._raw_request_str(
-                METHOD_GET, "/node_log", {
+                METHOD_GET, "/node_logs", {
                     "pipeline": self.get_pipeline().get_id(),
                     "node": self.get_id(),
                 }) as fin:
