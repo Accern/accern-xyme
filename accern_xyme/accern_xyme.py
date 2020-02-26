@@ -641,7 +641,9 @@ class PipelineHandle:
             edges: List[Tuple[NodeHandle, str, int]] = []
             for node in order:
                 edges, in_line = draw_in_edges(node, edges)
-                lines.append(in_line.rstrip())
+                in_line = in_line.rstrip()
+                if in_line:
+                    lines.append(f"  {in_line}")
                 node_line = \
                     f"{node.get_short_status()} " \
                     f"{node.get_type()}[{node.get_id()}] "
@@ -651,10 +653,12 @@ class PipelineHandle:
                 if total_gap > 0:
                     node_line = f"{node_line}{'-' * total_gap}\\"
                 lines.append(node_line.rstrip())
-                lines.append(out_line.rstrip())
+                out_line = out_line.rstrip()
+                if out_line:
+                    lines.append(f"  {out_line}")
             return lines
 
-        return "\n".join((line for line in draw() if line))
+        return "\n".join(draw())
 
     def __hash__(self) -> int:
         return hash(self._pipe_id)
