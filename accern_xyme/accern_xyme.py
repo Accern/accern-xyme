@@ -643,7 +643,8 @@ class PipelineHandle:
                 edges, in_line = draw_in_edges(node, edges)
                 lines.append(in_line.rstrip())
                 node_line = \
-                    f"{node.get_type()}[{node.get_id()}]({node.get_status()}) "
+                    f"{node.get_short_status()} " \
+                    f"{node.get_type()}[{node.get_id()}] "
                 edges, out_line = draw_out_edges(node, edges)
                 total_gap = max(
                     0, sum((edge[2] for edge in edges)) - len(node_line))
@@ -744,6 +745,19 @@ class NodeHandle:
                 "pipeline": self.get_pipeline().get_id(),
                 "node": self.get_id(),
             }, capture_err=False))["status"]
+
+    def get_short_status(self) -> str:
+        status_map: Dict[TaskStatus, str] = {
+            "blocked": "B",
+            "waiting": "W",
+            "running": "R",
+            "complete": "C",
+            "eos": "X",
+            "paused": "P",
+            "error": "E",
+            "unknown": "?",
+        }
+        return status_map[self.get_status()]
 
     def get_logs(self) -> str:
         with self._client._raw_request_str(
