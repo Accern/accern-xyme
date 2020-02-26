@@ -17,6 +17,7 @@ import json
 import time
 import weakref
 import contextlib
+import collections
 from io import BytesIO, StringIO
 import requests
 import pandas as pd
@@ -93,6 +94,7 @@ class XYMEClient:
         self._auto_refresh = True
         self._pipeline_cache: WVD = weakref.WeakValueDictionary()
         self._permissions: Optional[List[str]] = None
+        self._node_defs: Optional[Dict[str, NodeDefInfo]] = None
 
         def get_version() -> int:
             server_version = self.get_server_version()
@@ -130,6 +132,13 @@ class XYMEClient:
 
     def is_auto_refresh(self) -> bool:
         return self._auto_refresh
+
+    def refresh(self) -> None:
+        self._node_defs = None
+
+    def _maybe_refresh(self) -> None:
+        if self.is_auto_refresh():
+            self.refresh()
 
     @contextlib.contextmanager
     def bulk_operation(self) -> Iterator[bool]:
@@ -472,10 +481,14 @@ class XYMEClient:
         self._pipeline_cache[pipe_id] = res
         return res
 
-    def get_node_types(self) -> Dict[str, NodeDefInfo]:
+    def get_node_defs(self) -> Dict[str, NodeDefInfo]:
+        self._maybe_refresh()
+        if self._node_defs is not None:
+            return self._node_defs
         res = cast(NodeTypes, self._request_json(
-            METHOD_GET, "/node_types", {}, capture_err=False))
-        return res["info"]
+            METHOD_GET, "/node_types", {}, capture_err=False))["info"]
+        self._node_defs = res
+        return res
 
 # *** XYMEClient ***
 
@@ -556,6 +569,92 @@ class PipelineHandle:
                 self.refresh()
             yield do_refresh
 
+    def pretty(self) -> str:
+        nodes = [self.get_node(node_id) for node_id in self.get_nodes()]
+        already: Set[NodeHandle] = set()
+        order: List[NodeHandle] = []
+        outs: Dict[
+            NodeHandle,
+            List[Tuple[NodeHandle, str, str]],
+        ] = collections.defaultdict(list)
+
+        def topo(cur: NodeHandle) -> None:
+            if cur in already:
+                return
+            for in_key in cur.get_inputs():
+                out_node, out_key = cur.get_input(in_key)
+                outs[out_node].append((cur, in_key, out_key))
+                topo(out_node)
+            already.add(cur)
+            order.append(cur)
+
+        for tnode in nodes:
+            topo(tnode)
+
+        def draw_in_edges(
+                node: NodeHandle,
+                cur_edges: List[Tuple[NodeHandle, str, int]],
+                ) -> Tuple[List[Tuple[NodeHandle, str, int]], str]:
+            gap = 0
+            prev_gap = 0
+            new_edges: List[Tuple[NodeHandle, str, int]] = []
+            segs: List[str] = []
+            for edge in cur_edges:
+                in_node, in_key, cur_gap = edge
+                before_gap = cur_gap
+                if in_node == node:
+                    gap += cur_gap
+                    cur_str = f"| {in_key} "
+                else:
+                    cur_str = "|"
+                    cur_gap += gap
+                    gap = 0
+                    new_edges.append((in_node, in_key, cur_gap))
+                segs.append(f"{' ' * prev_gap}{cur_str}")
+                prev_gap = max(0, before_gap - len(cur_str))
+            return new_edges, "".join(segs)
+
+        def draw_out_edges(
+                node: NodeHandle,
+                cur_edges: List[Tuple[NodeHandle, str, int]],
+                ) -> Tuple[List[Tuple[NodeHandle, str, int]], str]:
+            new_edges: List[Tuple[NodeHandle, str, int]] = []
+            segs: List[str] = []
+            prev_gap = 0
+            for edge in cur_edges:
+                _, _, cur_gap = edge
+                cur_str = "|"
+                segs.append(f"{' ' * prev_gap}{cur_str}")
+                new_edges.append(edge)
+                prev_gap = max(0, cur_gap - len(cur_str))
+            for (in_node, in_key, out_key) in outs[node]:
+                cur_str = f"| {in_key} "
+                end_str = f"| {out_key} "
+                segs.append(f"{' ' * prev_gap}{cur_str}")
+                cur_gap = max(len(cur_str), len(end_str))
+                new_edges.append((in_node, out_key, cur_gap))
+                prev_gap = max(0, cur_gap - len(cur_str))
+            return new_edges, "".join(segs)
+
+        def draw() -> List[str]:
+            lines: List[str] = []
+            edges: List[Tuple[NodeHandle, str, int]] = []
+            for node in order:
+                edges, in_line = draw_in_edges(node, edges)
+                lines.append(in_line.rstrip())
+                node_line = \
+                    f"{node.get_type()}[{node.get_id()}]({node.get_status()}) "
+                edges, out_line = draw_out_edges(node, edges)
+                total_gap = max(
+                    0, sum((edge[2] for edge in edges)) - len(node_line))
+                if total_gap > 0:
+                    node_line = f"{node_line}{'-' * total_gap}\\"
+                lines.append(node_line.rstrip())
+                lines.append(out_line.rstrip())
+            return lines
+
+        return "\n".join((line for line in draw() if line))
+
     def __hash__(self) -> int:
         return hash(self._pipe_id)
 
@@ -628,6 +727,9 @@ class NodeHandle:
 
     def get_type(self) -> str:
         return self._type
+
+    def get_node_def(self) -> NodeDefInfo:
+        return self._client.get_node_defs()[self.get_type()]
 
     def get_inputs(self) -> Set[str]:
         return set(self._inputs.keys())
