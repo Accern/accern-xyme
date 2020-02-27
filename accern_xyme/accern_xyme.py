@@ -29,6 +29,7 @@ from .util import (
 )
 from .types import (
     MaintenanceResponse,
+    NodeChunk,
     NodeDefInfo,
     NodeInfo,
     NodeStatus,
@@ -649,7 +650,8 @@ class PipelineHandle:
                     lines.append(f"  {in_line}")
                 node_line = \
                     f"{node.get_short_status(allow_unicode)} " \
-                    f"{node.get_type()}[{node.get_id()}] "
+                    f"{node.get_type()}[{node.get_id()}] " \
+                    f"{node.get_highest_chunk()} "
                 edges, out_line = draw_out_edges(node, edges)
                 total_gap = max(
                     0, sum((edge[2] for edge in edges)) - len(node_line))
@@ -752,6 +754,13 @@ class NodeHandle:
                 "pipeline": self.get_pipeline().get_id(),
                 "node": self.get_id(),
             }, capture_err=False))["status"]
+
+    def get_highest_chunk(self) -> int:
+        return cast(NodeChunk, self._client._request_json(
+            METHOD_GET, "/node_chunk", {
+                "pipeline": self.get_pipeline().get_id(),
+                "node": self.get_id(),
+            }, capture_err=False))["chunk"]
 
     def get_short_status(self, allow_unicode: bool) -> str:
         status_map: Dict[TaskStatus, str] = {

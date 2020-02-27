@@ -53,6 +53,9 @@ NodeDefInfo = TypedDict('NodeDefInfo', {
 NodeStatus = TypedDict('NodeStatus', {
     "status": TaskStatus,
 })
+NodeChunk = TypedDict('NodeChunk', {
+    "chunk": int,
+})
 NodeTypes = TypedDict('NodeTypes', {
     "types": List[str],
     "info": Dict[str, NodeDefInfo],
