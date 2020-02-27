@@ -26,12 +26,17 @@ def run() -> None:
         "--pipeline",
         type=str,
         help="the pipeline to pretty print")
+    parser.add_argument(
+        "--no-unicode",
+        dest="no_uni",
+        action="store_true",
+        help="avoid unicode characters in the output")
     args = parser.parse_args()
 
     with accern_xyme.create_xyme_session(
             args.server, args.user, args.password) as xyme:
         pipe = xyme.get_pipeline(args.pipeline)
-        print(pipe.pretty())
+        print(pipe.pretty(not args.no_uni))
 
 
 if __name__ == "__main__":

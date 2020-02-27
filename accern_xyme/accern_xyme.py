@@ -569,8 +569,11 @@ class PipelineHandle:
                 self.refresh()
             yield do_refresh
 
-    def pretty(self) -> str:
-        nodes = [self.get_node(node_id) for node_id in self.get_nodes()]
+    def pretty(self, allow_unicode: bool) -> str:
+        nodes = [
+            self.get_node(node_id)
+            for node_id in sorted(self.get_nodes())
+        ]
         already: Set[NodeHandle] = set()
         order: List[NodeHandle] = []
         outs: Dict[
@@ -581,7 +584,7 @@ class PipelineHandle:
         def topo(cur: NodeHandle) -> None:
             if cur in already:
                 return
-            for in_key in cur.get_inputs():
+            for in_key in sorted(cur.get_inputs()):
                 out_node, out_key = cur.get_input(in_key)
                 outs[out_node].append((cur, in_key, out_key))
                 topo(out_node)
@@ -645,7 +648,7 @@ class PipelineHandle:
                 if in_line:
                     lines.append(f"  {in_line}")
                 node_line = \
-                    f"{node.get_short_status()} " \
+                    f"{node.get_short_status(allow_unicode)} " \
                     f"{node.get_type()}[{node.get_id()}] "
                 edges, out_line = draw_out_edges(node, edges)
                 total_gap = max(
@@ -750,16 +753,17 @@ class NodeHandle:
                 "node": self.get_id(),
             }, capture_err=False))["status"]
 
-    def get_short_status(self) -> str:
+    def get_short_status(self, allow_unicode: bool) -> str:
         status_map: Dict[TaskStatus, str] = {
             "blocked": "B",
             "waiting": "W",
-            "running": "R",
-            "complete": "C",
+            "running": "→" if allow_unicode else "R",
+            "complete": "✓" if allow_unicode else "C",
             "eos": "X",
             "paused": "P",
-            "error": "E",
+            "error": "!",
             "unknown": "?",
+            "virtual": "∴" if allow_unicode else "V",
         }
         return status_map[self.get_status()]
 

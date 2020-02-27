@@ -12,6 +12,7 @@ TaskStatus = Literal[
     "paused",
     "error",
     "unknown",
+    "virtual",
 ]
 ParamType = Literal[
     "str",
