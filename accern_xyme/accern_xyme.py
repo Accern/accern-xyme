@@ -34,7 +34,10 @@ from .types import (
     NodeInfo,
     NodeStatus,
     NodeTypes,
+    PipelineCreate,
+    PipelineDef,
     PipelineInfo,
+    PipelineInit,
     PipelineList,
     ReadNode,
     TaskStatus,
@@ -490,6 +493,19 @@ class XYMEClient:
             METHOD_GET, "/node_types", {}, capture_err=False))["info"]
         self._node_defs = res
         return res
+
+    def create_new_pipeline(self) -> str:
+        return cast(PipelineInit, self._request_json(
+            METHOD_POST, "/pipeline_init", {}, capture_err=False))["pipeline"]
+
+    def set_pipeline(
+            self, pipe_id: str, defs: PipelineDef) -> 'PipelineHandle':
+        pipe_id = cast(PipelineCreate, self._request_json(
+            METHOD_POST, "/pipeline_create", {
+                "pipeline": pipe_id,
+                "defs": defs,
+            }, capture_err=False))["pipeline"]
+        return self.get_pipeline(pipe_id)
 
 # *** XYMEClient ***
 

@@ -78,3 +78,24 @@ PipelineInfo = TypedDict('PipelineInfo', {
     "company": str,
     "nodes": List[NodeInfo],
 })
+PipelineInit = TypedDict('PipelineInit', {
+    "pipeline": str,
+})
+PipelineCreate = TypedDict('PipelineCreate', {
+    "pipeline": str,
+    "nodes": List[str],
+})
+NodeDef = TypedDict('NodeDef', {
+    "id": str,
+    "kind": str,
+    "inputs": Dict[str, Tuple[str, str]],
+    "blobs": Dict[str, str],
+    "params": Dict[str, Any],
+}, total=False)
+PipelineDef = TypedDict('PipelineDef', {
+    "name": str,
+    "company": str,
+    "nodes": List[NodeDef],
+    "state": str,
+    "high_priority": bool,
+}, total=False)
