@@ -23,8 +23,7 @@ Import it in python via:
 
     from accern_xyme import create_xyme_client
 
-    client = accern_xyme.create_xyme_client(
-        "https://xyme.accern.com/", "<USERNAME>", "<PASSWORD>")
+    client = create_xyme_client("https://xyme.accern.com/", "<USERNAME>", "<PASSWORD>")
     print(client.get_user_info())
 
 :code:`<USERNAME>` and :code:`<PASSWORD>` are the login credentials for XYME.
