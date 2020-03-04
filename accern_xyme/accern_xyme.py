@@ -32,6 +32,7 @@ from .types import (
     NodeChunk,
     NodeDefInfo,
     NodeInfo,
+    NodeState,
     NodeStatus,
     NodeTypes,
     PipelineCreate,
@@ -648,11 +649,11 @@ class PipelineHandle:
                 new_edges.append(edge)
                 prev_gap = max(0, cur_gap - len(cur_str))
             for (in_node, in_key, out_key) in outs[node]:
-                cur_str = f"| {in_key} "
-                end_str = f"| {out_key} "
+                cur_str = f"| {out_key} "
+                end_str = f"| {in_key} "
                 segs.append(f"{' ' * prev_gap}{cur_str}")
                 cur_gap = max(len(cur_str), len(end_str))
-                new_edges.append((in_node, out_key, cur_gap))
+                new_edges.append((in_node, in_key, cur_gap))
                 prev_gap = max(0, cur_gap - len(cur_str))
             return new_edges, "".join(segs)
 
@@ -816,6 +817,30 @@ class NodeHandle:
 
     def read(self, key: str, chunk: int) -> Optional[pd.DataFrame]:
         return self.read_blob(key, chunk).get_content()
+
+    def reset(self) -> NodeState:
+        return cast(NodeState, self._client._request_json(
+            METHOD_PUT, "/node_state", {
+                "pipeline": self.get_pipeline().get_id(),
+                "node": self.get_id(),
+                "action": "reset",
+            }, capture_err=False))
+
+    def notify(self) -> NodeState:
+        return cast(NodeState, self._client._request_json(
+            METHOD_PUT, "/node_state", {
+                "pipeline": self.get_pipeline().get_id(),
+                "node": self.get_id(),
+                "action": "notify",
+            }, capture_err=False))
+
+    def fix_error(self) -> NodeState:
+        return cast(NodeState, self._client._request_json(
+            METHOD_PUT, "/node_state", {
+                "pipeline": self.get_pipeline().get_id(),
+                "node": self.get_id(),
+                "action": "fix_error",
+            }, capture_err=False))
 
     def __hash__(self) -> int:
         return hash(self._node_id)
