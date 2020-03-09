@@ -42,6 +42,8 @@ from .types import (
     PipelineList,
     ReadNode,
     TaskStatus,
+    Timing,
+    Timings,
     VersionResponse,
 )
 
@@ -800,6 +802,13 @@ class NodeHandle:
                     "node": self.get_id(),
                 }) as fin:
             return fin.read()
+
+    def get_timing(self) -> List[Timing]:
+        return cast(Timings, self._client._request_json(
+            METHOD_GET, "/node_perf", {
+                "pipeline": self.get_pipeline().get_id(),
+                "node": self.get_id(),
+            }, capture_err=False))["times"]
 
     def read_blob(self, key: str, chunk: int) -> 'BlobHandle':
         res = cast(ReadNode, self._client._request_json(

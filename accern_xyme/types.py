@@ -103,3 +103,12 @@ PipelineDef = TypedDict('PipelineDef', {
     "state": str,
     "high_priority": bool,
 }, total=False)
+Timing = TypedDict('Timing', {
+    "name": str,
+    "total": float,
+    "quantity": int,
+    "avg": float,
+})
+Timings = TypedDict('Timings', {
+    "times": List[Timing],
+})
