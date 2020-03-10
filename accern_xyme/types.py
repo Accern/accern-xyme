@@ -112,3 +112,6 @@ Timing = TypedDict('Timing', {
 Timings = TypedDict('Timings', {
     "times": List[Timing],
 })
+InCursors = TypedDict('InCursors', {
+    "cursors": Dict[str, int],
+})

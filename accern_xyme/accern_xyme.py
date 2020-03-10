@@ -28,6 +28,7 @@ from .util import (
     get_retry_sleep,
 )
 from .types import (
+    InCursors,
     MaintenanceResponse,
     NodeChunk,
     NodeDefInfo,
@@ -614,6 +615,13 @@ class PipelineHandle:
         for tnode in nodes:
             topo(tnode)
 
+        in_states: Dict[NodeHandle, Dict[str, int]] = {}
+
+        def get_in_state(node: NodeHandle, key: str) -> int:
+            if node not in in_states:
+                in_states[node] = node.get_in_cursor_states()
+            return in_states[node].get(key, 0)
+
         def draw_in_edges(
                 node: NodeHandle,
                 cur_edges: List[Tuple[NodeHandle, str, int]],
@@ -627,7 +635,7 @@ class PipelineHandle:
                 before_gap = cur_gap
                 if in_node == node:
                     gap += cur_gap
-                    cur_str = f"| {in_key} "
+                    cur_str = f"| {in_key} ({get_in_state(in_node, in_key)}) "
                 else:
                     cur_str = "|"
                     cur_gap += gap
@@ -652,7 +660,7 @@ class PipelineHandle:
                 prev_gap = max(0, cur_gap - len(cur_str))
             for (in_node, in_key, out_key) in outs[node]:
                 cur_str = f"| {out_key} "
-                end_str = f"| {in_key} "
+                end_str = f"| {in_key} ({get_in_state(in_node, in_key)}) "
                 segs.append(f"{' ' * prev_gap}{cur_str}")
                 cur_gap = max(len(cur_str), len(end_str))
                 new_edges.append((in_node, in_key, cur_gap))
@@ -773,6 +781,13 @@ class NodeHandle:
                 "pipeline": self.get_pipeline().get_id(),
                 "node": self.get_id(),
             }, capture_err=False))["status"]
+
+    def get_in_cursor_states(self) -> Dict[str, int]:
+        return cast(InCursors, self._client._request_json(
+            METHOD_GET, "/node_in_cursors", {
+                "pipeline": self.get_pipeline().get_id(),
+                "node": self.get_id(),
+            }, capture_err=False))["cursors"]
 
     def get_highest_chunk(self) -> int:
         return cast(NodeChunk, self._client._request_json(
