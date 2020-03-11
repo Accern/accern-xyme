@@ -616,6 +616,9 @@ class PipelineHandle:
             topo(tnode)
 
         in_states: Dict[NodeHandle, Dict[str, int]] = {}
+        order_lookup = {
+            node: pos for (pos, node) in enumerate(order)
+        }
 
         def get_in_state(node: NodeHandle, key: str) -> int:
             if node not in in_states:
@@ -624,11 +627,11 @@ class PipelineHandle:
 
         def draw_in_edges(
                 node: NodeHandle,
-                cur_edges: List[Tuple[NodeHandle, str, int]],
-                ) -> Tuple[List[Tuple[NodeHandle, str, int]], str]:
+                cur_edges: List[Tuple[Optional[NodeHandle], str, int]],
+                ) -> Tuple[List[Tuple[Optional[NodeHandle], str, int]], str]:
             gap = 0
             prev_gap = 0
-            new_edges: List[Tuple[NodeHandle, str, int]] = []
+            new_edges: List[Tuple[Optional[NodeHandle], str, int]] = []
             segs: List[str] = []
             for edge in cur_edges:
                 in_node, in_key, cur_gap = edge
@@ -636,29 +639,37 @@ class PipelineHandle:
                 if in_node == node:
                     gap += cur_gap
                     cur_str = f"| {in_key} ({get_in_state(in_node, in_key)}) "
+                    new_edges.append((None, in_key, cur_gap))
                 else:
-                    cur_str = "|"
+                    cur_str = "|" if in_node is not None else ""
                     cur_gap += gap
                     gap = 0
                     new_edges.append((in_node, in_key, cur_gap))
                 segs.append(f"{' ' * prev_gap}{cur_str}")
                 prev_gap = max(0, before_gap - len(cur_str))
+            while new_edges:
+                if new_edges[-1][0] is None:
+                    new_edges.pop()
+                else:
+                    break
             return new_edges, "".join(segs)
 
         def draw_out_edges(
                 node: NodeHandle,
-                cur_edges: List[Tuple[NodeHandle, str, int]],
-                ) -> Tuple[List[Tuple[NodeHandle, str, int]], str]:
-            new_edges: List[Tuple[NodeHandle, str, int]] = []
+                cur_edges: List[Tuple[Optional[NodeHandle], str, int]],
+                ) -> Tuple[List[Tuple[Optional[NodeHandle], str, int]], str]:
+            new_edges: List[Tuple[Optional[NodeHandle], str, int]] = []
             segs: List[str] = []
             prev_gap = 0
             for edge in cur_edges:
-                _, _, cur_gap = edge
-                cur_str = "|"
+                cur_node, _, cur_gap = edge
+                cur_str = "|" if cur_node is not None else ""
                 segs.append(f"{' ' * prev_gap}{cur_str}")
                 new_edges.append(edge)
                 prev_gap = max(0, cur_gap - len(cur_str))
-            for (in_node, in_key, out_key) in outs[node]:
+            sout = sorted(
+                outs[node], key=lambda e: order_lookup[e[0]], reverse=True)
+            for (in_node, in_key, out_key) in sout:
                 cur_str = f"| {out_key} "
                 end_str = f"| {in_key} ({get_in_state(in_node, in_key)}) "
                 segs.append(f"{' ' * prev_gap}{cur_str}")
@@ -669,21 +680,27 @@ class PipelineHandle:
 
         def draw() -> List[str]:
             lines: List[str] = []
-            edges: List[Tuple[NodeHandle, str, int]] = []
+            edges: List[Tuple[Optional[NodeHandle], str, int]] = []
             for node in order:
-                edges, in_line = draw_in_edges(node, edges)
-                in_line = in_line.rstrip()
-                if in_line:
-                    lines.append(f"  {in_line}")
                 node_line = \
                     f"{node.get_short_status(allow_unicode)} " \
                     f"{node.get_type()}[{node.get_id()}] " \
                     f"{node.get_highest_chunk()} "
+                total_gap_top = max(
+                    0, sum((edge[2] for edge in edges[:-1])) - len(node_line))
+                edges, in_line = draw_in_edges(node, edges)
+                in_line = in_line.rstrip()
+                if in_line:
+                    lines.append(f"  {in_line}")
                 edges, out_line = draw_out_edges(node, edges)
-                total_gap = max(
-                    0, sum((edge[2] for edge in edges)) - len(node_line))
+                total_gap_bottom = max(
+                    0, sum((edge[2] for edge in edges[:-1])) - len(node_line))
+                connector = "\\" if total_gap_bottom > total_gap_top else "/"
+                if total_gap_bottom == total_gap_top:
+                    connector = "|"
+                total_gap = max(total_gap_bottom, total_gap_top)
                 if total_gap > 0:
-                    node_line = f"{node_line}{'-' * total_gap}\\"
+                    node_line = f"{node_line}{'-' * total_gap}--{connector}"
                 lines.append(node_line.rstrip())
                 out_line = out_line.rstrip()
                 if out_line:
