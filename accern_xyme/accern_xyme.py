@@ -637,7 +637,6 @@ class PipelineHandle:
                 in_node, in_key, cur_gap = edge
                 before_gap = cur_gap
                 if in_node == node:
-                    gap += cur_gap
                     cur_str = f"| {in_key} ({get_in_state(in_node, in_key)}) "
                     new_edges.append((None, in_key, cur_gap))
                 else:
