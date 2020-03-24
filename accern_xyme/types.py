@@ -44,6 +44,8 @@ ReadNode = TypedDict('ReadNode', {
     "publisher": str,
 })
 NodeDefInfo = TypedDict('NodeDefInfo', {
+    "name": str,
+    "desc": str,
     "input_keys": List[str],
     "output_keys": List[str],
     "task_type": Optional[str],
