@@ -743,6 +743,7 @@ class NodeHandle:
         self._blobs: Dict[str, BlobHandle] = {}
         self._inputs: Dict[str, Tuple[str, str]] = {}
         self._state: Optional[int] = None
+        self._config_error: Optional[bool] = None
 
     @staticmethod
     def from_node_info(
@@ -771,6 +772,7 @@ class NodeHandle:
         }
         self._inputs = node_info["inputs"]
         self._state = node_info["state"]
+        self._config_error = node_info["config_error"]
 
     def get_pipeline(self) -> PipelineHandle:
         return self._pipeline
@@ -797,6 +799,16 @@ class NodeHandle:
                 "pipeline": self.get_pipeline().get_id(),
                 "node": self.get_id(),
             }, capture_err=False))["status"]
+
+    def has_config_error(self) -> bool:
+        assert self._config_error is not None
+        return self._config_error
+
+    def get_blobs(self) -> List[str]:
+        return sorted(self._blobs.keys())
+
+    def get_blob_handle(self, key: str) -> 'BlobHandle':
+        return self._blobs[key]
 
     def get_in_cursor_states(self) -> Dict[str, int]:
         return cast(InCursors, self._client._request_json(

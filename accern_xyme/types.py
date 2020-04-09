@@ -73,6 +73,7 @@ NodeInfo = TypedDict('NodeInfo', {
     "blobs": Dict[str, str],
     "inputs": Dict[str, Tuple[str, str]],
     "state": Optional[int],
+    "config_error": bool,
 })
 PipelineList = TypedDict('PipelineList', {
     "pipelines": List[str],
