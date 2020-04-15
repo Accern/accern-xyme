@@ -10,9 +10,11 @@ from typing import (
     TextIO,
     Tuple,
     TYPE_CHECKING,
+    Union,
 )
 import io
 import os
+import sys
 import json
 import time
 import weakref
@@ -24,10 +26,16 @@ import pandas as pd
 import quick_server
 
 from .util import (
+    df_to_csv,
+    get_file_hash,
+    get_file_upload_chunk_size,
     get_max_retry,
+    get_progress_bar,
     get_retry_sleep,
 )
 from .types import (
+    CSVBlobResponse,
+    CSVOp,
     InCursors,
     MaintenanceResponse,
     NodeChunk,
@@ -69,6 +77,11 @@ METHOD_POST = "POST"
 METHOD_PUT = "PUT"
 
 PREFIX = "/xyme"
+
+INPUT_CSV_EXT = ".csv"
+INPUT_TSV_EXT = ".tsv"
+INPUT_ZIP_EXT = ".zip"
+INPUT_EXT = [INPUT_ZIP_EXT, INPUT_CSV_EXT, INPUT_TSV_EXT]
 
 
 class AccessDenied(Exception):
@@ -894,6 +907,17 @@ class NodeHandle:
                 "action": "fix_error",
             }, capture_err=False))
 
+    def get_csv_blob(self) -> 'CSVBlobHandle':
+        if self.get_type() != "csv_reader":
+            raise ValueError("node doesn't have csv blob")
+        res = cast(CSVBlobResponse, self._client._request_json(
+            METHOD_GET, "/csv_blob", {
+                "pipeline": self.get_pipeline().get_id(),
+                "node": self.get_id(),
+            }, capture_err=False))
+        return CSVBlobHandle(
+            self._client, res["csv"], res["count"], res["pos"], res["tmp"])
+
     def __hash__(self) -> int:
         return hash(self._node_id)
 
@@ -912,6 +936,132 @@ class NodeHandle:
         return f"{self.__class__.__name__}[{self._node_id}]"
 
 # *** NodeHandle ***
+
+
+class CSVBlobHandle:
+    def __init__(
+            self,
+            client: XYMEClient,
+            uri: str,
+            count: int,
+            pos: int,
+            has_tmp: bool) -> None:
+        self._client = client
+        self._uri = uri
+        self._count = count
+        self._pos = pos
+        self._has_tmp = has_tmp
+
+    def get_uri(self) -> str:
+        return self._uri
+
+    def get_count(self) -> int:
+        return self._count
+
+    def get_pos(self) -> int:
+        return self._pos
+
+    def has_tmp(self) -> bool:
+        return self._has_tmp
+
+    def perform_action(
+            self,
+            action: str,
+            additional: Dict[str, Union[str, int]],
+            fobj: Optional[IO[bytes]]) -> int:
+        args: Dict[str, Union[str, int]] = {
+            "blob": self.get_uri(),
+            "action": action,
+        }
+        args.update(additional)
+        if fobj is not None:
+            method = METHOD_FILE
+            files: Optional[Dict[str, IO[bytes]]] = {
+                "file": fobj,
+            }
+        else:
+            method = METHOD_POST
+            files = None
+        res = cast(CSVOp, self._client._request_json(
+            method, "/csv_action", args, capture_err=False, files=files))
+        self._count = res["count"]
+        self._has_tmp = res["tmp"]
+        self._pos = res["pos"]
+        return self._pos
+
+    def start_data(self, size: int, hash_str: str, ext: str) -> int:
+        return self.perform_action("start", {
+            "ext": ext,
+            "hash": hash_str,
+            "size": size,
+        }, None)
+
+    def append_data(self, fobj: IO[bytes]) -> int:
+        return self.perform_action("append", {}, fobj)
+
+    def finish_data(self) -> None:
+        self.perform_action("finish", {}, None)
+
+    def clear_tmp(self) -> None:
+        self.perform_action("clear", {}, None)
+
+    def upload_data(
+            self,
+            file_content: IO[bytes],
+            file_ext: str,
+            progress_bar: Optional[IO[Any]] = sys.stdout) -> int:
+        init_pos = file_content.seek(0, io.SEEK_CUR)
+        file_hash = get_file_hash(file_content)
+        total_size = file_content.seek(0, io.SEEK_CUR) - init_pos
+        file_content.seek(init_pos, io.SEEK_SET)
+        if progress_bar is not None:
+            progress_bar.write(f"Uploading file:\n")
+        print_progress = get_progress_bar(out=progress_bar)
+        cur_size = self.start_data(total_size, file_hash, file_ext)
+        while True:
+            print_progress(cur_size / total_size, False)
+            buff = file_content.read(get_file_upload_chunk_size())
+            if not buff:
+                break
+            new_size = self.append_data(BytesIO(buff))
+            if new_size - cur_size != len(buff):
+                raise ValueError(
+                    f"incomplete chunk upload n:{new_size} "
+                    f"o:{cur_size} b:{len(buff)}")
+            cur_size = new_size
+        print_progress(cur_size / total_size, True)
+        self.finish_data()
+        return cur_size
+
+    def add_from_file(
+            self,
+            filename: str,
+            progress_bar: Optional[IO[Any]] = sys.stdout) -> None:
+        fname = filename
+        if filename.endswith(INPUT_ZIP_EXT):
+            fname = filename[:-len(INPUT_ZIP_EXT)]
+        ext_pos = fname.rfind(".")
+        if ext_pos >= 0:
+            ext = filename[ext_pos + 1:]  # full filename
+        else:
+            raise ValueError("could not determine extension")
+        with open(filename, "rb") as fbuff:
+            self.upload_data(fbuff, ext, progress_bar)
+
+    def add_from_df(
+            self,
+            df: pd.DataFrame,
+            progress_bar: Optional[IO[Any]] = sys.stdout) -> None:
+        io_in = None
+        try:
+            io_in = df_to_csv(df)
+            self.upload_data(io_in, "csv", progress_bar)
+        finally:
+            if io_in is not None:
+                io_in.close()
+
+
+# *** CSVBlobHandle ***
 
 
 EMPTY_BLOB_PREFIX = "null://"

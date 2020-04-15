@@ -118,3 +118,14 @@ Timings = TypedDict('Timings', {
 InCursors = TypedDict('InCursors', {
     "cursors": Dict[str, int],
 })
+CSVBlobResponse = TypedDict('CSVBlobResponse', {
+    "count": int,
+    "csv": str,
+    "pos": int,
+    "tmp": bool,
+})
+CSVOp = TypedDict('CSVOp', {
+    "count": int,
+    "pos": int,
+    "tmp": bool,
+})
