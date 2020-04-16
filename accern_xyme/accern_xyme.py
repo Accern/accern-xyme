@@ -538,6 +538,8 @@ class PipelineHandle:
         self._company: Optional[str] = None
         self._state_publisher: Optional[str] = None
         self._notify_publisher: Optional[str] = None
+        self._state: Optional[str] = None
+        self._is_high_priority: Optional[bool] = None
         self._nodes: Dict[str, NodeHandle] = {}
 
     def refresh(self) -> None:
@@ -545,6 +547,8 @@ class PipelineHandle:
         self._company = None
         self._state_publisher = None
         self._notify_publisher = None
+        self._state = None
+        self._is_high_priority = None
         # NOTE: we don't reset nodes
 
     def _maybe_refresh(self) -> None:
@@ -564,6 +568,8 @@ class PipelineHandle:
         self._company = info["company"]
         self._state_publisher = info["state_publisher"]
         self._notify_publisher = info["notify_publisher"]
+        self._state = info["state"]
+        self._is_high_priority = info["high_priority"]
         old_nodes = {} if self._nodes is None else self._nodes
         self._nodes = {
             node["id"]: NodeHandle.from_node_info(
@@ -596,12 +602,27 @@ class PipelineHandle:
         assert self._company is not None
         return self._company
 
+    def get_state_type(self) -> str:
+        self._maybe_refresh()
+        self._maybe_fetch()
+        assert self._state is not None
+        return self._state
+
+    def is_high_priority(self) -> bool:
+        self._maybe_refresh()
+        self._maybe_fetch()
+        assert self._is_high_priority is not None
+        return self._is_high_priority
+
     @contextlib.contextmanager
     def bulk_operation(self) -> Iterator[bool]:
         with self._client.bulk_operation() as do_refresh:
             if do_refresh:
                 self.refresh()
             yield do_refresh
+
+    def set_pipeline(self, defs: PipelineDef) -> None:
+        self._client.set_pipeline(self.get_id(), defs)
 
     def pretty(self, allow_unicode: bool) -> str:
         nodes = [

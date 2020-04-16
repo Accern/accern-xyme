@@ -84,6 +84,8 @@ PipelineInfo = TypedDict('PipelineInfo', {
     "notify_publisher": Optional[str],
     "company": str,
     "nodes": List[NodeInfo],
+    "state": str,
+    "high_priority": bool,
 })
 PipelineInit = TypedDict('PipelineInit', {
     "pipeline": str,
