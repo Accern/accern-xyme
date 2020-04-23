@@ -35,8 +35,11 @@ from .util import (
 )
 from .types import (
     CSVBlobResponse,
+    CSVList,
     CSVOp,
     InCursors,
+    JobInfo,
+    JobList,
     MaintenanceResponse,
     NodeChunk,
     NodeDefInfo,
@@ -523,6 +526,51 @@ class XYMEClient:
                 "defs": defs,
             }, capture_err=False))["pipeline"]
         return self.get_pipeline(pipe_id)
+
+    def get_csvs(self) -> List[str]:
+        return cast(CSVList, self._request_json(
+            METHOD_GET, "/csvs", {
+            }, capture_err=False))["csvs"]
+
+    def add_csv(self, csv_blob_id: str) -> List[str]:
+        return cast(CSVList, self._request_json(
+            METHOD_PUT, "/csvs", {
+                "blob": csv_blob_id,
+            }, capture_err=False))["csvs"]
+
+    def remove_csv(self, csv_blob_id: str) -> List[str]:
+        return cast(CSVList, self._request_json(
+            METHOD_DELETE, "/csvs", {
+                "blob": csv_blob_id,
+            }, capture_err=False))["csvs"]
+
+    def get_jobs(self) -> List[str]:
+        return cast(JobList, self._request_json(
+            METHOD_GET, "/jobs", {
+            }, capture_err=False))["jobs"]
+
+    def remove_job(self, job_id: str) -> List[str]:
+        return cast(JobList, self._request_json(
+            METHOD_DELETE, "/job", {
+                "job": job_id,
+            }, capture_err=False))["jobs"]
+
+    def create_job(self) -> JobInfo:
+        return cast(JobInfo, self._request_json(
+            METHOD_POST, "/job_init", {
+            }, capture_err=False))
+
+    def get_job(self, job_id: str) -> JobInfo:
+        return cast(JobInfo, self._request_json(
+            METHOD_GET, "/job", {
+                "job": job_id,
+            }, capture_err=False))
+
+    def set_job(self, job: JobInfo) -> JobInfo:
+        return cast(JobInfo, self._request_json(
+            METHOD_PUT, "/job", {
+                "job": job,
+            }, capture_err=False))
 
 # *** XYMEClient ***
 

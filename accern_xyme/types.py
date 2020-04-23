@@ -131,3 +131,23 @@ CSVOp = TypedDict('CSVOp', {
     "pos": int,
     "tmp": bool,
 })
+CSVList = TypedDict('CSVList', {
+    "csvs": List[str],
+})
+JobList = TypedDict('JobList', {
+    "jobs": List[str],
+})
+JobInfoEntries = TypedDict('JobInfoEntries', {  # pylint: disable=invalid-name
+    "data": Optional[Tuple[str, str]],
+    "performance": Optional[Tuple[str, str]],
+    "predictions": Optional[Tuple[str, str]],
+    "sources": List[str],
+})
+JobInfo = TypedDict('JobInfo', {  # pylint: disable=invalid-name
+    "id": str,
+    "name": str,
+    "owner": str,
+    "company": str,
+    "high_priority": bool,
+    "entry_points": JobInfoEntries,
+})

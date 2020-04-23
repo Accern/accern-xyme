@@ -96,23 +96,23 @@ class GenericNode:
         return f"{self.__class__.__name__}[{self._node_id}]"
 
 
-class CSVReader(GenericNode):
+# class CSVReader(GenericNode):
 
-    def as_node_def(self) -> List[NodeDef]:
-        return [{
-            "id": self.get_id(),
-            "kind": "csv_reader",
-            "params": {
-                "columns": columns,
-                "column_types": column_types,
-            },
-        }]
+#     def as_node_def(self) -> List[NodeDef]:
+#         return [{
+#             "id": self.get_id(),
+#             "kind": "csv_reader",
+#             "params": {
+#                 "columns": columns,
+#                 "column_types": column_types,
+#             },
+#         }]
 
-    def get_valid_inputs(self) -> List[str]:
-        return []
+#     def get_valid_inputs(self) -> List[str]:
+#         return []
 
-    def get_valid_outputs(self) -> List[str]:
-        return ["csv"]
+#     def get_valid_outputs(self) -> List[str]:
+#         return ["csv"]
 
 
 class EmptyReader(GenericNode):
@@ -176,8 +176,8 @@ class DataPipeline:
     def get_pipeline(self) -> PipelineHandle:
         return self._pipe
 
-    def read_csv(self) -> CSVReader:
-        pass
+    # def read_csv(self) -> CSVReader:
+    #     pass
 
     def read_empty(self) -> EmptyReader:
         pass
