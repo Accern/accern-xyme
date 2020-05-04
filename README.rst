@@ -23,8 +23,7 @@ Import it in python via:
 
     from accern_xyme import create_xyme_client
 
-    client = accern_xyme.create_xyme_client(
-        "https://xyme.accern.com/", "<USERNAME>", "<PASSWORD>")
+    client = create_xyme_client("https://xyme.accern.com/", "<USERNAME>", "<PASSWORD>")
     print(client.get_user_info())
 
 :code:`<USERNAME>` and :code:`<PASSWORD>` are the login credentials for XYME.
@@ -42,14 +41,14 @@ The workspaces of the user can be retrieved via:
 .. code:: python
 
     for (workspace, count) in client.get_workspaces().items():
-        print(f"{workspace} contains {count} jobs"
+        print(f"{workspace} contains {count} jobs")
 
 And jobs in a given workspace can be retrieved via:
 
 .. code:: python
 
     for job in client.get_jobs(workspace):
-        print(f"{job.get_job_id()}: {job.get_name()} - {job.get_status()}"
+        print(f"{job.get_job_id()}: {job.get_name()} - {job.get_status()}")
 
 Or directly by Job ID:
 

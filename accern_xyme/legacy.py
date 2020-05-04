@@ -129,6 +129,9 @@ JobCreateResponse = TypedDict('JobCreateResponse', {
     "path": str,
     "schema": str,
 })
+JobBackupResponse = TypedDict('JobBackupResponse', {
+    "jobId": str,
+})
 SchemaResponse = TypedDict('SchemaResponse', {
     "schema": str,
 })
@@ -2172,6 +2175,25 @@ class JobHandle:
         if not res["success"]:
             raise AccessDenied(f"cannot access job {self._job_id}")
         self.refresh()
+
+    def create_backup(self) -> 'JobHandle':
+        res = cast(JobBackupResponse, self._client._request_json(
+            METHOD_LONGPOST, "/backup_job", {
+                "job": self._job_id,
+            }, capture_err=True))
+        return JobHandle(
+            client=self._client,
+            job_id=res["jobId"],
+            path=None,
+            name=None,
+            schema_obj=None,
+            kinds=None,
+            status=None,
+            permalink=None,
+            time_total=None,
+            time_start=None,
+            time_end=None,
+            time_estimate=None)
 
     def __repr__(self) -> str:
         name = ""
