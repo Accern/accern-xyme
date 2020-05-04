@@ -29,7 +29,7 @@ from typing_extensions import TypedDict, Literal, overload
 import quick_server
 
 
-__version__ = "0.0.17"
+__version__ = "0.0.18"
 # FIXME: async calls, documentation, auth, summary – time it took etc.
 
 
