@@ -1901,6 +1901,22 @@ class JobHandle:
                 StdoutWrapper(res["stdout"]),
             )
 
+    def get_table(
+            self,
+            offset: int,
+            size: int,
+            reverse_order: bool) -> pd.DataFrame:
+        resp = self._client._request_bytes(
+            METHOD_POST, "/job_data", {
+                "job": self._job_id,
+                "format": "csv",
+                "offset": offset,
+                "size": size,
+                "reverse_order": reverse_order,
+            })
+        resp.seek(0)
+        return pd.read_csv(resp)
+
     def get_predictions(
             self,
             method: Optional[str],
@@ -1908,7 +1924,8 @@ class JobHandle:
             date: Optional[str],
             last_n: int,
             filters: Optional[Dict[str, Any]],
-                ) -> Optional[pd.DataFrame]:
+            offset: int = 0,
+            reverse_order: bool = False) -> Optional[pd.DataFrame]:
         if filters is None:
             filters = {}
         res = cast(SimplePredictionsResponse, self._client._request_json(
@@ -1918,7 +1935,9 @@ class JobHandle:
                 "ticker": ticker,
                 "date": date,
                 "last_n": last_n,
+                "offset": offset,
                 "filters": filters,
+                "reverse_order": reverse_order,
             }, capture_err=False))
         columns = res.get("columns", None)
         predictions = res.get("predictions", None)
