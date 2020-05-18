@@ -1811,6 +1811,28 @@ class JobHandle:
             }, capture_err=True))
         return is_pause if res["success"] else not is_pause
 
+    def feature_importance(
+            self,
+            method: str,
+            ticker: Optional[str],
+            date: Optional[str],
+            last_n: Optional[int],
+            agg_mode: Optional[str] = None) -> Any:
+        obj: Dict[str, Any] = {
+            "job": self._job_id,
+            "ticker": ticker,
+            "method": method,
+            "date": date,
+            "filters": {},
+        }
+        if agg_mode is not None:
+            obj["agg_mode"] = agg_mode
+        if last_n is not None:
+            obj["last_n"] = last_n
+        res = self._client._request_json(
+            METHOD_LONGPOST, "/explain", obj, capture_err=False)
+        return res
+
     def dynamic_predict(
             self,
             method: str,
