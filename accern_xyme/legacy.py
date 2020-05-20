@@ -1811,6 +1811,22 @@ class JobHandle:
             }, capture_err=True))
         return is_pause if res["success"] else not is_pause
 
+    def input_data(
+            self,
+            column: str,
+            ticker: Optional[str],
+            slow: bool = False) -> Any:
+
+        obj: Dict[str, Any] = {
+            "job": self._job_id,
+            "ticker": ticker,
+            "plot": column,
+            "allowCat": True,
+            "slow": slow,
+        }
+        return self._client._request_json(
+            METHOD_LONGPOST, "/input", obj, capture_err=False)
+
     def feature_importance(
             self,
             method: str,
