@@ -498,6 +498,7 @@ DataPlotListInfo = TypedDict('DataPlotListInfo', {
     "selected_plots": List[List[str]],
 })
 
+
 def predictions_to_df(preds: PredictionsResponse) -> pd.DataFrame:
     df = pd.DataFrame(preds["values"], columns=preds["columns"])
     if "date" in df.columns:  # pylint: disable=unsupported-membership-test
