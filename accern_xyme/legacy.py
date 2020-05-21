@@ -387,12 +387,13 @@ MetricResponse = TypedDict('MetricResponse', {
 MetricListResponse = TypedDict('MetricListResponse', {
     "metrics": List[List[str]],
     "selectedPlots": List[List[str]],
-    "metricsDetails": List[Dict[str, Union[str, bool]]],
+    "plotDetails": List[Dict[str, Any]],
     "pollHint": float,
 })
 MetricListInfo = TypedDict('MetricListInfo', {
     "metrics": List[List[str]],
     "selected_plots": List[List[str]],
+    "plotDetails": List[Dict[str, Any]],
 })
 SummaryResponse = TypedDict('SummaryResponse', {
     "messages": Dict[str, List[Tuple[str, List[StdoutLine]]]],
@@ -487,13 +488,14 @@ SelectPlotsResponse = TypedDict('SelectPlotsResponse', {
 DataPlotListResponse = TypedDict('DataPlotListResponse', {
     "dataPlots": List[List[str]],
     "noOrdering": bool,
-    "plotDetail": List[Dict[str, Union[bool, str]]],
+    "plotDetails": List[Dict[str, Any]],
     "pollHint": float,
     "selectedPlots": List[List[str]],
 })
 DataPlotListInfo = TypedDict('DataPlotListInfo', {
     "data_plots": List[List[str]],
     "selected_plots": List[List[str]],
+    "plotDetails": List[Dict[str, Any]],
 })
 
 
@@ -2116,11 +2118,10 @@ class JobHandle:
                 "job": self._job_id,
                 "kind": kind,
             }, capture_err=False))
-        metrics = res["metrics"]
-        selected_plots = res["selectedPlots"]
         return {
-            "metrics": metrics,
-            "selected_plots": selected_plots,
+            "metrics": res["metrics"],
+            "selected_plots": res["selectedPlots"],
+            "plot_details": res["plotDetails"],
         }
 
     def get_data_plots(self) -> DataPlotListInfo:
@@ -2131,6 +2132,7 @@ class JobHandle:
         return {
             "data_plots": res["dataPlots"],
             "selected_plots": res["selectedPlots"],
+            "plot_details": res["plotDetails"],
         }
 
     def select_plots(
