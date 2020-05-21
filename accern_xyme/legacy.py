@@ -393,7 +393,7 @@ MetricListResponse = TypedDict('MetricListResponse', {
 MetricListInfo = TypedDict('MetricListInfo', {
     "metrics": List[List[str]],
     "selected_plots": List[List[str]],
-    "plotDetails": List[Dict[str, Any]],
+    "plot_details": List[Dict[str, Any]],
 })
 SummaryResponse = TypedDict('SummaryResponse', {
     "messages": Dict[str, List[Tuple[str, List[StdoutLine]]]],
@@ -495,7 +495,7 @@ DataPlotListResponse = TypedDict('DataPlotListResponse', {
 DataPlotListInfo = TypedDict('DataPlotListInfo', {
     "data_plots": List[List[str]],
     "selected_plots": List[List[str]],
-    "plotDetails": List[Dict[str, Any]],
+    "plot_details": List[Dict[str, Any]],
 })
 
 
