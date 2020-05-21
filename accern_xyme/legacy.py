@@ -385,9 +385,15 @@ MetricResponse = TypedDict('MetricResponse', {
     "pollHint": float,
 })
 MetricListResponse = TypedDict('MetricListResponse', {
-    "metrics": List[Tuple[str, str]],
-    "selectedPlots": List[Tuple[str, str]],
+    "metrics": List[List[str]],
+    "selectedPlots": List[List[str]],
+    "plotDetails": List[Dict[str, Any]],
     "pollHint": float,
+})
+MetricListInfo = TypedDict('MetricListInfo', {
+    "metrics": List[List[str]],
+    "selected_plots": List[List[str]],
+    "plot_details": List[Dict[str, Any]],
 })
 SummaryResponse = TypedDict('SummaryResponse', {
     "messages": Dict[str, List[Tuple[str, List[StdoutLine]]]],
@@ -472,6 +478,24 @@ JobColumnsResponse = TypedDict('JobColumnsResponse', {
 })
 JobRegisterResponse = TypedDict('JobRegisterResponse', {
     "success": bool,
+})
+HidePlotResponse = TypedDict('HidePlotResponse', {
+    "success": bool,
+})
+SelectPlotsResponse = TypedDict('SelectPlotsResponse', {
+    "selectedPlots": List[List[str]],
+})
+DataPlotListResponse = TypedDict('DataPlotListResponse', {
+    "dataPlots": List[List[str]],
+    "noOrdering": bool,
+    "plotDetails": List[Dict[str, Any]],
+    "pollHint": float,
+    "selectedPlots": List[List[str]],
+})
+DataPlotListInfo = TypedDict('DataPlotListInfo', {
+    "data_plots": List[List[str]],
+    "selected_plots": List[List[str]],
+    "plot_details": List[Dict[str, Any]],
 })
 
 
@@ -2104,13 +2128,49 @@ class JobHandle:
     def inspect(self, ticker: Optional[str]) -> 'InspectHandle':
         return InspectHandle(self._client, self, ticker)
 
-    def get_metrics(self, kind: str = PLOT_PKL) -> List[Tuple[str, str]]:
+    def get_metrics(self, kind: str = PLOT_PKL) -> MetricListInfo:
         res = cast(MetricListResponse, self._client._request_json(
             METHOD_LONGPOST, "/metric_plots", {
                 "job": self._job_id,
                 "kind": kind,
             }, capture_err=False))
-        return res["metrics"]
+        return {
+            "metrics": res["metrics"],
+            "selected_plots": res["selectedPlots"],
+            "plot_details": res["plotDetails"],
+        }
+
+    def get_data_plots(self) -> DataPlotListInfo:
+        res = cast(DataPlotListResponse, self._client._request_json(
+            METHOD_LONGPOST, "/data_plots", {
+                "job": self._job_id,
+            }, capture_err=False))
+        return {
+            "data_plots": res["dataPlots"],
+            "selected_plots": res["selectedPlots"],
+            "plot_details": res["plotDetails"],
+        }
+
+    def select_plots(
+            self,
+            plots: List[List[str]],
+            plot_type: str) -> List[List[str]]:
+        res = cast(SelectPlotsResponse, self._client._request_json(
+            METHOD_PUT, "/select_plots", {
+                "job": self._job_id,
+                "selectedPlots": plots,
+                "type": plot_type,
+            }, capture_err=False))
+        return res["selectedPlots"]
+
+    def hide_plot(self, plot: List[str], plot_type: str, hide: bool) -> bool:
+        return cast(HidePlotResponse, self._client._request_json(
+            METHOD_PUT, "/hide_plot", {
+                "hide": hide,
+                "job": self._job_id,
+                "plot": plot,
+                "type": plot_type,
+            }, capture_err=True)).get("success", False)
 
     def get_metric(
             self,
