@@ -1098,7 +1098,6 @@ class CSVBlobHandle:
                     f"incomplete chunk upload n:{new_size} "
                     f"o:{cur_size} b:{len(buff)}")
             cur_size = new_size
-
         print_progress(cur_size / total_size, True)
         self.finish_data()
         return cur_size
