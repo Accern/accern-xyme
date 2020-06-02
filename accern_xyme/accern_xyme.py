@@ -1088,8 +1088,7 @@ class CSVBlobHandle:
         print_progress = get_progress_bar(out=progress_bar)
         cur_size = self.start_data(total_size, file_hash, file_ext)
         while True:
-            if progress_bar is not None:
-                print_progress(cur_size / total_size, False)
+            print_progress(cur_size / total_size, False)
             buff = file_content.read(get_file_upload_chunk_size())
             if not buff:
                 break
@@ -1099,8 +1098,8 @@ class CSVBlobHandle:
                     f"incomplete chunk upload n:{new_size} "
                     f"o:{cur_size} b:{len(buff)}")
             cur_size = new_size
-        if progress_bar is not None:
-            print_progress(cur_size / total_size, True)
+
+        print_progress(cur_size / total_size, True)
         self.finish_data()
         return cur_size
 
