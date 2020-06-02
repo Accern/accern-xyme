@@ -1081,7 +1081,7 @@ class CSVBlobHandle:
             progress_bar: Optional[IO[Any]] = sys.stdout) -> int:
         init_pos = file_content.seek(0, io.SEEK_CUR)
         file_hash = get_file_hash(file_content)
-        total_size = file_content.seek(0, io.SEEK_CUR) - init_pos
+        total_size = file_content.seek(0, io.SEEK_END) - init_pos
         file_content.seek(init_pos, io.SEEK_SET)
         if progress_bar is not None:
             progress_bar.write(f"Uploading file:\n")
