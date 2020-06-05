@@ -151,3 +151,16 @@ JobInfo = TypedDict('JobInfo', {  # pylint: disable=invalid-name
     "high_priority": bool,
     "entry_points": JobInfoEntries,
 })
+S3Settings = TypedDict('S3Settings', {  # pylint: disable=invalid-name
+    "region_name": str,
+    "api_version": Optional[str],
+    "use_ssl": Optional[bool],
+    "verify": Optional[bool],
+    "endpoint_url": Optional[str],
+    "aws_access_key_id": str,
+    "aws_secret_access_key": str,
+    "aws_session_token": Optional[str],
+})
+S3Response = TypedDict('S3Response', {  # pylint: disable=invalid-name
+    "success": bool,
+})

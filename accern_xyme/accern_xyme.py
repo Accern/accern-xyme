@@ -53,6 +53,8 @@ from .types import (
     PipelineInit,
     PipelineList,
     ReadNode,
+    S3Response,
+    S3Settings,
     TaskStatus,
     Timing,
     Timings,
@@ -572,6 +574,16 @@ class XYMEClient:
                 "job": job,
             }, capture_err=False))
 
+    def setup_s3_connection(
+            self,
+            pipe_id: str,
+            settings: S3Settings) -> S3Response:
+        return cast(S3Response, self._request_json(
+            METHOD_POST, "/setup_pipeline_s3", {
+                "pipeline": pipe_id,
+                "settings": settings,
+            }, capture_err=False))
+
 # *** XYMEClient ***
 
 
@@ -789,6 +801,9 @@ class PipelineHandle:
             return lines
 
         return "\n".join(draw())
+
+    def setup_s3_connection(self, settings: S3Settings) -> S3Response:
+        return self._client.setup_s3_connection(self.get_id(), settings)
 
     def __hash__(self) -> int:
         return hash(self._pipe_id)
