@@ -163,4 +163,5 @@ S3Settings = TypedDict('S3Settings', {  # pylint: disable=invalid-name
 })
 S3Response = TypedDict('S3Response', {  # pylint: disable=invalid-name
     "success": bool,
-})
+    "errMessage": Optional[str],
+}, total=False)
