@@ -960,7 +960,8 @@ class NodeHandle:
         return BlobHandle(self._client, uri, is_full=True)
 
     def read(self, key: str, chunk: int) -> Optional[pd.DataFrame]:
-        return self.read_blob(key, chunk).get_content()
+        pipeline_id = self.get_pipeline().get_id()
+        return self.read_blob(key, chunk).get_content(pipeline_id)
 
     def reset(self) -> NodeState:
         return cast(NodeState, self._client._request_json(
@@ -1161,7 +1162,7 @@ class BlobHandle:
     def get_uri(self) -> str:
         return self._uri
 
-    def get_content(self) -> Optional[pd.DataFrame]:
+    def get_content(self, pipe_id: str) -> Optional[pd.DataFrame]:
         if not self.is_full():
             raise ValueError(f"URI must be full: {self}")
         if self.is_empty():
@@ -1169,6 +1170,7 @@ class BlobHandle:
         with self._client._raw_request_bytes(
                 METHOD_POST, "/uri", {
                     "uri": self._uri,
+                    "pipeline": pipe_id,
                 }) as fin:
             return pd.read_parquet(fin)
 
