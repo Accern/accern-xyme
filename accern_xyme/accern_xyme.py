@@ -53,8 +53,6 @@ from .types import (
     PipelineInit,
     PipelineList,
     ReadNode,
-    S3Response,
-    S3Settings,
     TaskStatus,
     Timing,
     Timings,
@@ -572,14 +570,6 @@ class XYMEClient:
         return cast(JobInfo, self._request_json(
             METHOD_PUT, "/job", {
                 "job": job,
-            }, capture_err=False))
-
-    def setup_s3_connection(
-            self,
-            settings: Dict[str, S3Settings]) -> S3Response:
-        return cast(S3Response, self._request_json(
-            METHOD_POST, "/setup_pipeline_s3", {
-                "settings": settings,
             }, capture_err=False))
 
 # *** XYMEClient ***
