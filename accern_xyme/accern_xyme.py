@@ -527,6 +527,15 @@ class XYMEClient:
             }, capture_err=False))["pipeline"]
         return self.get_pipeline(pipe_id)
 
+    def update_settings(
+            self, pipe_id: str, settings: Dict[str, Any]) -> 'PipelineHandle':
+        pipe_id = cast(PipelineCreate, self._request_json(
+            METHOD_POST, "/update_pipeline_settings", {
+                "pipeline": pipe_id,
+                "settings": settings,
+            }, capture_err=False))["pipeline"]
+        return self.get_pipeline(pipe_id)
+
     def get_csvs(self) -> List[str]:
         return cast(CSVList, self._request_json(
             METHOD_GET, "/csvs", {
@@ -589,6 +598,7 @@ class PipelineHandle:
         self._state: Optional[str] = None
         self._is_high_priority: Optional[bool] = None
         self._nodes: Dict[str, NodeHandle] = {}
+        self._settings: Optional[Dict[str, Any]] = None
 
     def refresh(self) -> None:
         self._name = None
@@ -618,6 +628,7 @@ class PipelineHandle:
         self._notify_publisher = info["notify_publisher"]
         self._state = info["state"]
         self._is_high_priority = info["high_priority"]
+        self._settings = info["settings"]
         old_nodes = {} if self._nodes is None else self._nodes
         self._nodes = {
             node["id"]: NodeHandle.from_node_info(
@@ -656,6 +667,12 @@ class PipelineHandle:
         assert self._state is not None
         return self._state
 
+    def get_settings(self) -> Dict[str, Any]:
+        self._maybe_refresh()
+        self._maybe_fetch()
+        assert self._settings is not None
+        return self._settings
+
     def is_high_priority(self) -> bool:
         self._maybe_refresh()
         self._maybe_fetch()
@@ -671,6 +688,9 @@ class PipelineHandle:
 
     def set_pipeline(self, defs: PipelineDef) -> None:
         self._client.set_pipeline(self.get_id(), defs)
+
+    def update_settings(self, settings: Dict[str, Any]) -> None:
+        self._client.update_settings(self.get_id(), settings)
 
     def pretty(self, allow_unicode: bool) -> str:
         nodes = [
@@ -950,7 +970,8 @@ class NodeHandle:
         return BlobHandle(self._client, uri, is_full=True)
 
     def read(self, key: str, chunk: int) -> Optional[pd.DataFrame]:
-        return self.read_blob(key, chunk).get_content()
+        pipeline_id = self.get_pipeline().get_id()
+        return self.read_blob(key, chunk).get_content(pipeline_id)
 
     def reset(self) -> NodeState:
         return cast(NodeState, self._client._request_json(
@@ -1151,7 +1172,7 @@ class BlobHandle:
     def get_uri(self) -> str:
         return self._uri
 
-    def get_content(self) -> Optional[pd.DataFrame]:
+    def get_content(self, pipe_id: str) -> Optional[pd.DataFrame]:
         if not self.is_full():
             raise ValueError(f"URI must be full: {self}")
         if self.is_empty():
@@ -1159,6 +1180,7 @@ class BlobHandle:
         with self._client._raw_request_bytes(
                 METHOD_POST, "/uri", {
                     "uri": self._uri,
+                    "pipeline": pipe_id,
                 }) as fin:
             return pd.read_parquet(fin)
 
