@@ -536,7 +536,6 @@ class XYMEClient:
             }, capture_err=False))["pipeline"]
         return self.get_pipeline(pipe_id)
 
-
     def get_csvs(self) -> List[str]:
         return cast(CSVList, self._request_json(
             METHOD_GET, "/csvs", {
