@@ -86,6 +86,7 @@ PipelineInfo = TypedDict('PipelineInfo', {
     "nodes": List[NodeInfo],
     "state": str,
     "high_priority": bool,
+    "settings": Dict[str, Any],
 })
 PipelineInit = TypedDict('PipelineInit', {
     "pipeline": str,
