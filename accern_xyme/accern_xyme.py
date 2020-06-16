@@ -598,7 +598,7 @@ class PipelineHandle:
         self._state: Optional[str] = None
         self._is_high_priority: Optional[bool] = None
         self._nodes: Dict[str, NodeHandle] = {}
-        self._settings: Optional[dict] = None
+        self._settings: Optional[Dict[str, Any]] = None
 
     def refresh(self) -> None:
         self._name = None
