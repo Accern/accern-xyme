@@ -178,13 +178,14 @@ class XYMEClient:
             method: str,
             path: str,
             args: Dict[str, Any],
+            files: Optional[Dict[str, BytesIO]] = None,
             add_prefix: bool = True,
             api_version: Optional[int] = None) -> BytesIO:
         retry = 0
         while True:
             try:
                 return self._fallible_raw_request_bytes(
-                    method, path, args, add_prefix, api_version)
+                    method, path, args, files, add_prefix, api_version)
             except requests.ConnectionError:
                 if retry >= get_max_retry():
                     raise
@@ -258,6 +259,7 @@ class XYMEClient:
             method: str,
             path: str,
             args: Dict[str, Any],
+            files: Optional[Dict[str, BytesIO]],
             add_prefix: bool,
             api_version: Optional[int]) -> BytesIO:
         prefix = ""
@@ -276,6 +278,22 @@ class XYMEClient:
                 f"error {req.status_code} in worker request:\n{req.text}")
         if method == METHOD_POST:
             req = requests.post(url, json=args)
+            if req.status_code == 403:
+                raise AccessDenied(req.text)
+            if req.status_code == 200:
+                return BytesIO(req.content)
+            raise ValueError(
+                f"error {req.status_code} in worker request:\n{req.text}")
+        if method == METHOD_FILE:
+            if files is None:
+                raise ValueError(f"file method must have files: {files}")
+            req = requests.post(url, data=args, files={
+                key: (
+                    getattr(value, "name", key),
+                    value,
+                    "application/octet-stream",
+                ) for (key, value) in files.items()
+            })
             if req.status_code == 403:
                 raise AccessDenied(req.text)
             if req.status_code == 200:
@@ -416,11 +434,12 @@ class XYMEClient:
         #     "token": self._token,
         # })
 
-    def _request_bytes(
+    def request_bytes(
             self,
             method: str,
             path: str,
             args: Dict[str, Any],
+            files: Optional[Dict[str, BytesIO]] = None,
             add_prefix: bool = True,
             api_version: Optional[int] = None) -> BytesIO:
         if self._token is None:
@@ -429,7 +448,7 @@ class XYMEClient:
         def execute() -> BytesIO:
             args["token"] = self._token
             return self._raw_request_bytes(
-                method, path, args, add_prefix, api_version)
+                method, path, args, files, add_prefix, api_version)
 
         try:
             return execute()
@@ -691,6 +710,14 @@ class PipelineHandle:
 
     def update_settings(self, settings: Dict[str, Any]) -> None:
         self._client.update_settings(self.get_id(), settings)
+
+    def dynamic(self, input_data: BytesIO) -> BytesIO:
+        return self._client.request_bytes(
+            METHOD_FILE, "/dynamic", {
+                "pipeline": self._pipe_id,
+            }, files={
+                "file": input_data,
+            })
 
     def pretty(self, allow_unicode: bool) -> str:
         nodes = [
