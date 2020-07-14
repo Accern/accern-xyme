@@ -1,6 +1,7 @@
 from typing import (
     Any,
     cast,
+    Callable,
     Dict,
     IO,
     Iterator,
@@ -13,17 +14,20 @@ from typing import (
     Union,
 )
 import io
+import inspect
 import os
 import sys
 import json
+import re
 import time
 import weakref
 import contextlib
 import collections
 from io import BytesIO, StringIO
-import requests
 import pandas as pd
 import quick_server
+import requests
+from RestrictedPython import compile_restricted
 
 from .util import (
     df_to_csv,
@@ -37,6 +41,8 @@ from .types import (
     CSVBlobResponse,
     CSVList,
     CSVOp,
+    CustomCodeResponse,
+    CustomImportsResponse,
     InCursors,
     JobInfo,
     JobList,
@@ -86,6 +92,8 @@ INPUT_TSV_EXT = ".tsv"
 INPUT_ZIP_EXT = ".zip"
 INPUT_EXT = [INPUT_ZIP_EXT, INPUT_CSV_EXT, INPUT_TSV_EXT]
 
+
+RETURN_PATTERN = re.compile(r"\s*return\s*")
 
 class AccessDenied(Exception):
     pass
@@ -1034,6 +1042,51 @@ class NodeHandle:
             }, capture_err=False))
         return CSVBlobHandle(
             self._client, res["csv"], res["count"], res["pos"], res["tmp"])
+
+    def set_custom_imports(self, modules: List[str]) -> None:
+        self._client._request_json(
+            METHOD_PUT, "/update_custom_imports", {
+                "pipeline": self.get_pipeline().get_id(),
+                "node": self.get_id(),
+                "modules": modules,
+            }, capture_err=False)
+
+    def get_custom_imports(self) -> CustomImportsResponse:
+        return cast(CustomImportsResponse, self._client._request_json(
+            METHOD_GET, "/get_custom_imports", {
+                "pipeline": self.get_pipeline().get_id(),
+                "node": self.get_id(),
+            }, capture_err=False))
+
+    def set_custom_code(
+            self, func: Callable[[pd.DataFrame], pd.DataFrame]) -> None:
+
+        def as_str(fun: Callable[[pd.DataFrame], pd.DataFrame]) -> str:
+            body = inspect.getsource(fun)
+            returns = RETURN_PATTERN.search(body)
+            if returns is None:
+                raise ValueError("no return from custom function")
+            res = f"{body}\nresult = {fun.__name__}(df)"
+            compile_restricted(res, "inline", "exec")
+            return res
+
+        if not self.get_type().startswith("custom"):
+            raise ValueError(f"node({self}) does not support custom code")
+
+        raw_code = as_str(func)
+        self._client._request_json(
+            METHOD_PUT, "/update_node_code", {
+                "pipeline": self.get_pipeline().get_id(),
+                "node": self.get_id(),
+                "code": raw_code,
+            }, capture_err=False)
+
+    def get_custom_code(self) -> CustomCodeResponse:
+        return cast(CustomCodeResponse, self._client._request_json(
+            METHOD_GET, "/get_node_code", {
+                "pipeline": self.get_pipeline().get_id(),
+                "node": self.get_id(),
+            }, capture_err=False))
 
     def __hash__(self) -> int:
         return hash(self._node_id)

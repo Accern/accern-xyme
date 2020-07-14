@@ -152,3 +152,9 @@ JobInfo = TypedDict('JobInfo', {  # pylint: disable=invalid-name
     "high_priority": bool,
     "entry_points": JobInfoEntries,
 })
+CustomCodeResponse = TypedDict('CustomCodeResponse', {
+    "code": str,
+})
+CustomImportsResponse = TypedDict('CustomImportsResponse', {
+    "modules": List[str],
+})
