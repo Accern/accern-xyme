@@ -1060,7 +1060,6 @@ class NodeHandle:
 
     def set_custom_code(
             self, func: Callable[[pd.DataFrame], pd.DataFrame]) -> None:
-
         def as_str(fun: Callable[[pd.DataFrame], pd.DataFrame]) -> str:
             body = inspect.getsource(fun)
             returns = RETURN_PATTERN.search(body)
@@ -1075,7 +1074,7 @@ class NodeHandle:
 
         raw_code = as_str(func)
         self._client._request_json(
-            METHOD_PUT, "/update_node_code", {
+            METHOD_PUT, "/update_custom_code", {
                 "pipeline": self.get_pipeline().get_id(),
                 "node": self.get_id(),
                 "code": raw_code,
@@ -1083,7 +1082,7 @@ class NodeHandle:
 
     def get_custom_code(self) -> CustomCodeResponse:
         return cast(CustomCodeResponse, self._client._request_json(
-            METHOD_GET, "/get_node_code", {
+            METHOD_GET, "/get_custom_code", {
                 "pipeline": self.get_pipeline().get_id(),
                 "node": self.get_id(),
             }, capture_err=False))
