@@ -719,6 +719,15 @@ class PipelineHandle:
                 "file": input_data,
             })
 
+    def dynamic_obj(self, input_obj: Any) -> Any:
+        bio = BytesIO(json.dumps(
+            input_obj,
+            separators=(",", ":"),
+            indent=None,
+            sort_keys=True).encode("utf-8"))
+        out = self.dynamic(bio)
+        return json.load(out)
+
     def pretty(self, allow_unicode: bool) -> str:
         nodes = [
             self.get_node(node_id)
