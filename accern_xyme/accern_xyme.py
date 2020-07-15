@@ -95,8 +95,7 @@ INPUT_EXT = [INPUT_ZIP_EXT, INPUT_CSV_EXT, INPUT_TSV_EXT]
 
 
 RETURN_PATTERN = re.compile(r"\s*return\s*")
-PD_FUNC = Callable[[pd.DataFrame], pd.DataFrame]
-JSON_FUNC = Callable[[pd.DataFrame], pd.DataFrame]
+DF_FUNC = Callable[[pd.DataFrame], pd.DataFrame]
 
 
 class AccessDenied(Exception):
@@ -1047,7 +1046,6 @@ class NodeHandle:
         return CSVBlobHandle(
             self._client, res["csv"], res["count"], res["pos"], res["tmp"])
 
-
     def get_json_blob(self) -> 'JSONBlobHandle':
         if self.get_type() != "jsons_reader":
             raise ValueError(
@@ -1080,10 +1078,10 @@ class NodeHandle:
                 "node": self.get_id(),
             }, capture_err=False))
 
-    def set_custom_code(self, func: PD_FUNC) -> CustomCodeResponse:
+    def set_custom_code(self, func: DF_FUNC) -> CustomCodeResponse:
         self.check_custom_code_node()
 
-        def as_str(fun: PD_FUNC) -> str:
+        def as_str(fun: DF_FUNC) -> str:
             body = inspect.getsource(fun)
             returns = RETURN_PATTERN.search(body)
             if returns is None:
@@ -1107,6 +1105,21 @@ class NodeHandle:
                 "pipeline": self.get_pipeline().get_id(),
                 "node": self.get_id(),
             }, capture_err=False))
+
+    def get_input_sample_df(self) -> Optional[pd.DataFrame]:
+        if self.get_type() != "custom":
+            raise ValueError(
+                "can only load sample input data for 'custom' node")
+        res = self._client._request_json(
+            METHOD_GET, "/get_input_sample", {
+                "pipeline": self.get_pipeline().get_id(),
+                "node": self.get_id(),
+            }, capture_err=True)
+        if res["uri"] is None:
+            return None
+        sample_blob = BlobHandle(self._client, res["uri"], is_full=True)
+        pipeline_id = self.get_pipeline().get_id()
+        return sample_blob.get_content(pipeline_id)
 
     def __hash__(self) -> int:
         return hash(self._node_id)
