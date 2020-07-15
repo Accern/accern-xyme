@@ -158,3 +158,7 @@ CustomCodeResponse = TypedDict('CustomCodeResponse', {
 CustomImportsResponse = TypedDict('CustomImportsResponse', {
     "modules": List[str],
 })
+JSONBlobResponse = TypedDict('JSONBlobResponse', {
+    "count": int,
+    "json": str,
+})
