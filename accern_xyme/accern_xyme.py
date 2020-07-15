@@ -1106,10 +1106,10 @@ class NodeHandle:
                 "node": self.get_id(),
             }, capture_err=False))
 
-    def get_input_example_df(self) -> Optional[pd.DataFrame]:
+    def get_input_example(self) -> Optional[pd.DataFrame]:
         if self.get_type() != "custom":
             raise ValueError(
-                "can only load sample input data for 'custom' node")
+                "can only load example input data for 'custom' node")
         res = self._client._request_json(
             METHOD_GET, "/get_input_example", {
                 "pipeline": self.get_pipeline().get_id(),
