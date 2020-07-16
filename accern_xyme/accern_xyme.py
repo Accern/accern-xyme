@@ -744,7 +744,7 @@ class PipelineHandle:
                 "file": input_data,
             }).read()
         if not cur_res:
-            raise ValueError(f"empty response")
+            raise ValueError("empty response")
         return BytesIO(cur_res)
 
     def dynamic_obj(self, input_obj: Any) -> Any:
