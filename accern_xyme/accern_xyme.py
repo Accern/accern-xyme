@@ -727,6 +727,7 @@ class PipelineHandle:
             retry += 1
             if retry > 10:
                 raise ValueError(f"could not send data")
+            time.sleep(get_retry_sleep())
 
     def dynamic_obj(self, input_obj: Any) -> Any:
         bio = BytesIO(json.dumps(
