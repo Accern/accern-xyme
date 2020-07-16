@@ -181,6 +181,24 @@ class XYMEClient:
             files: Optional[Dict[str, BytesIO]] = None,
             add_prefix: bool = True,
             api_version: Optional[int] = None) -> BytesIO:
+        file_resets = {}
+        can_reset = True
+        if files is not None:
+            for (fname, fbuff) in files.items():
+                if hasattr(fbuff, "seek"):
+                    file_resets[fname] = fbuff.seek(0, io.SEEK_CUR)
+                else:
+                    can_reset = False
+
+        def reset_files() -> bool:
+            if files is None:
+                return True
+            if not can_reset:
+                return False
+            for (fname, pos) in file_resets.items():
+                files[fname].seek(pos, io.SEEK_SET)
+            return True
+
         retry = 0
         while True:
             try:
@@ -189,7 +207,14 @@ class XYMEClient:
             except requests.ConnectionError:
                 if retry >= get_max_retry():
                     raise
+                if not reset_files():
+                    raise
                 time.sleep(get_retry_sleep())
+            except AccessDenied as adex:
+                if not reset_files():
+                    raise ValueError(
+                        "cannot reset file buffers for retry") from adex
+                raise adex
             retry += 1
 
     def _raw_request_str(
@@ -712,22 +737,15 @@ class PipelineHandle:
         self._client.update_settings(self.get_id(), settings)
 
     def dynamic(self, input_data: BytesIO) -> BytesIO:
-        out = BytesIO(input_data.read())
-        retry = 0
-        while True:
-            out.seek(0)
-            cur_res = self._client.request_bytes(
-                METHOD_FILE, "/dynamic", {
-                    "pipeline": self._pipe_id,
-                }, files={
-                    "file": out,
-                }).read()
-            if cur_res:
-                return BytesIO(cur_res)
-            retry += 1
-            if retry > 10:
-                raise ValueError(f"could not send data")
-            time.sleep(get_retry_sleep())
+        cur_res = self._client.request_bytes(
+            METHOD_FILE, "/dynamic", {
+                "pipeline": self._pipe_id,
+            }, files={
+                "file": input_data,
+            }).read()
+        if not cur_res:
+            raise ValueError(f"empty response")
+        return BytesIO(cur_res)
 
     def dynamic_obj(self, input_obj: Any) -> Any:
         bio = BytesIO(json.dumps(
