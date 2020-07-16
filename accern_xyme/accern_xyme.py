@@ -712,12 +712,21 @@ class PipelineHandle:
         self._client.update_settings(self.get_id(), settings)
 
     def dynamic(self, input_data: BytesIO) -> BytesIO:
-        return self._client.request_bytes(
-            METHOD_FILE, "/dynamic", {
-                "pipeline": self._pipe_id,
-            }, files={
-                "file": input_data,
-            })
+        out = BytesIO(input_data.read())
+        retry = 0
+        while True:
+            out.seek(0)
+            cur_res = self._client.request_bytes(
+                METHOD_FILE, "/dynamic", {
+                    "pipeline": self._pipe_id,
+                }, files={
+                    "file": out,
+                }).read()
+            if cur_res:
+                return BytesIO(cur_res)
+            retry += 1
+            if retry > 10:
+                raise ValueError(f"could not send data")
 
     def dynamic_obj(self, input_obj: Any) -> Any:
         bio = BytesIO(json.dumps(
