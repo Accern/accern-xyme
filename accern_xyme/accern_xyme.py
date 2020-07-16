@@ -554,7 +554,7 @@ class XYMEClient:
             METHOD_POST, "/pipeline_create", {
                 "pipeline": pipe_id,
                 "defs": defs,
-            }, capture_err=False))["pipeline"]
+            }, capture_err=True))["pipeline"]
         return self.get_pipeline(pipe_id)
 
     def update_settings(
@@ -563,7 +563,7 @@ class XYMEClient:
             METHOD_POST, "/update_pipeline_settings", {
                 "pipeline": pipe_id,
                 "settings": settings,
-            }, capture_err=False))["pipeline"]
+            }, capture_err=True))["pipeline"]
         return self.get_pipeline(pipe_id)
 
     def get_csvs(self) -> List[str]:
