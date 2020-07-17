@@ -1086,7 +1086,7 @@ class NodeHandle:
             returns = RETURN_PATTERN.search(body)
             if returns is None:
                 raise ValueError("no return from custom function")
-            res = f"{body}\nresult = {fun.__name__}(df)"
+            res = f"{body}\nresult = {fun.__name__}(df)\nprint_stmt = printed"
             compile_restricted(res, "inline", "exec")
             return res
 
@@ -1263,9 +1263,9 @@ class CSVBlobHandle:
             if io_in is not None:
                 io_in.close()
 
-
 # *** CSVBlobHandle ***
-# *** JSONBlobHandle ***
+
+
 class JSONBlobHandle:
     def __init__(
             self,
@@ -1294,7 +1294,6 @@ class JSONBlobHandle:
             }, capture_err=True)
         self._count = res["count"]
         return self
-
 
 # *** JSONBlobHandle ***
 
