@@ -1144,7 +1144,6 @@ class NodeHandle:
             result = {fun.__name__}(data)
             if result is None:
                 raise ValueError("{fun.__name__} must return a value")
-            print_stmt = printed
             """)
             compile_restricted(res, "inline", "exec")
             return res
