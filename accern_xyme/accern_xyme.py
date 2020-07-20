@@ -1119,7 +1119,7 @@ class NodeHandle:
             self, modules: List[List[str]]) -> CustomImportsResponse:
         self.check_custom_code_node()
         return cast(CustomImportsResponse, self._client._request_json(
-            METHOD_PUT, "/update_custom_imports", {
+            METHOD_PUT, "/custom_imports", {
                 "pipeline": self.get_pipeline().get_id(),
                 "node": self.get_id(),
                 "modules": modules,
@@ -1128,7 +1128,7 @@ class NodeHandle:
     def get_custom_imports(self) -> CustomImportsResponse:
         self.check_custom_code_node()
         return cast(CustomImportsResponse, self._client._request_json(
-            METHOD_GET, "/get_custom_imports", {
+            METHOD_GET, "/custom_imports", {
                 "pipeline": self.get_pipeline().get_id(),
                 "node": self.get_id(),
             }, capture_err=False))
@@ -1151,7 +1151,7 @@ class NodeHandle:
 
         raw_code = as_str(func)
         return cast(CustomCodeResponse, self._client._request_json(
-            METHOD_PUT, "/update_custom_code", {
+            METHOD_PUT, "/custom_code", {
                 "pipeline": self.get_pipeline().get_id(),
                 "node": self.get_id(),
                 "code": raw_code,
@@ -1160,14 +1160,14 @@ class NodeHandle:
     def get_custom_code(self) -> CustomCodeResponse:
         self.check_custom_code_node()
         return cast(CustomCodeResponse, self._client._request_json(
-            METHOD_GET, "/get_custom_code", {
+            METHOD_GET, "/custom_code", {
                 "pipeline": self.get_pipeline().get_id(),
                 "node": self.get_id(),
             }, capture_err=False))
 
     def get_user_columns(self, key: str) -> UserColumnsResponse:
         return cast(UserColumnsResponse, self._client._request_json(
-            METHOD_GET, "/get_user_columns", {
+            METHOD_GET, "/user_columns", {
                 "pipeline": self.get_pipeline().get_id(),
                 "node": self.get_id(),
                 "key": key,
