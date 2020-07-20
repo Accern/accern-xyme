@@ -18,7 +18,6 @@ import inspect
 import os
 import sys
 import json
-import re
 import textwrap
 import time
 import weakref
@@ -95,8 +94,6 @@ INPUT_ZIP_EXT = ".zip"
 INPUT_EXT = [INPUT_ZIP_EXT, INPUT_CSV_EXT, INPUT_TSV_EXT]
 
 
-RETURN_PATTERN = re.compile(r"\s*return\s*")
-PRINT_PATTERN = re.compile(r"\s*print\s*")
 FUNC = Callable[[Any], Any]
 CUSTOM_NODE_TYPES = {
     "custom_data",
@@ -1143,12 +1140,12 @@ class NodeHandle:
 
         def as_str(fun: FUNC) -> str:
             body = textwrap.dedent(inspect.getsource(fun))
-            returns = RETURN_PATTERN.search(body)
-            if returns is None:
-                raise ValueError("no return from custom function")
-            res = f"{body}\nresult = {fun.__name__}(data)"
-            if PRINT_PATTERN.search(body) is not None:
-                res = f"{res}\nprint_stmt = printed"
+            res = body + textwrap.dedent(f"""
+            result = {fun.__name__}(data)
+            if result is None:
+                raise ValueError("{fun.__name__} must return a value")
+            print_stmt = printed
+            """)
             compile_restricted(res, "inline", "exec")
             return res
 
