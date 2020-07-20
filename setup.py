@@ -39,6 +39,7 @@ setup(
         "pandas>=0.25.3",
         "quick-server>=0.7.8",
         "requests>=2.22.0",
+        "RestrictedPython>=5.0",
         "typing-extensions>=3.7.4.1",
     ],
     extras_require={

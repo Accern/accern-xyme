@@ -1,6 +1,7 @@
 from typing import (
     Any,
     cast,
+    Callable,
     Dict,
     IO,
     Iterator,
@@ -13,17 +14,19 @@ from typing import (
     Union,
 )
 import io
+import inspect
 import os
 import sys
 import json
+import textwrap
 import time
 import weakref
 import contextlib
 import collections
 from io import BytesIO, StringIO
-import requests
 import pandas as pd
 import quick_server
+import requests
 
 from .util import (
     df_to_csv,
@@ -37,9 +40,12 @@ from .types import (
     CSVBlobResponse,
     CSVList,
     CSVOp,
+    CustomCodeResponse,
+    CustomImportsResponse,
     InCursors,
     JobInfo,
     JobList,
+    JSONBlobResponse,
     MaintenanceResponse,
     NodeChunk,
     NodeDefInfo,
@@ -56,6 +62,7 @@ from .types import (
     TaskStatus,
     Timing,
     Timings,
+    UserColumnsResponse,
     VersionResponse,
 )
 
@@ -85,6 +92,14 @@ INPUT_CSV_EXT = ".csv"
 INPUT_TSV_EXT = ".tsv"
 INPUT_ZIP_EXT = ".zip"
 INPUT_EXT = [INPUT_ZIP_EXT, INPUT_CSV_EXT, INPUT_TSV_EXT]
+
+
+FUNC = Callable[[Any], Any]
+CUSTOM_NODE_TYPES = {
+    "custom_data",
+    "custom_json",
+    "custom_json_to_data",
+}
 
 
 class AccessDenied(Exception):
@@ -568,7 +583,7 @@ class XYMEClient:
             METHOD_POST, "/pipeline_create", {
                 "pipeline": pipe_id,
                 "defs": defs,
-            }, capture_err=False))["pipeline"]
+            }, capture_err=True))["pipeline"]
         return self.get_pipeline(pipe_id)
 
     def update_settings(
@@ -577,7 +592,7 @@ class XYMEClient:
             METHOD_POST, "/update_pipeline_settings", {
                 "pipeline": pipe_id,
                 "settings": settings,
-            }, capture_err=False))["pipeline"]
+            }, capture_err=True))["pipeline"]
         return self.get_pipeline(pipe_id)
 
     def get_csvs(self) -> List[str]:
@@ -624,6 +639,10 @@ class XYMEClient:
             METHOD_PUT, "/job", {
                 "job": job,
             }, capture_err=False))
+
+    def get_allowed_custom_imports(self) -> CustomImportsResponse:
+        return cast(CustomImportsResponse, self._request_json(
+            METHOD_GET, "/allowed_custom_imports", {}, capture_err=False))
 
 # *** XYMEClient ***
 
@@ -1070,7 +1089,103 @@ class NodeHandle:
                 "node": self.get_id(),
             }, capture_err=False))
         return CSVBlobHandle(
-            self._client, res["csv"], res["count"], res["pos"], res["tmp"])
+            self._client,
+            self.get_pipeline(),
+            res["csv"],
+            res["count"],
+            res["pos"],
+            res["tmp"])
+
+    def get_json_blob(self) -> 'JSONBlobHandle':
+        if self.get_type() != "jsons_reader":
+            raise ValueError(
+                f"can not append jsons to {self}, expected 'jsons_reader'")
+        res = cast(JSONBlobResponse, self._client._request_json(
+            METHOD_GET, "/json_blob", {
+                "pipeline": self.get_pipeline().get_id(),
+                "node": self.get_id(),
+            }, capture_err=False))
+        return JSONBlobHandle(
+            self._client,
+            self.get_pipeline(),
+            res["json"],
+            res["count"])
+
+    def check_custom_code_node(self) -> None:
+        if not self.get_type() in CUSTOM_NODE_TYPES:
+            raise ValueError(f"{self} is not a custom code node.")
+
+    def set_custom_imports(
+            self, modules: List[List[str]]) -> CustomImportsResponse:
+        self.check_custom_code_node()
+        return cast(CustomImportsResponse, self._client._request_json(
+            METHOD_PUT, "/custom_imports", {
+                "pipeline": self.get_pipeline().get_id(),
+                "node": self.get_id(),
+                "modules": modules,
+            }, capture_err=True))
+
+    def get_custom_imports(self) -> CustomImportsResponse:
+        self.check_custom_code_node()
+        return cast(CustomImportsResponse, self._client._request_json(
+            METHOD_GET, "/custom_imports", {
+                "pipeline": self.get_pipeline().get_id(),
+                "node": self.get_id(),
+            }, capture_err=False))
+
+    def set_custom_code(self, func: FUNC) -> CustomCodeResponse:
+        from RestrictedPython import compile_restricted
+
+        self.check_custom_code_node()
+
+        def as_str(fun: FUNC) -> str:
+            body = textwrap.dedent(inspect.getsource(fun))
+            res = body + textwrap.dedent(f"""
+            result = {fun.__name__}(data)
+            if result is None:
+                raise ValueError("{fun.__name__} must return a value")
+            """)
+            compile_restricted(res, "inline", "exec")
+            return res
+
+        raw_code = as_str(func)
+        return cast(CustomCodeResponse, self._client._request_json(
+            METHOD_PUT, "/custom_code", {
+                "pipeline": self.get_pipeline().get_id(),
+                "node": self.get_id(),
+                "code": raw_code,
+            }, capture_err=True))
+
+    def get_custom_code(self) -> CustomCodeResponse:
+        self.check_custom_code_node()
+        return cast(CustomCodeResponse, self._client._request_json(
+            METHOD_GET, "/custom_code", {
+                "pipeline": self.get_pipeline().get_id(),
+                "node": self.get_id(),
+            }, capture_err=False))
+
+    def get_user_columns(self, key: str) -> UserColumnsResponse:
+        return cast(UserColumnsResponse, self._client._request_json(
+            METHOD_GET, "/user_columns", {
+                "pipeline": self.get_pipeline().get_id(),
+                "node": self.get_id(),
+                "key": key,
+            }, capture_err=False))
+
+    def get_input_example(self) -> Dict[str, Optional[pd.DataFrame]]:
+        if self.get_type() != "custom_data":
+            raise ValueError(
+                "can only load example input data for 'custom' node")
+        res = {}
+        for key in self.get_inputs():
+            input_node, out_key = self.get_input(key)
+            df = input_node.read(out_key, 0)
+            if df is not None:
+                user_columns = self.get_user_columns(out_key)["user_columns"]
+                rmap = {col: col.replace("user_", "") for col in user_columns}
+                df = df.loc[:, user_columns].rename(columns=rmap)
+            res[key] = df
+        return res
 
     def __hash__(self) -> int:
         return hash(self._node_id)
@@ -1096,11 +1211,13 @@ class CSVBlobHandle:
     def __init__(
             self,
             client: XYMEClient,
+            pipe: PipelineHandle,
             uri: str,
             count: int,
             pos: int,
             has_tmp: bool) -> None:
         self._client = client
+        self._pipe = pipe
         self._uri = uri
         self._count = count
         self._pos = pos
@@ -1115,6 +1232,9 @@ class CSVBlobHandle:
     def get_pos(self) -> int:
         return self._pos
 
+    def get_pipeline_id(self) -> str:
+        return self._pipe.get_id()
+
     def has_tmp(self) -> bool:
         return self._has_tmp
 
@@ -1126,6 +1246,7 @@ class CSVBlobHandle:
         args: Dict[str, Union[str, int]] = {
             "blob": self.get_uri(),
             "action": action,
+            "pipeline": self.get_pipeline_id(),
         }
         args.update(additional)
         if fobj is not None:
@@ -1214,8 +1335,41 @@ class CSVBlobHandle:
             if io_in is not None:
                 io_in.close()
 
-
 # *** CSVBlobHandle ***
+
+
+class JSONBlobHandle:
+    def __init__(
+            self,
+            client: XYMEClient,
+            pipe: PipelineHandle,
+            uri: str,
+            count: int) -> None:
+        self._client = client
+        self._pipe = pipe
+        self._uri = uri
+        self._count = count
+
+    def get_uri(self) -> str:
+        return self._uri
+
+    def get_count(self) -> int:
+        return self._count
+
+    def get_pipeline_id(self) -> str:
+        return self._pipe.get_id()
+
+    def append_jsons(self, jsons: List[Any]) -> 'JSONBlobHandle':
+        res = self._client._request_json(
+            METHOD_PUT, "/json_append", {
+                "pipeline": self.get_pipeline_id(),
+                "blob": self.get_uri(),
+                "jsons": jsons,
+            }, capture_err=True)
+        self._count = res["count"]
+        return self
+
+# *** JSONBlobHandle ***
 
 
 EMPTY_BLOB_PREFIX = "null://"
