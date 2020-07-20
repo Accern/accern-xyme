@@ -28,7 +28,6 @@ from io import BytesIO, StringIO
 import pandas as pd
 import quick_server
 import requests
-from RestrictedPython import compile_restricted
 
 from .util import (
     df_to_csv,
@@ -1138,6 +1137,8 @@ class NodeHandle:
             }, capture_err=False))
 
     def set_custom_code(self, func: FUNC) -> CustomCodeResponse:
+        from RestrictedPython import compile_restricted
+
         self.check_custom_code_node()
 
         def as_str(fun: FUNC) -> str:
