@@ -642,7 +642,7 @@ class XYMEClient:
 
     def get_allowed_custom_imports(self) -> CustomImportsResponse:
         return cast(CustomImportsResponse, self._request_json(
-            METHOD_GET, "/get_allowed_custom_imports", {}, capture_err=False))
+            METHOD_GET, "/allowed_custom_imports", {}, capture_err=False))
 
 # *** XYMEClient ***
 
