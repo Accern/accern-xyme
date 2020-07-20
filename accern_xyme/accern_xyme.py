@@ -64,6 +64,7 @@ from .types import (
     TaskStatus,
     Timing,
     Timings,
+    UserColumnsResponse,
     VersionResponse,
 )
 
@@ -1166,6 +1167,14 @@ class NodeHandle:
                 "node": self.get_id(),
             }, capture_err=False))
 
+    def get_user_columns(self, key: str) -> UserColumnsResponse:
+        return cast(UserColumnsResponse, self._client._request_json(
+            METHOD_GET, "/get_user_columns", {
+                "pipeline": self.get_pipeline().get_id(),
+                "node": self.get_id(),
+                "key": key,
+            }, capture_err=False))
+
     def get_input_example(self) -> Dict[str, Optional[pd.DataFrame]]:
         if self.get_type() != "custom_data":
             raise ValueError(
@@ -1173,7 +1182,12 @@ class NodeHandle:
         res = {}
         for key in self.get_inputs():
             input_node, out_key = self.get_input(key)
-            res[key] = input_node.read(out_key, 0)
+            df = input_node.read(out_key, 0)
+            if df is not None:
+                user_columns = self.get_user_columns(out_key)["user_columns"]
+                rmap = {col: col.replace("user_", "") for col in user_columns}
+                df = df.loc[:, user_columns].rename(columns=rmap)
+            res[key] = df
         return res
 
     def __hash__(self) -> int:

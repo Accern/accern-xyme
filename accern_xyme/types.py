@@ -162,3 +162,6 @@ JSONBlobResponse = TypedDict('JSONBlobResponse', {
     "count": int,
     "json": str,
 })
+UserColumnsResponse = TypedDict('UserColumnsResponse', {
+    "user_columns": List[str],
+})
