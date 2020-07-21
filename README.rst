@@ -11,9 +11,8 @@ Accern-XYME
 Usage
 -----
 
-For XYME legacy information use the latest version before v0.1.0:
-
-https://github.com/Accern/accern-xyme/tree/legacy
+For XYME legacy information use the latest version before
+`v0.1.0 <https://github.com/Accern/accern-xyme/tree/legacy>`
 
 You can install *accern\_xyme* with pip:
 
