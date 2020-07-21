@@ -12,7 +12,7 @@ Usage
 -----
 
 For XYME legacy information use the latest version before
-`v0.1.0 <https://github.com/Accern/accern-xyme/tree/legacy>`
+`v0.1.0 <https://github.com/Accern/accern-xyme/tree/legacy>`_
 
 You can install *accern\_xyme* with pip:
 
