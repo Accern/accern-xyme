@@ -16,7 +16,7 @@ with codecs.open(os.path.join(here, "README.rst"), encoding="utf-8") as f:
 
 setup(
     name="accern_xyme",
-    version="0.0.18",
+    version="0.1.0",
     description="AccernXYME is a library for easily "
                 "accessing XYME via python.",
     long_description=long_description,
@@ -39,12 +39,17 @@ setup(
         "pandas>=0.25.3",
         "quick-server>=0.7.8",
         "requests>=2.22.0",
+        "RestrictedPython>=5.0",
         "typing-extensions>=3.7.4.1",
     ],
     extras_require={
         "dev": [],
         "test": [],
     },
-    package_data={},
+    package_data={
+        'accern_xyme': [
+            'py.typed',
+        ],
+    },
     data_files=[],
 )
