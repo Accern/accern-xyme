@@ -660,6 +660,7 @@ class PipelineHandle:
         self._notify_publisher: Optional[str] = None
         self._state: Optional[str] = None
         self._is_high_priority: Optional[bool] = None
+        self._is_parallel: Optional[bool] = None
         self._nodes: Dict[str, NodeHandle] = {}
         self._settings: Optional[Dict[str, Any]] = None
 
@@ -670,6 +671,7 @@ class PipelineHandle:
         self._notify_publisher = None
         self._state = None
         self._is_high_priority = None
+        self._is_parallel = None
         # NOTE: we don't reset nodes
 
     def _maybe_refresh(self) -> None:
@@ -691,6 +693,7 @@ class PipelineHandle:
         self._notify_publisher = info["notify_publisher"]
         self._state = info["state"]
         self._is_high_priority = info["high_priority"]
+        self._is_parallel = info["is_parallel"]
         self._settings = info["settings"]
         old_nodes = {} if self._nodes is None else self._nodes
         self._nodes = {
@@ -741,6 +744,12 @@ class PipelineHandle:
         self._maybe_fetch()
         assert self._is_high_priority is not None
         return self._is_high_priority
+
+    def is_parallel(self) -> bool:
+        self._maybe_refresh()
+        self._maybe_fetch()
+        assert self._is_parallel is not None
+        return self._is_parallel
 
     @contextlib.contextmanager
     def bulk_operation(self) -> Iterator[bool]:
