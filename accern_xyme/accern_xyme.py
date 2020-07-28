@@ -1020,6 +1020,7 @@ class NodeHandle:
             "error": "!",
             "unknown": "?",
             "virtual": "∴" if allow_unicode else "V",
+            "parallel": "=",
         }
         return status_map[self.get_status()]
 

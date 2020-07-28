@@ -13,6 +13,7 @@ TaskStatus = Literal[
     "error",
     "unknown",
     "virtual",
+    "parallel",
 ]
 ParamType = Literal[
     "str",
@@ -48,7 +49,7 @@ NodeDefInfo = TypedDict('NodeDefInfo', {
     "desc": str,
     "input_keys": List[str],
     "output_keys": List[str],
-    "task_type": Optional[str],
+    "task_types": Optional[List[str]],
     "blob_types": Dict[str, str],
     "params": ParamDefs,
 })
