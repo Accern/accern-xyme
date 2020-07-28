@@ -1191,7 +1191,8 @@ class NodeHandle:
             input_node, out_key = self.get_input(key)
             df = input_node.read(out_key, 0)
             if df is not None:
-                user_columns = self.get_user_columns(out_key)["user_columns"]
+                user_columns = \
+                    input_node.get_user_columns(out_key)["user_columns"]
                 rmap = {col: col.replace("user_", "") for col in user_columns}
                 df = df.loc[:, user_columns].rename(columns=rmap)
             res[key] = df
