@@ -29,12 +29,14 @@ import quick_server
 import requests
 
 from .util import (
+    ByteResponse,
     df_to_csv,
     get_file_hash,
     get_file_upload_chunk_size,
     get_max_retry,
     get_progress_bar,
     get_retry_sleep,
+    interpret_ctype,
 )
 from .types import (
     CSVBlobResponse,
@@ -195,7 +197,7 @@ class XYMEClient:
             args: Dict[str, Any],
             files: Optional[Dict[str, BytesIO]] = None,
             add_prefix: bool = True,
-            api_version: Optional[int] = None) -> BytesIO:
+            api_version: Optional[int] = None) -> Tuple[BytesIO, str]:
         file_resets = {}
         can_reset = True
         if files is not None:
@@ -301,7 +303,7 @@ class XYMEClient:
             args: Dict[str, Any],
             files: Optional[Dict[str, BytesIO]],
             add_prefix: bool,
-            api_version: Optional[int]) -> BytesIO:
+            api_version: Optional[int]) -> Tuple[BytesIO, str]:
         prefix = ""
         if add_prefix:
             if api_version is None:
@@ -313,7 +315,7 @@ class XYMEClient:
             if req.status_code == 403:
                 raise AccessDenied(req.text)
             if req.status_code == 200:
-                return BytesIO(req.content)
+                return BytesIO(req.content), req.headers["content-type"]
             raise ValueError(
                 f"error {req.status_code} in worker request:\n{req.text}")
         if method == METHOD_POST:
@@ -321,7 +323,7 @@ class XYMEClient:
             if req.status_code == 403:
                 raise AccessDenied(req.text)
             if req.status_code == 200:
-                return BytesIO(req.content)
+                return BytesIO(req.content), req.headers["content-type"]
             raise ValueError(
                 f"error {req.status_code} in worker request:\n{req.text}")
         if method == METHOD_FILE:
@@ -337,7 +339,7 @@ class XYMEClient:
             if req.status_code == 403:
                 raise AccessDenied(req.text)
             if req.status_code == 200:
-                return BytesIO(req.content)
+                return BytesIO(req.content), req.headers["content-type"]
             raise ValueError(
                 f"error {req.status_code} in worker request:\n{req.text}")
         raise ValueError(f"unknown method {method}")
@@ -481,11 +483,11 @@ class XYMEClient:
             args: Dict[str, Any],
             files: Optional[Dict[str, BytesIO]] = None,
             add_prefix: bool = True,
-            api_version: Optional[int] = None) -> BytesIO:
+            api_version: Optional[int] = None) -> Tuple[BytesIO, str]:
         if self._token is None:
             self._login()
 
-        def execute() -> BytesIO:
+        def execute() -> Tuple[BytesIO, str]:
             args["token"] = self._token
             return self._raw_request_bytes(
                 method, path, args, files, add_prefix, api_version)
@@ -764,25 +766,22 @@ class PipelineHandle:
     def update_settings(self, settings: Dict[str, Any]) -> None:
         self._client.update_settings(self.get_id(), settings)
 
-    def dynamic(self, input_data: BytesIO) -> BytesIO:
-        cur_res = self._client.request_bytes(
+    def dynamic(self, input_data: BytesIO) -> ByteResponse:
+        cur_res, ctype = self._client.request_bytes(
             METHOD_FILE, "/dynamic", {
                 "pipeline": self._pipe_id,
             }, files={
                 "file": input_data,
-            }).read()
-        if not cur_res:
-            raise ValueError("empty response")
-        return BytesIO(cur_res)
+            })
+        return interpret_ctype(cur_res, ctype)
 
-    def dynamic_obj(self, input_obj: Any) -> Any:
+    def dynamic_obj(self, input_obj: Any) -> ByteResponse:
         bio = BytesIO(json.dumps(
             input_obj,
             separators=(",", ":"),
             indent=None,
             sort_keys=True).encode("utf-8"))
-        out = self.dynamic(bio)
-        return json.load(out)
+        return self.dynamic(bio)
 
     def pretty(self, allow_unicode: bool) -> str:
         nodes = [
@@ -1062,7 +1061,7 @@ class NodeHandle:
             raise ValueError(f"uri is None: {res}")
         return BlobHandle(self._client, uri, is_full=True)
 
-    def read(self, key: str, chunk: int) -> Optional[pd.DataFrame]:
+    def read(self, key: str, chunk: int) -> Optional[ByteResponse]:
         pipeline_id = self.get_pipeline().get_id()
         return self.read_blob(key, chunk).get_content(pipeline_id)
 
@@ -1182,7 +1181,7 @@ class NodeHandle:
                 "key": key,
             }, capture_err=False))
 
-    def get_input_example(self) -> Dict[str, Optional[pd.DataFrame]]:
+    def get_input_example(self) -> Dict[str, Optional[ByteResponse]]:
         if self.get_type() != "custom_data":
             raise ValueError(
                 "can only load example input data for 'custom' node")
@@ -1190,7 +1189,7 @@ class NodeHandle:
         for key in self.get_inputs():
             input_node, out_key = self.get_input(key)
             df = input_node.read(out_key, 0)
-            if df is not None:
+            if df is not None and isinstance(df, pd.DataFrame):
                 user_columns = \
                     input_node.get_user_columns(out_key)["user_columns"]
                 rmap = {col: col.replace("user_", "") for col in user_columns}
@@ -1401,17 +1400,16 @@ class BlobHandle:
     def get_uri(self) -> str:
         return self._uri
 
-    def get_content(self, pipe_id: str) -> Optional[pd.DataFrame]:
+    def get_content(self, pipe_id: str) -> Optional[ByteResponse]:
         if not self.is_full():
             raise ValueError(f"URI must be full: {self}")
         if self.is_empty():
             return None
-        with self._client._raw_request_bytes(
-                METHOD_POST, "/uri", {
-                    "uri": self._uri,
-                    "pipeline": pipe_id,
-                }) as fin:
-            return pd.read_parquet(fin)
+        fin, ctype = self._client._raw_request_bytes(METHOD_POST, "/uri", {
+            "uri": self._uri,
+            "pipeline": pipe_id,
+        })
+        return interpret_ctype(fin, ctype)
 
     def as_str(self) -> str:
         return f"{self.get_uri()}"

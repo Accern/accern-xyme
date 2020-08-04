@@ -3,8 +3,10 @@ from typing import (
     Callable,
     IO,
     Optional,
+    Union,
 )
 import io
+import json
 import shutil
 from io import BytesIO, TextIOWrapper
 import pandas as pd
@@ -14,6 +16,9 @@ FILE_UPLOAD_CHUNK_SIZE = 8 * 1024 * 1024  # 8MB
 FILE_HASH_CHUNK_SIZE = FILE_UPLOAD_CHUNK_SIZE
 MAX_RETRY = 5
 RETRY_SLEEP = 5.0
+
+
+ByteResponse = Union[pd.DataFrame, dict, IO[bytes]]
 
 
 def set_file_upload_chunk_size(size: int) -> None:
@@ -158,3 +163,11 @@ def get_file_hash(buff: IO[bytes]) -> str:
         sha.update(chunk)
     buff.seek(init_pos, io.SEEK_SET)
     return sha.hexdigest()
+
+
+def interpret_ctype(data: IO[bytes], ctype: str) -> ByteResponse:
+    if ctype == "application/json":
+        return json.load(data)
+    if ctype == "application/parquet":
+        return pd.read_parquet(data)
+    return data
