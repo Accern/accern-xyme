@@ -170,4 +170,18 @@ def interpret_ctype(data: IO[bytes], ctype: str) -> ByteResponse:
         return json.load(data)
     if ctype == "application/parquet":
         return pd.read_parquet(data)
-    return data
+    # NOTE: try best guess...
+    content = BytesIO(data.read())
+    try:
+        return pd.read_parquet(content)
+    except OSError:
+        pass
+    content.seek(0)
+    try:
+        return json.load(content)
+    except json.decoder.JSONDecodeError:
+        pass
+    except UnicodeDecodeError:
+        pass
+    content.seek(0)
+    return content
