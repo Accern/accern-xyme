@@ -2,9 +2,12 @@ from typing import (
     Any,
     Callable,
     IO,
+    List,
     Optional,
+    Union,
 )
 import io
+import json
 import shutil
 from io import BytesIO, TextIOWrapper
 import pandas as pd
@@ -14,6 +17,9 @@ FILE_UPLOAD_CHUNK_SIZE = 8 * 1024 * 1024  # 8MB
 FILE_HASH_CHUNK_SIZE = FILE_UPLOAD_CHUNK_SIZE
 MAX_RETRY = 5
 RETRY_SLEEP = 5.0
+
+
+ByteResponse = Union[pd.DataFrame, dict, IO[bytes], List[dict]]
 
 
 def set_file_upload_chunk_size(size: int) -> None:
@@ -158,3 +164,40 @@ def get_file_hash(buff: IO[bytes]) -> str:
         sha.update(chunk)
     buff.seek(init_pos, io.SEEK_SET)
     return sha.hexdigest()
+
+
+def interpret_ctype(data: IO[bytes], ctype: str) -> ByteResponse:
+    if ctype == "application/json":
+        return json.load(data)
+    if ctype == "application/parquet":
+        return pd.read_parquet(data)
+    if ctype == "application/jsonl":
+        return [
+            json.load(BytesIO(line))
+            for line in data
+        ]
+    # NOTE: try best guess...
+    content = BytesIO(data.read())
+    try:
+        return pd.read_parquet(content)
+    except OSError:
+        pass
+    content.seek(0)
+    try:
+        return json.load(content)
+    except json.decoder.JSONDecodeError:
+        pass
+    except UnicodeDecodeError:
+        pass
+    content.seek(0)
+    try:
+        return [
+            json.load(BytesIO(line))
+            for line in content
+        ]
+    except json.decoder.JSONDecodeError:
+        pass
+    except UnicodeDecodeError:
+        pass
+    content.seek(0)
+    return content

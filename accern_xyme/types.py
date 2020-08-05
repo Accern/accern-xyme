@@ -13,6 +13,7 @@ TaskStatus = Literal[
     "error",
     "unknown",
     "virtual",
+    "parallel",
 ]
 ParamType = Literal[
     "str",
@@ -48,7 +49,7 @@ NodeDefInfo = TypedDict('NodeDefInfo', {
     "desc": str,
     "input_keys": List[str],
     "output_keys": List[str],
-    "task_type": Optional[str],
+    "task_types": Optional[List[str]],
     "blob_types": Dict[str, str],
     "params": ParamDefs,
 })
@@ -86,6 +87,7 @@ PipelineInfo = TypedDict('PipelineInfo', {
     "nodes": List[NodeInfo],
     "state": str,
     "high_priority": bool,
+    "is_parallel": bool,
     "settings": Dict[str, Any],
 })
 PipelineInit = TypedDict('PipelineInit', {
@@ -108,6 +110,7 @@ PipelineDef = TypedDict('PipelineDef', {
     "nodes": List[NodeDef],
     "state": str,
     "high_priority": bool,
+    "is_parallel": bool,
 }, total=False)
 Timing = TypedDict('Timing', {
     "name": str,
@@ -150,6 +153,7 @@ JobInfo = TypedDict('JobInfo', {  # pylint: disable=invalid-name
     "owner": str,
     "company": str,
     "high_priority": bool,
+    "is_parallel": bool,
     "entry_points": JobInfoEntries,
 })
 CustomCodeResponse = TypedDict('CustomCodeResponse', {
