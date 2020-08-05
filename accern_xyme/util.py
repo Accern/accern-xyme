@@ -2,6 +2,7 @@ from typing import (
     Any,
     Callable,
     IO,
+    List,
     Optional,
     Union,
 )
@@ -18,7 +19,7 @@ MAX_RETRY = 5
 RETRY_SLEEP = 5.0
 
 
-ByteResponse = Union[pd.DataFrame, dict, IO[bytes]]
+ByteResponse = Union[pd.DataFrame, dict, IO[bytes], List[dict]]
 
 
 def set_file_upload_chunk_size(size: int) -> None:
@@ -170,6 +171,11 @@ def interpret_ctype(data: IO[bytes], ctype: str) -> ByteResponse:
         return json.load(data)
     if ctype == "application/parquet":
         return pd.read_parquet(data)
+    if ctype == "application/jsonl":
+        return [
+            json.load(BytesIO(line))
+            for line in data
+        ]
     # NOTE: try best guess...
     content = BytesIO(data.read())
     try:
@@ -179,6 +185,16 @@ def interpret_ctype(data: IO[bytes], ctype: str) -> ByteResponse:
     content.seek(0)
     try:
         return json.load(content)
+    except json.decoder.JSONDecodeError:
+        pass
+    except UnicodeDecodeError:
+        pass
+    content.seek(0)
+    try:
+        return [
+            json.load(BytesIO(line))
+            for line in content
+        ]
     except json.decoder.JSONDecodeError:
         pass
     except UnicodeDecodeError:
