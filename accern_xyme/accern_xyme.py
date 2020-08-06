@@ -74,7 +74,7 @@ else:
     WVD = weakref.WeakValueDictionary
 
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 # FIXME: async calls, documentation, auth, summary – time it took etc.
 
 
@@ -783,6 +783,36 @@ class PipelineHandle:
             sort_keys=True).encode("utf-8"))
         return self.dynamic(bio)
 
+    def dynamic_async(
+            self, input_data: List[BytesIO]) -> List['ComputationHandle']:
+        names = [f"file{pos}" for pos in range(len(input_data))]
+        res: Dict[str, str] = self._client._request_json(
+            METHOD_FILE, "/dynamic_async", {
+                "pipeline": self._pipe_id,
+            }, capture_err=False, files=dict(zip(names, input_data)))
+        return [ComputationHandle(self, res[name]) for name in names]
+
+    def dynamic_async_obj(
+            self, input_data: List[Any]) -> List['ComputationHandle']:
+        return self.dynamic_async([
+            BytesIO(json.dumps(
+                input_obj,
+                separators=(",", ":"),
+                indent=None,
+                sort_keys=True).encode("utf-8"))
+            for input_obj in input_data
+        ])
+
+    def maybe_get_dynamic_result(self, data_id: str) -> Optional[ByteResponse]:
+        cur_res, ctype = self._client.request_bytes(
+            METHOD_GET, "/dynamic_result", {
+                "pipeline": self._pipe_id,
+                "id": data_id,
+            })
+        if not cur_res:
+            return None
+        return interpret_ctype(cur_res, ctype)
+
     def pretty(self, allow_unicode: bool) -> str:
         nodes = [
             self.get_node(node_id)
@@ -1432,6 +1462,29 @@ class BlobHandle:
         return f"{self.__class__.__name__}[{self.as_str()}]"
 
 # *** BlobHandle ***
+
+
+class ComputationHandle:
+    def __init__(self, pipeline: PipelineHandle, data_id: str) -> None:
+        self._pipeline = pipeline
+        self._data_id = data_id
+        self._value: Optional[ByteResponse] = None
+
+    def maybe_value(self) -> Optional[ByteResponse]:
+        if self._value is None:
+            self._value = self._pipeline.maybe_get_dynamic_result(
+                self._data_id)
+        return self._value
+
+    def get_value(self, timeout: Optional[int] = None) -> ByteResponse:
+        start_time = time.monotonic()
+        while timeout is None or (start_time + timeout < time.monotonic()):
+            value = self.maybe_value()
+            if value is not None:
+                return value
+        raise TimeoutError(f"waiting for {self._data_id} has timed out!")
+
+# *** ComputationHandle ***
 
 
 def create_xyme_client(
