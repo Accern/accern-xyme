@@ -1468,6 +1468,9 @@ class ComputationHandle:
         self._data_id = data_id
         self._value: Optional[ByteResponse] = None
 
+    def has_fetched(self) -> bool:
+        return self._value is not None
+
     def get(self) -> Optional[ByteResponse]:
         if self._value is None:
             self._value = self._pipeline.get_dynamic_result(self._data_id)
