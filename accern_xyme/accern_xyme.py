@@ -1476,6 +1476,14 @@ class ComputationHandle:
             self._value = self._pipeline.get_dynamic_result(self._data_id)
         return self._value
 
+    def __str__(self) -> str:
+        if self._value is None:
+            return f"data_id={self._data_id}"
+        return f"value={self._value}"
+
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}[{self.__str__()}]"
+
 # *** ComputationHandle ***
 
 
