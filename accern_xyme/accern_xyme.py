@@ -803,14 +803,12 @@ class PipelineHandle:
             for input_obj in input_data
         ])
 
-    def maybe_get_dynamic_result(self, data_id: str) -> Optional[ByteResponse]:
+    def get_dynamic_result(self, data_id: str) -> ByteResponse:
         cur_res, ctype = self._client.request_bytes(
             METHOD_GET, "/dynamic_result", {
                 "pipeline": self._pipe_id,
                 "id": data_id,
             })
-        if not cur_res:
-            return None
         return interpret_ctype(cur_res, ctype)
 
     def pretty(self, allow_unicode: bool) -> str:
@@ -1470,19 +1468,10 @@ class ComputationHandle:
         self._data_id = data_id
         self._value: Optional[ByteResponse] = None
 
-    def maybe_value(self) -> Optional[ByteResponse]:
+    def get(self) -> Optional[ByteResponse]:
         if self._value is None:
-            self._value = self._pipeline.maybe_get_dynamic_result(
-                self._data_id)
+            self._value = self._pipeline.get_dynamic_result(self._data_id)
         return self._value
-
-    def get_value(self, timeout: Optional[int] = None) -> ByteResponse:
-        start_time = time.monotonic()
-        while timeout is None or (start_time + timeout < time.monotonic()):
-            value = self.maybe_value()
-            if value is not None:
-                return value
-        raise TimeoutError(f"waiting for {self._data_id} has timed out!")
 
 # *** ComputationHandle ***
 
