@@ -49,6 +49,7 @@ from .types import (
     JobList,
     JSONBlobResponse,
     MaintenanceResponse,
+    ModelSetupResponse,
     NodeChunk,
     NodeDefInfo,
     NodeInfo,
@@ -102,6 +103,11 @@ CUSTOM_NODE_TYPES = {
     "custom_json",
     "custom_json_to_data",
 }
+EMBEDDING_MODEL_NODE_TYPES = {
+    "dyn_embedding_model",
+    "static_embedding_model",
+}
+MODEL_NODE_TYPES = EMBEDDING_MODEL_NODE_TYPES
 
 
 class AccessDenied(Exception):
@@ -1226,6 +1232,21 @@ class NodeHandle:
                 df = df.loc[:, user_columns].rename(columns=rmap)
             res[key] = df
         return res
+
+    def setup_model(self, obj: Dict[str, Any]) -> Any:
+        if self.get_type() not in MODEL_NODE_TYPES:
+            raise ValueError("{self} is not a model node")
+        model_type: str
+        if model_type in EMBEDDING_MODEL_NODE_TYPES:
+            model_type = "embedding"
+
+        return cast(ModelSetupResponse, self._client._request_json(
+            METHOD_PUT, "/model_setup", {
+                "pipeline": self.get_pipeline().get_id(),
+                "node": self.get_id(),
+                "config": obj,
+                "model_type": model_type,
+            }, capture_err=True))
 
     def __hash__(self) -> int:
         return hash(self._node_id)
