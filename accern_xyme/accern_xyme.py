@@ -1236,7 +1236,7 @@ class NodeHandle:
 
     def setup_model(self, obj: Dict[str, Any]) -> Any:
         if self.get_type() not in MODEL_NODE_TYPES:
-            raise ValueError("{self} is not a model node")
+            raise ValueError(f"{self} is not a model node")
         model_type: str
         if self.get_type() in EMBEDDING_MODEL_NODE_TYPES:
             model_type = "embedding"
