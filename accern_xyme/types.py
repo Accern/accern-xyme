@@ -172,3 +172,6 @@ UserColumnsResponse = TypedDict('UserColumnsResponse', {
 ModelSetupResponse = TypedDict('ModelSetupResponse', {
     "model_info": Dict[str, Any],
 })
+ModelParamsResponse = TypedDict('ModelParamsResponse', {
+    "model_params": Dict[str, Any],
+})

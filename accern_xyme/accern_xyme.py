@@ -49,6 +49,7 @@ from .types import (
     JobList,
     JSONBlobResponse,
     MaintenanceResponse,
+    ModelParamsResponse,
     ModelSetupResponse,
     NodeChunk,
     NodeDefInfo,
@@ -1237,7 +1238,7 @@ class NodeHandle:
         if self.get_type() not in MODEL_NODE_TYPES:
             raise ValueError("{self} is not a model node")
         model_type: str
-        if model_type in EMBEDDING_MODEL_NODE_TYPES:
+        if self.get_type() in EMBEDDING_MODEL_NODE_TYPES:
             model_type = "embedding"
 
         return cast(ModelSetupResponse, self._client._request_json(
@@ -1246,6 +1247,13 @@ class NodeHandle:
                 "node": self.get_id(),
                 "config": obj,
                 "model_type": model_type,
+            }, capture_err=True))
+
+    def get_model_params(self) -> Any:
+        return cast(ModelParamsResponse, self._client._request_json(
+            METHOD_GET, "/model_params", {
+                "pipeline": self.get_pipeline().get_id(),
+                "node": self.get_id(),
             }, capture_err=True))
 
     def __hash__(self) -> int:
