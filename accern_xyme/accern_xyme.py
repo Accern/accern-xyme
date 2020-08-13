@@ -997,7 +997,11 @@ class NodeHandle:
         self._state_key = node_info["state_key"]
         self._type = node_info["type"]
         self._blobs = {
-            key: BlobHandle(self._client, value, is_full=False)
+            key: BlobHandle(
+                self._client,
+                value,
+                is_full=False,
+                pipeline=self.get_pipeline())
             for (key, value) in node_info["blobs"].items()
         }
         self._inputs = node_info["inputs"]
@@ -1096,11 +1100,14 @@ class NodeHandle:
         uri = res["result_uri"]
         if uri is None:
             raise ValueError(f"uri is None: {res}")
-        return BlobHandle(self._client, uri, is_full=True)
+        return BlobHandle(
+            self._client,
+            uri,
+            is_full=True,
+            pipeline=self.get_pipeline())
 
     def read(self, key: str, chunk: int) -> Optional[ByteResponse]:
-        pipeline_id = self.get_pipeline().get_id()
-        return self.read_blob(key, chunk).get_content(pipeline_id)
+        return self.read_blob(key, chunk).get_content()
 
     def reset(self) -> NodeState:
         return cast(NodeState, self._client._request_json(
@@ -1445,10 +1452,16 @@ EMPTY_BLOB_PREFIX = "null://"
 
 
 class BlobHandle:
-    def __init__(self, client: XYMEClient, uri: str, is_full: bool) -> None:
+    def __init__(
+            self,
+            client: XYMEClient,
+            uri: str,
+            is_full: bool,
+            pipeline: PipelineHandle) -> None:
         self._client = client
         self._uri = uri
         self._is_full = is_full
+        self._pipeline = pipeline
 
     def is_full(self) -> bool:
         return self._is_full
@@ -1459,16 +1472,27 @@ class BlobHandle:
     def get_uri(self) -> str:
         return self._uri
 
-    def get_content(self, pipe_id: str) -> Optional[ByteResponse]:
+    def get_pipeline(self) -> PipelineHandle:
+        return self._pipeline
+
+    def get_content(self) -> Optional[ByteResponse]:
         if not self.is_full():
             raise ValueError(f"URI must be full: {self}")
         if self.is_empty():
             return None
         fin, ctype = self._client._raw_request_bytes(METHOD_POST, "/uri", {
             "uri": self._uri,
-            "pipeline": pipe_id,
+            "pipeline": self.get_pipeline().get_id(),
         })
         return interpret_ctype(fin, ctype)
+
+    def list_files(self) -> List:
+        resp = self._client._request_json(
+            METHOD_GET, "/blob_files", {
+                "uri": self._uri,
+                "pipeline": self.get_pipeline().get_id(),
+            }, capture_err=False)
+        return resp["files"]
 
     def as_str(self) -> str:
         return f"{self.get_uri()}"
