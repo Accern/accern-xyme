@@ -40,6 +40,7 @@ setup(
         "quick-server>=0.7.8",
         "requests>=2.22.0",
         "RestrictedPython>=5.0",
+        "torch>=1.5.1"
         "typing-extensions>=3.7.4.1",
     ],
     extras_require={
