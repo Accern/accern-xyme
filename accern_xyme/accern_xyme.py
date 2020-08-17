@@ -741,6 +741,13 @@ class PipelineHandle:
         assert self._settings is not None
         return self._settings
 
+    def get_pipeline_timing(self) -> List[Timing]:
+        nodes = self.get_nodes()
+        return [
+            f"node_{node_ix}: {self.get_node(nodes[node_ix]).get_timing()}"
+            for node_ix, node in enumerate(nodes)
+            ]
+
     def is_high_priority(self) -> bool:
         self._maybe_refresh()
         self._maybe_fetch()
