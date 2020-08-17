@@ -936,9 +936,6 @@ class PipelineHandle:
 
         return "\n".join(draw())
 
-    def get_def(self):
-        pass
-
     def __hash__(self) -> int:
         return hash(self._pipe_id)
 
@@ -1488,9 +1485,11 @@ class BlobHandle:
         return interpret_ctype(fin, ctype)
 
     def list_files(self) -> List:
+        if self.is_full():
+            raise ValueError(f"URI must not be full: {self}")
         resp = self._client._request_json(
             METHOD_GET, "/blob_files", {
-                "uri": self._uri,
+                "blob": self._uri,
                 "pipeline": self.get_pipeline().get_id(),
             }, capture_err=False)
         return resp["files"]
