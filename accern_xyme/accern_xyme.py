@@ -936,6 +936,9 @@ class PipelineHandle:
 
         return "\n".join(draw())
 
+    def get_def(self):
+        pass
+
     def __hash__(self) -> int:
         return hash(self._pipe_id)
 
