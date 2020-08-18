@@ -1271,7 +1271,7 @@ class NodeHandle:
                 "node": self.get_id(),
             }, capture_err=True))
 
-    def get_def(self) -> PipelineDef:
+    def get_def(self) -> NodeDef:
         return cast(NodeDef, self._client._request_json(
             METHOD_GET, "/node_def", {
                 "pipeline": self.get_pipeline().get_id(),
