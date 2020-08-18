@@ -52,6 +52,7 @@ from .types import (
     ModelParamsResponse,
     ModelSetupResponse,
     NodeChunk,
+    NodeDef,
     NodeDefInfo,
     NodeInfo,
     NodeState,
@@ -936,6 +937,12 @@ class PipelineHandle:
 
         return "\n".join(draw())
 
+    def get_def(self) -> PipelineDef:
+        return cast(PipelineDef, self._client._request_json(
+            METHOD_GET, "/pipeline_def", {
+                "pipeline": self.get_id(),
+            }, capture_err=False))
+
     def __hash__(self) -> int:
         return hash(self._pipe_id)
 
@@ -1038,6 +1045,9 @@ class NodeHandle:
 
     def get_blobs(self) -> List[str]:
         return sorted(self._blobs.keys())
+
+    def get_blob_handles(self) -> Dict[str, 'BlobHandle']:
+        return self._blobs
 
     def get_blob_handle(self, key: str) -> 'BlobHandle':
         return self._blobs[key]
@@ -1260,6 +1270,13 @@ class NodeHandle:
                 "pipeline": self.get_pipeline().get_id(),
                 "node": self.get_id(),
             }, capture_err=True))
+
+    def get_def(self) -> PipelineDef:
+        return cast(NodeDef, self._client._request_json(
+            METHOD_GET, "/node_def", {
+                "pipeline": self.get_pipeline().get_id(),
+                "node": self.get_id(),
+            }, capture_err=False))
 
     def __hash__(self) -> int:
         return hash(self._node_id)
