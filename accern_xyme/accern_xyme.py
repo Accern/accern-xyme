@@ -49,7 +49,10 @@ from .types import (
     JobList,
     JSONBlobResponse,
     MaintenanceResponse,
+    ModelParamsResponse,
+    ModelSetupResponse,
     NodeChunk,
+    NodeDef,
     NodeDefInfo,
     NodeInfo,
     NodeState,
@@ -102,6 +105,11 @@ CUSTOM_NODE_TYPES = {
     "custom_json",
     "custom_json_to_data",
 }
+EMBEDDING_MODEL_NODE_TYPES = {
+    "dyn_embedding_model",
+    "static_embedding_model",
+}
+MODEL_NODE_TYPES = EMBEDDING_MODEL_NODE_TYPES
 
 
 class AccessDenied(Exception):
@@ -929,6 +937,12 @@ class PipelineHandle:
 
         return "\n".join(draw())
 
+    def get_def(self) -> PipelineDef:
+        return cast(PipelineDef, self._client._request_json(
+            METHOD_GET, "/pipeline_def", {
+                "pipeline": self.get_id(),
+            }, capture_err=False))
+
     def __hash__(self) -> int:
         return hash(self._pipe_id)
 
@@ -988,7 +1002,11 @@ class NodeHandle:
         self._state_key = node_info["state_key"]
         self._type = node_info["type"]
         self._blobs = {
-            key: BlobHandle(self._client, value, is_full=False)
+            key: BlobHandle(
+                self._client,
+                value,
+                is_full=False,
+                pipeline=self.get_pipeline())
             for (key, value) in node_info["blobs"].items()
         }
         self._inputs = node_info["inputs"]
@@ -1027,6 +1045,9 @@ class NodeHandle:
 
     def get_blobs(self) -> List[str]:
         return sorted(self._blobs.keys())
+
+    def get_blob_handles(self) -> Dict[str, 'BlobHandle']:
+        return self._blobs
 
     def get_blob_handle(self, key: str) -> 'BlobHandle':
         return self._blobs[key]
@@ -1087,11 +1108,14 @@ class NodeHandle:
         uri = res["result_uri"]
         if uri is None:
             raise ValueError(f"uri is None: {res}")
-        return BlobHandle(self._client, uri, is_full=True)
+        return BlobHandle(
+            self._client,
+            uri,
+            is_full=True,
+            pipeline=self.get_pipeline())
 
     def read(self, key: str, chunk: int) -> Optional[ByteResponse]:
-        pipeline_id = self.get_pipeline().get_id()
-        return self.read_blob(key, chunk).get_content(pipeline_id)
+        return self.read_blob(key, chunk).get_content()
 
     def reset(self) -> NodeState:
         return cast(NodeState, self._client._request_json(
@@ -1224,6 +1248,35 @@ class NodeHandle:
                 df = df.loc[:, user_columns].rename(columns=rmap)
             res[key] = df
         return res
+
+    def setup_model(self, obj: Dict[str, Any]) -> Any:
+        if self.get_type() not in MODEL_NODE_TYPES:
+            raise ValueError(f"{self} is not a model node")
+        model_type: str
+        if self.get_type() in EMBEDDING_MODEL_NODE_TYPES:
+            model_type = "embedding"
+
+        return cast(ModelSetupResponse, self._client._request_json(
+            METHOD_PUT, "/model_setup", {
+                "pipeline": self.get_pipeline().get_id(),
+                "node": self.get_id(),
+                "config": obj,
+                "model_type": model_type,
+            }, capture_err=True))
+
+    def get_model_params(self) -> Any:
+        return cast(ModelParamsResponse, self._client._request_json(
+            METHOD_GET, "/model_params", {
+                "pipeline": self.get_pipeline().get_id(),
+                "node": self.get_id(),
+            }, capture_err=True))
+
+    def get_def(self) -> NodeDef:
+        return cast(NodeDef, self._client._request_json(
+            METHOD_GET, "/node_def", {
+                "pipeline": self.get_pipeline().get_id(),
+                "node": self.get_id(),
+            }, capture_err=False))
 
     def __hash__(self) -> int:
         return hash(self._node_id)
@@ -1414,10 +1467,16 @@ EMPTY_BLOB_PREFIX = "null://"
 
 
 class BlobHandle:
-    def __init__(self, client: XYMEClient, uri: str, is_full: bool) -> None:
+    def __init__(
+            self,
+            client: XYMEClient,
+            uri: str,
+            is_full: bool,
+            pipeline: PipelineHandle) -> None:
         self._client = client
         self._uri = uri
         self._is_full = is_full
+        self._pipeline = pipeline
 
     def is_full(self) -> bool:
         return self._is_full
@@ -1428,16 +1487,29 @@ class BlobHandle:
     def get_uri(self) -> str:
         return self._uri
 
-    def get_content(self, pipe_id: str) -> Optional[ByteResponse]:
+    def get_pipeline(self) -> PipelineHandle:
+        return self._pipeline
+
+    def get_content(self) -> Optional[ByteResponse]:
         if not self.is_full():
             raise ValueError(f"URI must be full: {self}")
         if self.is_empty():
             return None
         fin, ctype = self._client._raw_request_bytes(METHOD_POST, "/uri", {
             "uri": self._uri,
-            "pipeline": pipe_id,
+            "pipeline": self.get_pipeline().get_id(),
         })
         return interpret_ctype(fin, ctype)
+
+    def list_files(self) -> List:
+        if self.is_full():
+            raise ValueError(f"URI must not be full: {self}")
+        resp = self._client._request_json(
+            METHOD_GET, "/blob_files", {
+                "blob": self._uri,
+                "pipeline": self.get_pipeline().get_id(),
+            }, capture_err=False)
+        return resp["files"]
 
     def as_str(self) -> str:
         return f"{self.get_uri()}"

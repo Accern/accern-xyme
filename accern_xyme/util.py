@@ -11,6 +11,8 @@ import json
 import shutil
 from io import BytesIO, TextIOWrapper
 import pandas as pd
+from scipy import sparse
+import torch
 
 
 FILE_UPLOAD_CHUNK_SIZE = 8 * 1024 * 1024  # 8MB
@@ -171,6 +173,10 @@ def interpret_ctype(data: IO[bytes], ctype: str) -> ByteResponse:
         return json.load(data)
     if ctype == "application/parquet":
         return pd.read_parquet(data)
+    if ctype == "application/torch":
+        return torch.load(data)
+    if ctype == "application/npz":
+        return sparse.load_npz(data)
     if ctype == "application/jsonl":
         return [
             json.load(BytesIO(line))
