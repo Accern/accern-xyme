@@ -1298,7 +1298,114 @@ class NodeHandle:
 # *** NodeHandle ***
 
 
-class CSVBlobHandle:
+EMPTY_BLOB_PREFIX = "null://"
+
+
+class BlobHandle:
+    def __init__(
+            self,
+            client: XYMEClient,
+            uri: str,
+            is_full: bool,
+            pipeline: PipelineHandle) -> None:
+        self._client = client
+        self._uri = uri
+        self._is_full = is_full
+        self._pipeline = pipeline
+
+    def is_full(self) -> bool:
+        return self._is_full
+
+    def is_empty(self) -> bool:
+        return self._uri.startswith(EMPTY_BLOB_PREFIX)
+
+    def get_uri(self) -> str:
+        return self._uri
+
+    def get_pipeline(self) -> PipelineHandle:
+        return self._pipeline
+
+    def get_content(self) -> Optional[ByteResponse]:
+        if not self.is_full():
+            raise ValueError(f"URI must be full: {self}")
+        if self.is_empty():
+            return None
+        fin, ctype = self._client._raw_request_bytes(METHOD_POST, "/uri", {
+            "uri": self._uri,
+            "pipeline": self.get_pipeline().get_id(),
+        })
+        return interpret_ctype(fin, ctype)
+
+    def list_files(self) -> List:
+        if self.is_full():
+            raise ValueError(f"URI must not be full: {self}")
+        resp = self._client._request_json(
+            METHOD_GET, "/blob_files", {
+                "blob": self._uri,
+                "pipeline": self.get_pipeline().get_id(),
+            }, capture_err=False)
+        return resp["files"]
+
+    def as_str(self) -> str:
+        return f"{self.get_uri()}"
+
+    def download_files(self, save_path: str) -> None:
+        if self.is_full():
+            raise ValueError(f"URI must not be full: {self}")
+        cur_res, ctype = self._client._raw_request_bytes(
+            METHOD_GET, "/blob_download", {
+                "blob": self._uri,
+                "pipeline": self.get_pipeline().get_id(),
+            })
+        with open(save_path, "wb") as file_download:
+            file_download.write(cur_res.read())
+
+    def __hash__(self) -> int:
+        return hash(self.as_str())
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, self.__class__):
+            return False
+        return self.as_str() == other.as_str()
+
+    def __ne__(self, other: object) -> bool:
+        return not self.__eq__(other)
+
+    def __str__(self) -> str:
+        return self.as_str()
+
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}[{self.as_str()}]"
+
+# *** BlobHandle ***
+
+
+class ComputationHandle:
+    def __init__(self, pipeline: PipelineHandle, data_id: str) -> None:
+        self._pipeline = pipeline
+        self._data_id = data_id
+        self._value: Optional[ByteResponse] = None
+
+    def has_fetched(self) -> bool:
+        return self._value is not None
+
+    def get(self) -> ByteResponse:
+        if self._value is None:
+            self._value = self._pipeline.get_dynamic_result(self._data_id)
+        return self._value
+
+    def __str__(self) -> str:
+        if self._value is None:
+            return f"data_id={self._data_id}"
+        return f"value={self._value}"
+
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}[{self.__str__()}]"
+
+# *** ComputationHandle ***
+
+
+class CSVBlobHandle(BlobHandle):
     def __init__(
             self,
             client: XYMEClient,
@@ -1307,6 +1414,7 @@ class CSVBlobHandle:
             count: int,
             pos: int,
             has_tmp: bool) -> None:
+        super().__init__(client, uri, is_full=False, pipeline=pipe)
         self._client = client
         self._pipe = pipe
         self._uri = uri
@@ -1323,9 +1431,6 @@ class CSVBlobHandle:
     def get_pos(self) -> int:
         return self._pos
 
-    def get_pipeline_id(self) -> str:
-        return self._pipe.get_id()
-
     def has_tmp(self) -> bool:
         return self._has_tmp
 
@@ -1337,7 +1442,7 @@ class CSVBlobHandle:
         args: Dict[str, Union[str, int]] = {
             "blob": self.get_uri(),
             "action": action,
-            "pipeline": self.get_pipeline_id(),
+            "pipeline": self.get_pipeline().get_id(),
         }
         args.update(additional)
         if fobj is not None:
@@ -1429,13 +1534,14 @@ class CSVBlobHandle:
 # *** CSVBlobHandle ***
 
 
-class JSONBlobHandle:
+class JSONBlobHandle(BlobHandle):
     def __init__(
             self,
             client: XYMEClient,
             pipe: PipelineHandle,
             uri: str,
             count: int) -> None:
+        super().__init__(client, uri, is_full=False, pipeline=pipe)
         self._client = client
         self._pipe = pipe
         self._uri = uri
@@ -1447,13 +1553,10 @@ class JSONBlobHandle:
     def get_count(self) -> int:
         return self._count
 
-    def get_pipeline_id(self) -> str:
-        return self._pipe.get_id()
-
     def append_jsons(self, jsons: List[Any]) -> 'JSONBlobHandle':
         res = self._client._request_json(
             METHOD_PUT, "/json_append", {
-                "pipeline": self.get_pipeline_id(),
+                "pipeline": self.get_pipeline().get_id(),
                 "blob": self.get_uri(),
                 "jsons": jsons,
             }, capture_err=True)
@@ -1461,102 +1564,6 @@ class JSONBlobHandle:
         return self
 
 # *** JSONBlobHandle ***
-
-
-EMPTY_BLOB_PREFIX = "null://"
-
-
-class BlobHandle:
-    def __init__(
-            self,
-            client: XYMEClient,
-            uri: str,
-            is_full: bool,
-            pipeline: PipelineHandle) -> None:
-        self._client = client
-        self._uri = uri
-        self._is_full = is_full
-        self._pipeline = pipeline
-
-    def is_full(self) -> bool:
-        return self._is_full
-
-    def is_empty(self) -> bool:
-        return self._uri.startswith(EMPTY_BLOB_PREFIX)
-
-    def get_uri(self) -> str:
-        return self._uri
-
-    def get_pipeline(self) -> PipelineHandle:
-        return self._pipeline
-
-    def get_content(self) -> Optional[ByteResponse]:
-        if not self.is_full():
-            raise ValueError(f"URI must be full: {self}")
-        if self.is_empty():
-            return None
-        fin, ctype = self._client._raw_request_bytes(METHOD_POST, "/uri", {
-            "uri": self._uri,
-            "pipeline": self.get_pipeline().get_id(),
-        })
-        return interpret_ctype(fin, ctype)
-
-    def list_files(self) -> List:
-        if self.is_full():
-            raise ValueError(f"URI must not be full: {self}")
-        resp = self._client._request_json(
-            METHOD_GET, "/blob_files", {
-                "blob": self._uri,
-                "pipeline": self.get_pipeline().get_id(),
-            }, capture_err=False)
-        return resp["files"]
-
-    def as_str(self) -> str:
-        return f"{self.get_uri()}"
-
-    def __hash__(self) -> int:
-        return hash(self.as_str())
-
-    def __eq__(self, other: object) -> bool:
-        if not isinstance(other, self.__class__):
-            return False
-        return self.as_str() == other.as_str()
-
-    def __ne__(self, other: object) -> bool:
-        return not self.__eq__(other)
-
-    def __str__(self) -> str:
-        return self.as_str()
-
-    def __repr__(self) -> str:
-        return f"{self.__class__.__name__}[{self.as_str()}]"
-
-# *** BlobHandle ***
-
-
-class ComputationHandle:
-    def __init__(self, pipeline: PipelineHandle, data_id: str) -> None:
-        self._pipeline = pipeline
-        self._data_id = data_id
-        self._value: Optional[ByteResponse] = None
-
-    def has_fetched(self) -> bool:
-        return self._value is not None
-
-    def get(self) -> ByteResponse:
-        if self._value is None:
-            self._value = self._pipeline.get_dynamic_result(self._data_id)
-        return self._value
-
-    def __str__(self) -> str:
-        if self._value is None:
-            return f"data_id={self._data_id}"
-        return f"value={self._value}"
-
-    def __repr__(self) -> str:
-        return f"{self.__class__.__name__}[{self.__str__()}]"
-
-# *** ComputationHandle ***
 
 
 def create_xyme_client(
