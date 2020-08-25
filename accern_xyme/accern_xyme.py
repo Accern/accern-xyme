@@ -1360,6 +1360,20 @@ class BlobHandle:
         with open(save_path, "wb") as file_download:
             file_download.write(cur_res.read())
 
+    def upload_file(self, from_path: str) -> List:
+
+        with open(from_path, "rb") as fin:
+            zip_stream = io.BytesIO(fin.read())
+
+        resp = self._client._request_json(
+            METHOD_FILE, "/upload_blob", {
+                "blob": self._uri,
+                "pipeline": self.get_pipeline().get_id(),
+            }, files={
+                "file": zip_stream,
+            }, capture_err=False)
+        return resp["files"]
+
     def __hash__(self) -> int:
         return hash(self.as_str())
 
