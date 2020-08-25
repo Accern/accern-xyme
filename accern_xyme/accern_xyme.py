@@ -1394,31 +1394,6 @@ class BlobHandle:
 # *** BlobHandle ***
 
 
-class ComputationHandle:
-    def __init__(self, pipeline: PipelineHandle, data_id: str) -> None:
-        self._pipeline = pipeline
-        self._data_id = data_id
-        self._value: Optional[ByteResponse] = None
-
-    def has_fetched(self) -> bool:
-        return self._value is not None
-
-    def get(self) -> ByteResponse:
-        if self._value is None:
-            self._value = self._pipeline.get_dynamic_result(self._data_id)
-        return self._value
-
-    def __str__(self) -> str:
-        if self._value is None:
-            return f"data_id={self._data_id}"
-        return f"value={self._value}"
-
-    def __repr__(self) -> str:
-        return f"{self.__class__.__name__}[{self.__str__()}]"
-
-# *** ComputationHandle ***
-
-
 class CSVBlobHandle(BlobHandle):
     def __init__(
             self,
@@ -1578,6 +1553,31 @@ class JSONBlobHandle(BlobHandle):
         return self
 
 # *** JSONBlobHandle ***
+
+
+class ComputationHandle:
+    def __init__(self, pipeline: PipelineHandle, data_id: str) -> None:
+        self._pipeline = pipeline
+        self._data_id = data_id
+        self._value: Optional[ByteResponse] = None
+
+    def has_fetched(self) -> bool:
+        return self._value is not None
+
+    def get(self) -> ByteResponse:
+        if self._value is None:
+            self._value = self._pipeline.get_dynamic_result(self._data_id)
+        return self._value
+
+    def __str__(self) -> str:
+        if self._value is None:
+            return f"data_id={self._data_id}"
+        return f"value={self._value}"
+
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}[{self.__str__()}]"
+
+# *** ComputationHandle ***
 
 
 def create_xyme_client(
