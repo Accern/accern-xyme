@@ -1353,7 +1353,7 @@ class BlobHandle:
         if self.is_full():
             raise ValueError(f"URI must not be full: {self}")
         cur_res, ctype = self._client._raw_request_bytes(
-            METHOD_GET, "/blob_download", {
+            METHOD_GET, "/download_blob", {
                 "blob": self._uri,
                 "pipeline": self.get_pipeline().get_id(),
             })
