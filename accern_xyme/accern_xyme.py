@@ -1350,7 +1350,8 @@ class BlobHandle:
                 blob_uri,
                 is_full=True,
                 pipeline=self._pipeline)
-            for blob_uri in resp["files"]]
+            for blob_uri in resp["files"]
+        ]
 
     def as_str(self) -> str:
         return f"{self.get_uri()}"
@@ -1384,7 +1385,8 @@ class BlobHandle:
                 blob_uri,
                 is_full=True,
                 pipeline=self._pipeline)
-            for blob_uri in resp["files"]]
+            for blob_uri in resp["files"]
+        ]
 
     def __hash__(self) -> int:
         return hash(self.as_str())
