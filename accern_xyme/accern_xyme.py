@@ -741,12 +741,76 @@ class PipelineHandle:
         assert self._settings is not None
         return self._settings
 
-    def get_pipeline_timing(self) -> List[Timing]:
+    def get_timing(self, waiting="wait_for_uri") -> Dict[str, Any]:
         nodes = self.get_nodes()
-        return [
-            f"node_{node_ix}: {self.get_node(nodes[node_ix]).get_timing()}"
-            for node_ix, node in enumerate(nodes)
-            ]
+        node_list = []
+        node_total = []
+        node_avg = []
+        node_name = []
+        dict_temp = {}
+
+        def del_waiting(node_time):
+            for pos, cur in enumerate(node_time):
+                for key, value in cur.copy().items():
+                    if value == waiting:
+                        del node_time[pos]
+            return node_time
+
+        for node_ix, node in enumerate(nodes):
+            node_list.append(node)
+            node_time = self.get_node(nodes[node_ix]).get_timing()
+            node_time = del_waiting(node_time)
+
+            dicts = {nodes[node_ix]: {}}
+
+            total_sum = 0
+            for pos, cur in enumerate(node_time):
+                length = len(node_time)
+                dicts[nodes[node_ix]].setdefault("fns", []).append(cur)
+
+                for key, value in node_time[pos].copy().items():
+                    if key == "total":
+                        total_sum += value
+                    else:
+                        pass
+
+            node_def = self.get_node(node).get_node_def()
+
+            for key, value in node_def.items():
+                if key == "name":
+                    node_name.append(value)
+
+
+            node_total.append(total_sum)
+            node_avg.append(total_sum/length)
+            dict_temp.update(dicts)
+
+        inputs = zip(node_list, node_name, node_total, node_avg)
+        dict_main = {}
+        for n, d, t, a in inputs:
+            dict_main.update({
+                n: {
+                    "node_name": d,
+                    "node_total": t,
+                    "node_avg": a,
+                }
+            })
+
+        for keys in dict_main:
+            if keys in dict_temp:
+                dict_main[keys].update(dict_temp[keys])
+
+        outer = {
+            "total": sum(
+                dict_add['node_total']
+                for dict_add in dict_main.values() if dict_add)
+            }
+        results = sorted(
+            dict_main.items(), key=lambda x: x[1]['node_total'], reverse=True)
+
+        outer["node"] = results
+
+        return outer
 
     def is_high_priority(self) -> bool:
         self._maybe_refresh()
