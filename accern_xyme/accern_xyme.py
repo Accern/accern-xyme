@@ -793,7 +793,7 @@ class PipelineHandle:
                     "node_name": d,
                     "node_total": t,
                     "node_avg": a,
-                }
+                    }
             })
 
         for keys in dict_main:
@@ -805,7 +805,7 @@ class PipelineHandle:
             sum(
                 dict_add['node_total']
                 for dict_add in dict_main.values() if dict_add
-            )
+                )
         }
         results = sorted(
             dict_main.items(), key=lambda x: x[1]['node_total'], reverse=True)
