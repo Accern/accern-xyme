@@ -780,7 +780,6 @@ class PipelineHandle:
                 if key == "name":
                     node_name.append(value)
 
-
             node_total.append(total_sum)
             node_avg.append(total_sum/length)
             dict_temp.update(dicts)
@@ -802,7 +801,7 @@ class PipelineHandle:
                 dict_main[keys].update(dict_temp[keys])
 
         outer = {
-            "total":sum(
+            "total": sum(
                 dict_add['node_total']
                 for dict_add in dict_main.values() if dict_add),
         }
