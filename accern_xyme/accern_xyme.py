@@ -1336,7 +1336,7 @@ class BlobHandle:
         })
         return interpret_ctype(fin, ctype)
 
-    def list_files(self) -> List:
+    def list_files(self) -> List['BlobHandle']:
         if self.is_full():
             raise ValueError(f"URI must not be full: {self}")
         resp = self._client._request_json(
@@ -1344,35 +1344,47 @@ class BlobHandle:
                 "blob": self._uri,
                 "pipeline": self.get_pipeline().get_id(),
             }, capture_err=False)
-        return resp["files"]
+        return [
+            BlobHandle(
+                self._client,
+                blob_uri,
+                is_full=True,
+                pipeline=self._pipeline)
+            for blob_uri in resp["files"]]
 
     def as_str(self) -> str:
         return f"{self.get_uri()}"
 
-    def download_files(self, save_path: str) -> None:
+    def download_zip(self, save_path: str) -> None:
         if self.is_full():
             raise ValueError(f"URI must not be full: {self}")
         cur_res, ctype = self._client._raw_request_bytes(
-            METHOD_GET, "/download_blob", {
+            METHOD_GET, "/download_zip", {
                 "blob": self._uri,
                 "pipeline": self.get_pipeline().get_id(),
             })
         with open(save_path, "wb") as file_download:
             file_download.write(cur_res.read())
 
-    def upload_file(self, from_path: str) -> List:
+    def upload_zip(self, from_path: str) -> List['BlobHandle']:
 
         with open(from_path, "rb") as fin:
             zip_stream = io.BytesIO(fin.read())
 
         resp = self._client._request_json(
-            METHOD_FILE, "/upload_blob", {
+            METHOD_FILE, "/upload_zip", {
                 "blob": self._uri,
                 "pipeline": self.get_pipeline().get_id(),
             }, files={
                 "file": zip_stream,
             }, capture_err=False)
-        return resp["files"]
+        return [
+            BlobHandle(
+                self._client,
+                blob_uri,
+                is_full=True,
+                pipeline=self._pipeline)
+            for blob_uri in resp["files"]]
 
     def __hash__(self) -> int:
         return hash(self.as_str())
