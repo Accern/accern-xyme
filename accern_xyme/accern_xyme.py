@@ -1,9 +1,10 @@
 from typing import (
     Any,
-    cast,
     Callable,
+    cast,
     Dict,
     IO,
+    Iterable,
     Iterator,
     List,
     Optional,
@@ -29,6 +30,7 @@ import quick_server
 import requests
 
 from .util import (
+    async_compute,
     ByteResponse,
     df_to_csv,
     get_file_hash,
@@ -818,6 +820,38 @@ class PipelineHandle:
                 "id": data_id,
             })
         return interpret_ctype(cur_res, ctype)
+
+    def get_dynamic_bulk(
+            self,
+            input_data: List[BytesIO],
+            batch_size: int = 1000,
+            block_size: int = 200) -> Iterable[ByteResponse]:
+
+        def get(hnd: 'ComputationHandle') -> ByteResponse:
+            return hnd.get()
+
+        yield from async_compute(
+            input_data,
+            self.dynamic_async,
+            get,
+            batch_size,
+            block_size)
+
+    def get_dynamic_bulk_obj(
+            self,
+            input_data: List[Any],
+            batch_size: int = 1000,
+            block_size: int = 200) -> Iterable[ByteResponse]:
+
+        def get(hnd: 'ComputationHandle') -> ByteResponse:
+            return hnd.get()
+
+        yield from async_compute(
+            input_data,
+            self.dynamic_async_obj,
+            get,
+            batch_size,
+            block_size)
 
     def pretty(self, allow_unicode: bool) -> str:
         nodes = [
