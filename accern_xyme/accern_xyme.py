@@ -747,7 +747,7 @@ class PipelineHandle:
         node_list = []
         node_total = []
         node_avg = []
-        node_name:str = []
+        node_name: str = []
         dict_temp = {}
 
         def del_waiting(node_time: list) -> List[Any]:
