@@ -750,7 +750,7 @@ class PipelineHandle:
         node_name = []
         dict_temp = {}
 
-        def del_waiting(node_time:list) -> List[Any]:
+        def del_waiting(node_time: list) -> List[Any]:
             for pos, cur in enumerate(node_time):
                 for key, value in cur.copy().items():
                     if value == waiting:
