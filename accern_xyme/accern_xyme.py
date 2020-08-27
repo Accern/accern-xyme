@@ -764,14 +764,14 @@ class PipelineHandle:
 
             dicts: Dict[str, Any] = {nodes[node_ix]: {}}
 
-            total_sum = 0
+            total_sum: object = 0
             for pos, cur in enumerate(node_time):
                 length = len(node_time)
                 dicts[nodes[node_ix]].setdefault("fns", []).append(cur)
 
                 for key, value in node_time[pos].copy().items():
                     if key == "total":
-                        total_sum += int(value)
+                        total_sum += value
                     else:
                         pass
 
