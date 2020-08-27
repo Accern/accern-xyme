@@ -741,7 +741,8 @@ class PipelineHandle:
         assert self._settings is not None
         return self._settings
 
-    def get_timing(self, waiting="wait_for_uri") -> Dict[str, Any]:
+    def get_timing(self, waiting: str) -> Dict[str, Any]:
+
         nodes = self.get_nodes()
         node_list = []
         node_total = []
@@ -749,7 +750,7 @@ class PipelineHandle:
         node_name = []
         dict_temp = {}
 
-        def del_waiting(node_time):
+        def del_waiting(node_time) -> List[Any]:
             for pos, cur in enumerate(node_time):
                 for key, value in cur.copy().items():
                     if value == waiting:
@@ -761,7 +762,7 @@ class PipelineHandle:
             node_time = self.get_node(nodes[node_ix]).get_timing()
             node_time = del_waiting(node_time)
 
-            dicts = {nodes[node_ix]: {}}
+            dicts: Dict[str, Any] = {nodes[node_ix]: {}}
 
             total_sum = 0
             for pos, cur in enumerate(node_time):
@@ -770,7 +771,7 @@ class PipelineHandle:
 
                 for key, value in node_time[pos].copy().items():
                     if key == "total":
-                        total_sum += value
+                        total_sum += int(value)
                     else:
                         pass
 
