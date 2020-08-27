@@ -750,7 +750,7 @@ class PipelineHandle:
         node_name = []
         dict_temp = {}
 
-        def del_waiting(node_time) -> List[Any]:
+        def del_waiting(node_time:list) -> List[Any]:
             for pos, cur in enumerate(node_time):
                 for key, value in cur.copy().items():
                     if value == waiting:
@@ -764,12 +764,12 @@ class PipelineHandle:
 
             dicts: Dict[str, Any] = {nodes[node_ix]: {}}
 
-            total_sum: object = 0
+            total_sum = 0
             for pos, cur in enumerate(node_time):
                 length = len(node_time)
                 dicts[nodes[node_ix]].setdefault("fns", []).append(cur)
 
-                for key, value in node_time[pos].copy().items():
+                for key, value in enumerate(node_time[pos]):
                     if key == "total":
                         total_sum += value
                     else:
