@@ -747,7 +747,7 @@ class PipelineHandle:
         node_list = []
         node_total = []
         node_avg = []
-        node_name = []
+        node_name:str = []
         dict_temp = {}
 
         def del_waiting(node_time: list) -> List[Any]:
@@ -775,11 +775,11 @@ class PipelineHandle:
                     else:
                         pass
 
-            node_def = self.get_node(node).get_node_def()
+            node_def: dict = self.get_node(node).get_node_def()
 
-            for key, value in node_def.items():
-                if key == "name":
-                    node_name.append(value)
+            for k, v in node_def.items():
+                if k == "name":
+                    node_name.append(v)
 
             node_total.append(total_sum)
             node_avg.append(total_sum/length)
