@@ -1,22 +1,31 @@
 from typing import (
     Any,
     Callable,
+    Deque,
     IO,
+    Iterable,
     List,
     Optional,
+    TypeVar,
     Union,
 )
 import io
 import json
 import shutil
+import collections
 from io import BytesIO, TextIOWrapper
 import pandas as pd
+from scipy import sparse
+import torch
 
 
 FILE_UPLOAD_CHUNK_SIZE = 8 * 1024 * 1024  # 8MB
 FILE_HASH_CHUNK_SIZE = FILE_UPLOAD_CHUNK_SIZE
 MAX_RETRY = 5
 RETRY_SLEEP = 5.0
+
+
+RT = TypeVar('RT')
 
 
 ByteResponse = Union[pd.DataFrame, dict, IO[bytes], List[dict]]
@@ -171,6 +180,10 @@ def interpret_ctype(data: IO[bytes], ctype: str) -> ByteResponse:
         return json.load(data)
     if ctype == "application/parquet":
         return pd.read_parquet(data)
+    if ctype == "application/torch":
+        return torch.load(data)
+    if ctype == "application/npz":
+        return sparse.load_npz(data)
     if ctype == "application/jsonl":
         return [
             json.load(BytesIO(line))
@@ -201,3 +214,27 @@ def interpret_ctype(data: IO[bytes], ctype: str) -> ByteResponse:
         pass
     content.seek(0)
     return content
+
+
+def async_compute(
+        arr: List[Any],
+        start: Callable[[List[Any]], List[RT]],
+        get: Callable[[RT], ByteResponse],
+        batch_size: int = 1000,
+        block_size: int = 200) -> Iterable[ByteResponse]:
+    assert batch_size >= block_size
+    assert block_size > 0
+    pos = 0
+    ids: Deque[RT] = collections.deque()
+    cur_size = batch_size
+    while pos < len(arr):
+        cur = arr[pos:pos + cur_size]
+        pos += len(cur)
+        ids.extend(start(cur))
+        count = 0
+        while count < block_size and ids:
+            yield get(ids.popleft())
+            count += 1
+        cur_size = block_size
+    for cur_id in ids:
+        yield get(cur_id)
