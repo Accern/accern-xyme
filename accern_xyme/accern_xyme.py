@@ -1393,7 +1393,7 @@ class BlobHandle:
     def download_zip(self, save_path: str) -> None:
         if self.is_full():
             raise ValueError(f"URI must not be full: {self}")
-        cur_res, ctype = self._client._raw_request_bytes(
+        cur_res, _ = self._client._raw_request_bytes(
             METHOD_GET, "/download_zip", {
                 "blob": self._uri,
                 "pipeline": self.get_pipeline().get_id(),
@@ -1523,7 +1523,7 @@ class CSVBlobHandle(BlobHandle):
         total_size = file_content.seek(0, io.SEEK_END) - init_pos
         file_content.seek(init_pos, io.SEEK_SET)
         if progress_bar is not None:
-            progress_bar.write(f"Uploading file:\n")
+            progress_bar.write("Uploading file:\n")
         print_progress = get_progress_bar(out=progress_bar)
         cur_size = self.start_data(total_size, file_hash, file_ext)
         while True:
