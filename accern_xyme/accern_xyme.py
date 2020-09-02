@@ -1149,7 +1149,10 @@ class NodeHandle:
             pipeline=self.get_pipeline())
 
     def read(self, key: str, chunk: int) -> Optional[ByteResponse]:
-        return self.read_blob(key, chunk).get_content()
+        content = self.read_blob(key, chunk).get_content()
+        if content is None:
+            self.notify()
+        return content
 
     def reset(self) -> NodeState:
         return cast(NodeState, self._client._request_json(
