@@ -177,7 +177,10 @@ def get_file_hash(buff: IO[bytes]) -> str:
 
 def interpret_ctype(data: IO[bytes], ctype: str) -> ByteResponse:
     if ctype == "application/json":
-        return json.load(data)
+        res = json.load(data)
+        if "errMessage" in res and res["errMessage"]:
+            raise ValueError(res["errMessage"])
+        return res
     if ctype == "application/parquet":
         return pd.read_parquet(data)
     if ctype == "application/torch":

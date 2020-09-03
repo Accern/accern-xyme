@@ -799,7 +799,7 @@ class PipelineHandle:
         res: Dict[str, str] = self._client._request_json(
             METHOD_FILE, "/dynamic_async", {
                 "pipeline": self._pipe_id,
-            }, capture_err=False, files=dict(zip(names, input_data)))
+            }, capture_err=True, files=dict(zip(names, input_data)))
         return [ComputationHandle(self, res[name]) for name in names]
 
     def dynamic_async_obj(
