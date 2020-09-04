@@ -151,8 +151,8 @@ class XYMEClient:
             server_version = self.get_server_version()
             try:
                 return int(server_version["api_version"])
-            except (ValueError, KeyError):
-                raise LegacyVersion()
+            except (ValueError, KeyError) as e:
+                raise LegacyVersion() from e
 
         self._api_version = min(get_version(), API_VERSION)
         self._init()
@@ -457,13 +457,13 @@ class XYMEClient:
                     return quick_server.worker_request(url, args)
                 except quick_server.WorkerError as e:
                     if e.get_status_code() == 403:
-                        raise AccessDenied(e.args)
+                        raise AccessDenied(e.args) from e
                     raise e
             raise ValueError(f"unknown method {method}")
-        except json.decoder.JSONDecodeError:
+        except json.decoder.JSONDecodeError as e:
             if req is None:
                 raise
-            raise ValueError(req.text)
+            raise ValueError(req.text) from e
 
     def _login(self) -> None:
         if self._user is None or self._password is None:
