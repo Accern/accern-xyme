@@ -825,7 +825,8 @@ class PipelineHandle:
             self,
             input_data: List[BytesIO],
             batch_size: int = 1000,
-            block_size: int = 200) -> Iterable[ByteResponse]:
+            block_size: int = 200,
+            max_block: int = 10) -> Iterable[ByteResponse]:
 
         def get(hnd: 'ComputationHandle') -> ByteResponse:
             return hnd.get()
@@ -835,13 +836,15 @@ class PipelineHandle:
             self.dynamic_async,
             get,
             batch_size,
-            block_size)
+            block_size,
+            max_block)
 
     def get_dynamic_bulk_obj(
             self,
             input_data: List[Any],
             batch_size: int = 1000,
-            block_size: int = 200) -> Iterable[ByteResponse]:
+            block_size: int = 200,
+            max_block: int = 10) -> Iterable[ByteResponse]:
 
         def get(hnd: 'ComputationHandle') -> ByteResponse:
             return hnd.get()
@@ -851,7 +854,8 @@ class PipelineHandle:
             self.dynamic_async_obj,
             get,
             batch_size,
-            block_size)
+            block_size,
+            max_block)
 
     def pretty(self, allow_unicode: bool) -> str:
         nodes = [

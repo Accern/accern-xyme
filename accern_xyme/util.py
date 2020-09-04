@@ -19,7 +19,7 @@ from scipy import sparse
 import torch
 
 
-FILE_UPLOAD_CHUNK_SIZE = 8 * 1024 * 1024  # 8MB
+FILE_UPLOAD_CHUNK_SIZE = 100 * 1024  # 100kb
 FILE_HASH_CHUNK_SIZE = FILE_UPLOAD_CHUNK_SIZE
 MAX_RETRY = 5
 RETRY_SLEEP = 5.0
@@ -220,17 +220,20 @@ def async_compute(
         arr: List[Any],
         start: Callable[[List[Any]], List[RT]],
         get: Callable[[RT], ByteResponse],
-        batch_size: int = 1000,
-        block_size: int = 200) -> Iterable[ByteResponse]:
+        batch_size: int,
+        block_size: int,
+        max_block: int) -> Iterable[ByteResponse]:
     assert batch_size >= block_size
     assert block_size > 0
+    assert max_block > 0
     pos = 0
     ids: Deque[RT] = collections.deque()
     cur_size = batch_size
     while pos < len(arr):
         cur = arr[pos:pos + cur_size]
         pos += len(cur)
-        ids.extend(start(cur))
+        for block_ix in range(0, len(cur), max_block):
+            ids.extend(start(cur[block_ix:block_ix + max_block]))
         count = 0
         while count < block_size and ids:
             yield get(ids.popleft())
