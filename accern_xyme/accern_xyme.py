@@ -1130,7 +1130,11 @@ class NodeHandle:
                 "node": self.get_id(),
             }, capture_err=False))["times"]
 
-    def read_blob(self, key: str, chunk: int) -> 'BlobHandle':
+    def read_blob(
+            self,
+            key: str,
+            chunk: int,
+            force_refresh: bool) -> 'BlobHandle':
         res = cast(ReadNode, self._client._request_json(
             METHOD_LONGPOST, "/read_node", {
                 "pipeline": self.get_pipeline().get_id(),
@@ -1138,6 +1142,7 @@ class NodeHandle:
                 "key": key,
                 "chunk": chunk,
                 "is_blocking": True,
+                "force_refresh": force_refresh,
             }, capture_err=False))
         uri = res["result_uri"]
         if uri is None:
@@ -1148,10 +1153,12 @@ class NodeHandle:
             is_full=True,
             pipeline=self.get_pipeline())
 
-    def read(self, key: str, chunk: int) -> Optional[ByteResponse]:
-        content = self.read_blob(key, chunk).get_content()
-        if content is None:
-            self.notify()
+    def read(
+            self,
+            key: str,
+            chunk: int,
+            force_refresh: bool=False) -> Optional[ByteResponse]:
+        content = self.read_blob(key, chunk, force_refresh).get_content()
         return content
 
     def reset(self) -> NodeState:
