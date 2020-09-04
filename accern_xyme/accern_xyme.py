@@ -1157,7 +1157,7 @@ class NodeHandle:
             self,
             key: str,
             chunk: int,
-            force_refresh: bool=False) -> Optional[ByteResponse]:
+            force_refresh: bool = False) -> Optional[ByteResponse]:
         content = self.read_blob(key, chunk, force_refresh).get_content()
         return content
 
@@ -1400,7 +1400,7 @@ class BlobHandle:
     def as_str(self) -> str:
         return f"{self.get_uri()}"
 
-    def download_zip(self, save_path: str) -> None:
+    def download_zip(self, to_path: Optional[str]) -> Optional[io.BytesIO]:
         if self.is_full():
             raise ValueError(f"URI must not be full: {self}")
         cur_res, _ = self._client._raw_request_bytes(
@@ -1408,13 +1408,25 @@ class BlobHandle:
                 "blob": self._uri,
                 "pipeline": self.get_pipeline().get_id(),
             })
-        with open(save_path, "wb") as file_download:
+        if save_path is None:
+            return io.BytesIO(cur_res.read())
+        with open(to_path, "wb") as file_download:
             file_download.write(cur_res.read())
+        return None
 
-    def upload_zip(self, from_path: str) -> List['BlobHandle']:
-
-        with open(from_path, "rb") as fin:
-            zip_stream = io.BytesIO(fin.read())
+    def upload_zip(
+            self,
+            from_path: Optional[str],
+            from_io: Optional[io.BytesIO]) -> List['BlobHandle']:
+        if from_path is not None and from_io is not None:
+            raise ValueError("cannot have both from_path and from_io")
+        if from_io is not None:
+            zip_stream = from_io
+        elif from_path is not None:
+            with open(from_path, "rb") as fin:
+                zip_stream = io.BytesIO(fin.read())
+        else:
+            raise ValueError("from_path and from_io cannot be both None")
 
         resp = self._client._request_json(
             METHOD_FILE, "/upload_zip", {
