@@ -46,6 +46,7 @@ from .types import (
     CSVOp,
     CustomCodeResponse,
     CustomImportsResponse,
+    FlushAllQueuesResponse,
     InCursors,
     JobInfo,
     JobList,
@@ -655,6 +656,17 @@ class XYMEClient:
     def get_allowed_custom_imports(self) -> CustomImportsResponse:
         return cast(CustomImportsResponse, self._request_json(
             METHOD_GET, "/allowed_custom_imports", {}, capture_err=False))
+
+    def flush_all_queue_data(self) -> None:
+
+        def do_flush() -> bool:
+            res = cast(FlushAllQueuesResponse, self._request_json(
+                METHOD_POST, "/flush_all_queues", {}, capture_err=False))
+            return bool(res["success"])
+
+        while do_flush():  # we flush until there is nothing to flush anymore
+            time.sleep(1.0)
+
 
 # *** XYMEClient ***
 
