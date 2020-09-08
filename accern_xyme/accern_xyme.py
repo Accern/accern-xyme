@@ -854,9 +854,9 @@ class PipelineHandle:
     def get_dynamic_bulk_obj(
             self,
             input_data: List[Any],
-            batch_size: int = 1000,
-            block_size: int = 200,
-            max_block: int = 10) -> Iterable[ByteResponse]:
+            batch_size: int = 4000,
+            block_size: int = 2000,
+            max_block: int = 5) -> Iterable[ByteResponse]:
 
         def get(hnd: 'ComputationHandle') -> ByteResponse:
             return hnd.get()
