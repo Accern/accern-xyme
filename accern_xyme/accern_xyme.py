@@ -39,6 +39,7 @@ from .util import (
     get_progress_bar,
     get_retry_sleep,
     interpret_ctype,
+    ServerSideError,
 )
 from .types import (
     CSVBlobResponse,
@@ -687,6 +688,7 @@ class PipelineHandle:
         self._is_parallel: Optional[bool] = None
         self._nodes: Dict[str, NodeHandle] = {}
         self._settings: Optional[Dict[str, Any]] = None
+        self._dynamic_error: Optional[str] = None
 
     def refresh(self) -> None:
         self._name = None
@@ -807,12 +809,25 @@ class PipelineHandle:
 
     def dynamic_async(
             self, input_data: List[BytesIO]) -> List['ComputationHandle']:
+        self._dynamic_error = None
         names = [f"file{pos}" for pos in range(len(input_data))]
         res: Dict[str, str] = self._client._request_json(
             METHOD_FILE, "/dynamic_async", {
                 "pipeline": self._pipe_id,
             }, capture_err=True, files=dict(zip(names, input_data)))
-        return [ComputationHandle(self, res[name]) for name in names]
+        return [
+            ComputationHandle(
+                self,
+                res[name],
+                self.get_dynamic_error_message,
+                self.set_dynamic_error_message)
+            for name in names]
+
+    def set_dynamic_error_message(self, msg: str) -> None:
+        self._dynamic_error = msg
+
+    def get_dynamic_error_message(self) -> Optional[str]:
+        return self._dynamic_error
 
     def dynamic_async_obj(
             self, input_data: List[Any]) -> List['ComputationHandle']:
@@ -1642,18 +1657,32 @@ class JSONBlobHandle(BlobHandle):
 
 
 class ComputationHandle:
-    def __init__(self, pipeline: PipelineHandle, data_id: str) -> None:
+    def __init__(
+            self,
+            pipeline: PipelineHandle,
+            data_id: str,
+            get_dyn_error: Callable[[], Optional[str]],
+            set_dyn_error: Callable[[str], None]) -> None:
         self._pipeline = pipeline
         self._data_id = data_id
         self._value: Optional[ByteResponse] = None
+        self._get_dyn_error = get_dyn_error
+        self._set_dyn_error = set_dyn_error
 
     def has_fetched(self) -> bool:
         return self._value is not None
 
     def get(self) -> ByteResponse:
-        if self._value is None:
-            self._value = self._pipeline.get_dynamic_result(self._data_id)
-        return self._value
+        maybe_error = self._get_dyn_error()
+        if maybe_error is not None:
+            raise ServerSideError(maybe_error)
+        try:
+            if self._value is None:
+                self._value = self._pipeline.get_dynamic_result(self._data_id)
+            return self._value
+        except ServerSideError as e:
+            self._set_dyn_error(str(e))
+            raise e
 
     def __str__(self) -> str:
         if self._value is None:
