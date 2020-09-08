@@ -778,11 +778,11 @@ class PipelineHandle:
         node_timing_sorted = sorted(
             node_timing.items(), key=lambda x: x[1]["node_total"],
             reverse=True)
-        pipe_sums = node_time_dicts.get(node_ids, {}).get("node_total")
+        pipe_sums: float = node_time_dicts.get(node_ids, {}).get("node_total")
         pipe_ids = self.get_id()
         pipe_obj = pipe_timing.get(pipe_ids, {
             "pipe_total": 0.0,
-            "node": node_timing_sorted,
+            "nodes": node_timing_sorted,
         })
         pipe_obj["pipe_total"] += float(pipe_sums)
         pipe_timing[pipe_ids] = pipe_obj

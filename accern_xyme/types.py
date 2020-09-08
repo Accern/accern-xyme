@@ -125,7 +125,7 @@ NodeTiming = TypedDict('NodeTiming', {
    "node_name": str,
    "node_avg": float,
    "node_total": float,
-   "fns": Timings,
+   "fns": List[Timing],
 })
 TimingResult = TypedDict('TimingResult', {
     "pipe_total": float,
