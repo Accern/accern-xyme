@@ -741,11 +741,10 @@ class PipelineHandle:
         assert self._settings is not None
         return self._settings
 
-    def get_timing(self) -> Dict[str]:
+    def get_timing(self) -> Dict[str, Any]:
         nodes = self.get_nodes()
         pipe_timing: Dict[str] = {}
         node_timing: Dict[str] = {}
-
         for node_ix, node in enumerate(nodes):
             node_time = self.get_node(nodes[node_ix]).get_timing()
             node_time_dicts: Dict[str] = {}
@@ -764,7 +763,6 @@ class PipelineHandle:
                 node_obj["node_avg"] += float(node_sums/length)
                 node_time_dicts[node_ids] = node_obj
             node_timing.update(node_time_dicts)
-
         node_timing_sorted = sorted(
             node_timing.items(), key=lambda x: x[1]["node_total"],
             reverse=True)
