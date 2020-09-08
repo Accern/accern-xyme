@@ -232,18 +232,26 @@ def async_compute(
     pos = 0
     ids: Deque[RT] = collections.deque()
     cur_size = batch_size
-    while pos < len(arr):
-        cur = arr[pos:pos + cur_size]
-        pos += len(cur)
-        for block_ix in range(0, len(cur), max_block):
-            ids.extend(start(cur[block_ix:block_ix + max_block]))
-        count = 0
-        while count < block_size and ids:
-            yield get(ids.popleft())
-            count += 1
-        cur_size = block_size
-    for cur_id in ids:
-        yield get(cur_id)
+    try:
+        while pos < len(arr):
+            cur = arr[pos:pos + cur_size]
+            pos += len(cur)
+            for block_ix in range(0, len(cur), max_block):
+                ids.extend(start(cur[block_ix:block_ix + max_block]))
+            count = 0
+            while count < block_size and ids:
+                yield get(ids.popleft())
+                count += 1
+            cur_size = block_size
+        for cur_id in ids:
+            yield get(cur_id)
+    except ServerSideError as e:
+        for cur_id in ids:
+            try:
+                yield get(cur_id)
+            except ServerSideError:
+                pass
+        raise e
 
 
 class ServerSideError(Exception):
@@ -252,4 +260,4 @@ class ServerSideError(Exception):
         super().__init__(self._message)
 
     def __str__(self) -> str:
-        return f"Server side error: \n{self._message}"
+        return f"Error from xyme backend: \n{self._message}"
