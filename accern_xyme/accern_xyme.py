@@ -741,77 +741,42 @@ class PipelineHandle:
         assert self._settings is not None
         return self._settings
 
-    def get_timing(self, waiting: str) -> Dict[str, Any]:
-
-        nodes = self.get_nodes()
-        node_list = []
-        node_total = []
-        node_avg = []
-        node_name: str = []
-        dict_temp = {}
-
-        def del_waiting(node_time: list) -> List[Any]:
-            for pos, cur in enumerate(node_time):
-                for key, value in cur.copy().items():
-                    if value == waiting:
-                        del node_time[pos]
-            return node_time
+    def get_timing(self) -> Dict[str]:
+        nodes: List[str] = self.get_nodes()
+        pipe_timing: Dict[str] = {}
+        node_timing: Dict[str] = {}
 
         for node_ix, node in enumerate(nodes):
-            node_list.append(node)
             node_time = self.get_node(nodes[node_ix]).get_timing()
-            node_time = del_waiting(node_time)
-
-            dicts: Dict[str, Any] = {nodes[node_ix]: {}}
-
-            total_sum = 0
+            node_time_dicts: Dict[str] = {}
             for pos, cur in enumerate(node_time):
+                node_sums = cur.get("total")
                 length = len(node_time)
-                dicts[nodes[node_ix]].setdefault("fns", []).append(cur)
+                node_ids = self.get_node(nodes[node_ix]).get_id()
+                node_obj = node_time_dicts.get(node_ids, {
+                    "node_name":
+                    self.get_node(nodes[node_ix]).get_node_def().get("name"),
+                    "node_total": 0.0,
+                    "node_avg": 0.0,
+                    "fns": node_time,
+                })
+                node_obj["node_total"] += float(node_sums)
+                node_obj["node_avg"] += float(node_sums/length)
+                node_time_dicts[node_ids] = node_obj
+            node_timing.update(node_time_dicts)
 
-                for key, value in enumerate(node_time[pos]):
-                    if key == "total":
-                        total_sum += value
-                    else:
-                        pass
-
-            node_def: dict = self.get_node(node).get_node_def()
-
-            for k, v in node_def.items():
-                if k == "name":
-                    node_name.append(v)
-
-            node_total.append(total_sum)
-            node_avg.append(total_sum/length)
-            dict_temp.update(dicts)
-
-        inputs = zip(node_list, node_name, node_total, node_avg)
-        dict_main = {}
-        for n, d, t, a in inputs:
-            dict_main.update({
-                n:
-                {
-                    "node_name": d,
-                    "node_total": t,
-                    "node_avg": a,
-                },
-            })
-
-        for keys in dict_main:
-            if keys in dict_temp:
-                dict_main[keys].update(dict_temp[keys])
-
-        outer = {
-            "total": sum(
-                dict_add['node_total']
-                for dict_add in dict_main.values() if dict_add),
-        }
-        results = sorted(
-            dict_main.items(), key=lambda x: x[1]['node_total'], reverse=True)
-
-        outer["node"] = results
-
-        return outer
+        node_timing_sorted = sorted(
+            node_timing.items(), key=lambda x: x[1]["node_total"],
+            reverse=True)
+        pipe_sums = node_time_dicts.get(node_ids, {}).get("node_total")
+        pipe_ids = self.get_id()
+        pipe_obj = pipe_timing.get(pipe_ids, {
+            "pipe_total": 0.0,
+            "node": node_timing_sorted
+        })
+        pipe_obj["pipe_total"] += float(pipe_sums)
+        pipe_timing[pipe_ids] = pipe_obj
+        return pipe_timing
 
     def is_high_priority(self) -> bool:
         self._maybe_refresh()
