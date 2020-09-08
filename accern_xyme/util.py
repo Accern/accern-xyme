@@ -2,16 +2,19 @@ from typing import (
     Any,
     Callable,
     Deque,
+    Dict,
     IO,
     Iterable,
     List,
     Optional,
+    Tuple,
     TypeVar,
     Union,
 )
 import io
 import json
 import shutil
+import threading
 import collections
 from io import BytesIO, TextIOWrapper
 import pandas as pd
@@ -220,24 +223,66 @@ def async_compute(
         arr: List[Any],
         start: Callable[[List[Any]], List[RT]],
         get: Callable[[RT], ByteResponse],
-        batch_size: int,
+        max_buff: int,
         block_size: int,
-        max_block: int) -> Iterable[ByteResponse]:
-    assert batch_size >= block_size
+        num_threads: int) -> Iterable[ByteResponse]:
+    assert max_buff > 0
     assert block_size > 0
-    assert max_block > 0
-    pos = 0
-    ids: Deque[RT] = collections.deque()
-    cur_size = batch_size
-    while pos < len(arr):
-        cur = arr[pos:pos + cur_size]
-        pos += len(cur)
-        for block_ix in range(0, len(cur), max_block):
-            ids.extend(start(cur[block_ix:block_ix + max_block]))
-        count = 0
-        while count < block_size and ids:
-            yield get(ids.popleft())
-            count += 1
-        cur_size = block_size
-    for cur_id in ids:
-        yield get(cur_id)
+    assert num_threads > 0
+
+    done: List[bool] = [False]
+    cond = threading.Condition()
+    ids: Deque[Tuple[int, RT]] = collections.deque()
+    res: Dict[int, ByteResponse] = {}
+
+    def produce() -> None:
+        pos = 0
+        while pos < len(arr):
+            with cond:
+                cond.wait_for(lambda: len(ids) < max_buff)
+            start_pos = pos
+            cur = arr[pos:pos + block_size]
+            pos += len(cur)
+            ids.extend((
+                (cur_ix + start_pos, cur_id)
+                for (cur_ix, cur_id) in enumerate(start(cur))))
+            with cond:
+                cond.notify_all()
+
+    def consume() -> None:
+        while not done[0]:
+            with cond:
+                cond.wait_for(lambda: len(ids) > 0 or done[0])
+            while len(ids) > 0:
+                try:
+                    t_ix, t_id = ids.popleft()
+                    res[t_ix] = get(t_id)
+                except IndexError:
+                    pass
+            with cond:
+                cond.notify_all()
+
+    prod_th = threading.Thread(target=produce)
+    prod_th.start()
+
+    ths = [threading.Thread(target=consume) for _ in range(num_threads)]
+    for th in ths:
+        th.start()
+
+    yield_ix = 0
+    while yield_ix < len(arr):
+        with cond:
+            cond.wait_for(lambda: bool(res))
+        try:
+            while res:
+                yield res.pop(yield_ix)
+                yield_ix += 1
+        except KeyError:
+            pass
+
+    done[0] = True
+    with cond:
+        cond.notify_all()
+    prod_th.join()
+    for th in ths:
+        th.join()
