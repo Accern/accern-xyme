@@ -779,7 +779,7 @@ class PipelineHandle:
             node_timing.items(), key=lambda x: x[1]["node_total"],
             reverse=True)
         pipe_sums: float = node_time_dicts.get(node_ids, {}).get(
-            "node_total"
+            "node_total",
             )
         pipe_ids = self.get_id()
         pipe_obj = pipe_timing.get(pipe_ids, {
