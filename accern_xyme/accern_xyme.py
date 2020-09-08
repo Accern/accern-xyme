@@ -782,7 +782,7 @@ class PipelineHandle:
         pipe_ids = self.get_id()
         pipe_obj = pipe_timing.get(pipe_ids, {
             "pipe_total": 0.0,
-            "node": node_timing_sorted
+            "node": node_timing_sorted,
         })
         pipe_obj["pipe_total"] += float(pipe_sums)
         pipe_timing[pipe_ids] = pipe_obj
