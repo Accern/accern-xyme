@@ -141,13 +141,13 @@ CSVList = TypedDict('CSVList', {
 JobList = TypedDict('JobList', {
     "jobs": List[str],
 })
-JobInfoEntries = TypedDict('JobInfoEntries', {  # pylint: disable=invalid-name
+JobInfoEntries = TypedDict('JobInfoEntries', {
     "data": Optional[Tuple[str, str]],
     "performance": Optional[Tuple[str, str]],
     "predictions": Optional[Tuple[str, str]],
     "sources": List[str],
 })
-JobInfo = TypedDict('JobInfo', {  # pylint: disable=invalid-name
+JobInfo = TypedDict('JobInfo', {
     "id": str,
     "name": str,
     "owner": str,
@@ -168,4 +168,10 @@ JSONBlobResponse = TypedDict('JSONBlobResponse', {
 })
 UserColumnsResponse = TypedDict('UserColumnsResponse', {
     "user_columns": List[str],
+})
+ModelSetupResponse = TypedDict('ModelSetupResponse', {
+    "model_info": Dict[str, Any],
+})
+ModelParamsResponse = TypedDict('ModelParamsResponse', {
+    "model_params": Dict[str, Any],
 })
