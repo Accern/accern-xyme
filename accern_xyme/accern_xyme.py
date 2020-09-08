@@ -761,12 +761,12 @@ class PipelineHandle:
             node_time = self.get_node(nodes[node_ix]).get_timing()
             node_time_dicts: Dict[str, NodeTiming] = {}
             for pos, cur in enumerate(node_time):
-                node_sums: Optional[float] = cur.get("total")
+                name: str = self.get_node(node).get_node_def.get("name")
+                node_sums: float = cur.get("total")
                 length = len(node_time)
                 node_ids = self.get_node(nodes[node_ix]).get_id()
                 node_obj = node_time_dicts.get(node_ids, {
-                    "node_name":
-                    self.get_node(nodes[node_ix]).get_node_def().get("name"),
+                    "node_name": name,
                     "node_total": 0.0,
                     "node_avg": 0.0,
                     "fns": node_time,
@@ -778,7 +778,7 @@ class PipelineHandle:
         node_timing_sorted = sorted(
             node_timing.items(), key=lambda x: x[1]["node_total"],
             reverse=True)
-        pipe_sums: Optional[float] = node_time_dicts.get(node_ids, {}).get(
+        pipe_sums: float = node_time_dicts.get(node_ids, {}).get(
             "node_total"
             )
         pipe_ids = self.get_id()
