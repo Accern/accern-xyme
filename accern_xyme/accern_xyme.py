@@ -1408,7 +1408,7 @@ class BlobHandle:
                 "blob": self._uri,
                 "pipeline": self.get_pipeline().get_id(),
             })
-        if save_path is None:
+        if to_path is None:
             return io.BytesIO(cur_res.read())
         with open(to_path, "wb") as file_download:
             file_download.write(cur_res.read())

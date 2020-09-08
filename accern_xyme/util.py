@@ -180,7 +180,7 @@ def interpret_ctype(data: IO[bytes], ctype: str) -> ByteResponse:
         return json.load(data)
     if ctype == "application/json-error":
         res = json.load(data)
-        raise ValueError(res["errMessage"])
+        raise ServerSideError(res["errMessage"])
     if ctype == "application/parquet":
         return pd.read_parquet(data)
     if ctype == "application/torch":
@@ -241,3 +241,12 @@ def async_compute(
         cur_size = block_size
     for cur_id in ids:
         yield get(cur_id)
+
+
+class ServerSideError(Exception):
+    def __init__(self, message: str) -> None:
+        self._message = message
+        super().__init__(self._message)
+
+    def __str__(self) -> str:
+        return f"Server side error: \n{self._message}"
