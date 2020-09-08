@@ -59,6 +59,7 @@ from .types import (
     NodeInfo,
     NodeState,
     NodeStatus,
+    NodeTiming,
     NodeTypes,
     PipelineCreate,
     PipelineDef,
@@ -69,6 +70,7 @@ from .types import (
     TaskStatus,
     Timing,
     Timings,
+    TimingResult,
     UserColumnsResponse,
     VersionResponse,
 )
@@ -751,18 +753,13 @@ class PipelineHandle:
         assert self._settings is not None
         return self._settings
 
-<<<<<<< HEAD
-    def get_timing(self) -> Dict[str, Any]:
+    def get_timing(self) -> TimingResult:
         nodes = self.get_nodes()
-=======
-    def get_timing(self) -> Dict[str]:
-        nodes: List[str] = self.get_nodes()
->>>>>>> parent of cc01d16... comma
-        pipe_timing: Dict[str] = {}
-        node_timing: Dict[str] = {}
+        pipe_timing: TimingResult = {}
+        node_timing: NodeTiming = {}
         for node_ix, node in enumerate(nodes):
             node_time = self.get_node(nodes[node_ix]).get_timing()
-            node_time_dicts: Dict[str] = {}
+            node_time_dicts: NodeTiming = {}
             for pos, cur in enumerate(node_time):
                 node_sums = cur.get("total")
                 length = len(node_time)

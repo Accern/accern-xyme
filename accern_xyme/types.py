@@ -121,6 +121,16 @@ Timing = TypedDict('Timing', {
 Timings = TypedDict('Timings', {
     "times": List[Timing],
 })
+NodeTiming = TypedDict('NodeTiming', {
+   "node_name": str,
+   "node_avg": float,
+   "node_total": float,
+   "fns": Timings,
+})
+TimingResult = TypedDict('TimingResult', {
+    "pipe_total": float,
+    "nodes": Dict[str, NodeTiming],
+})
 InCursors = TypedDict('InCursors', {
     "cursors": Dict[str, int],
 })
