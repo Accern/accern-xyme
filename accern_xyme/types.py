@@ -175,3 +175,6 @@ ModelSetupResponse = TypedDict('ModelSetupResponse', {
 ModelParamsResponse = TypedDict('ModelParamsResponse', {
     "model_params": Dict[str, Any],
 })
+FlushAllQueuesResponse = TypedDict('FlushAllQueuesResponse', {
+    "success": bool,
+})

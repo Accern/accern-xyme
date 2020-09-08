@@ -46,6 +46,7 @@ from .types import (
     CSVOp,
     CustomCodeResponse,
     CustomImportsResponse,
+    FlushAllQueuesResponse,
     InCursors,
     JobInfo,
     JobList,
@@ -656,6 +657,17 @@ class XYMEClient:
         return cast(CustomImportsResponse, self._request_json(
             METHOD_GET, "/allowed_custom_imports", {}, capture_err=False))
 
+    def flush_all_queue_data(self) -> None:
+
+        def do_flush() -> bool:
+            res = cast(FlushAllQueuesResponse, self._request_json(
+                METHOD_POST, "/flush_all_queues", {}, capture_err=False))
+            return bool(res["success"])
+
+        while do_flush():  # we flush until there is nothing to flush anymore
+            time.sleep(1.0)
+
+
 # *** XYMEClient ***
 
 
@@ -824,8 +836,9 @@ class PipelineHandle:
     def get_dynamic_bulk(
             self,
             input_data: List[BytesIO],
-            batch_size: int = 1000,
-            block_size: int = 200) -> Iterable[ByteResponse]:
+            batch_size: int = 4000,
+            block_size: int = 2000,
+            max_block: int = 5) -> Iterable[ByteResponse]:
 
         def get(hnd: 'ComputationHandle') -> ByteResponse:
             return hnd.get()
@@ -835,13 +848,15 @@ class PipelineHandle:
             self.dynamic_async,
             get,
             batch_size,
-            block_size)
+            block_size,
+            max_block)
 
     def get_dynamic_bulk_obj(
             self,
             input_data: List[Any],
-            batch_size: int = 1000,
-            block_size: int = 200) -> Iterable[ByteResponse]:
+            batch_size: int = 4000,
+            block_size: int = 2000,
+            max_block: int = 5) -> Iterable[ByteResponse]:
 
         def get(hnd: 'ComputationHandle') -> ByteResponse:
             return hnd.get()
@@ -851,7 +866,8 @@ class PipelineHandle:
             self.dynamic_async_obj,
             get,
             batch_size,
-            block_size)
+            block_size,
+            max_block)
 
     def pretty(self, allow_unicode: bool) -> str:
         nodes = [
