@@ -753,13 +753,13 @@ class PipelineHandle:
         assert self._settings is not None
         return self._settings
 
-    def get_timing(self) -> TimingResult:
+    def get_timing(self) -> Dict[str, TimingResult]:
         nodes = self.get_nodes()
-        pipe_timing: TimingResult = {}
-        node_timing: NodeTiming = {}
+        pipe_timing: Dict[str, TimingResult] = {}
+        node_timing: Dict[str, NodeTiming] = {}
         for node_ix, node in enumerate(nodes):
             node_time = self.get_node(nodes[node_ix]).get_timing()
-            node_time_dicts: NodeTiming = {}
+            node_time_dicts: Dict[str, NodeTiming] = {}
             for pos, cur in enumerate(node_time):
                 node_sums = cur.get("total")
                 length = len(node_time)
