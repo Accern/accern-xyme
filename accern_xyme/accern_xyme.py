@@ -761,13 +761,14 @@ class PipelineHandle:
         node_timing: Dict[str, NodeTiming] = {}
 
         def filter_blacklist(
-                node_time: Timings) -> Iterator[str]:
+                node_time: List[Timing]) -> Iterator[str]:
             for k, v in enumerate(node_time):
                 if v.get("name") != blacklist:
                     yield v
         for node_ix, node in enumerate(nodes):
             node_time = self.get_node(node).get_timing()
-            node_times = [time for time in filter_blacklist(node_time)]
+            node_times: List[Timing] = [
+                time for time in filter_blacklist(node_time)]
             node_time_dicts: Dict[str, NodeTiming] = {}
             for pos, cur in enumerate(node_times):
                 node_name: str = self.get_node(node).get_node_def()["name"]
