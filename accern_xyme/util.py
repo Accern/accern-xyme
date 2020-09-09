@@ -280,9 +280,10 @@ def async_compute(
                     time.sleep(1)
                 do_wait = True
                 status = get_status([
-                    hnd.get_id() for hnd, _ in ids.items()
+                    hnd for hnd, _ in ids.items()
                 ])
                 for (t_id, t_status) in status.items():
+                    # print("t_id, t_status", t_id, t_status, t_id in ids)
                     if t_status in ("waiting", "running"):
                         continue
                     do_wait = False
@@ -298,7 +299,6 @@ def async_compute(
                         pass
             with cond:
                 cond.notify_all()
-
 
     prod_th = threading.Thread(target=produce)
     prod_th.start()
