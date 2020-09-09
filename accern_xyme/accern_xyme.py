@@ -754,13 +754,14 @@ class PipelineHandle:
         return self._settings
 
     def get_timing(
-        self,
-        blacklist: str ="wait_for_uri") -> Dict[str, TimingResult]:
+            self,
+            blacklist: str = "wait_for_uri") -> Dict[str, TimingResult]:
         nodes = self.get_nodes()
         pipe_timing: Dict[str, TimingResult] = {}
         node_timing: Dict[str, NodeTiming] = {}
 
-        def filter_blacklist(node_time: List[Timing]) -> Iterator[List[Timing]]:
+        def filter_blacklist(
+            node_time: List[Timing]) -> Iterator[List[Timing]]:
             for k, v in enumerate(node_time):
                 if v.get("name") != blacklist:
                     yield v
