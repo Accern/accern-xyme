@@ -757,14 +757,19 @@ class PipelineHandle:
         nodes = self.get_nodes()
         pipe_timing: Dict[str, TimingResult] = {}
         node_timing: Dict[str, NodeTiming] = {}
+        def filter_blacklist(node_time):
+            for key, value in enumerate(node_time):
+                if value.get("name") != blacklist:
+                        yield value
         for node_ix, node in enumerate(nodes):
-            node_time = self.get_node(nodes[node_ix]).get_timing()
+            node_time = self.get_node(node).get_timing()
+            node_time = [time for time in filter_blacklist(node_time)]
             node_time_dicts: Dict[str, NodeTiming] = {}
             for pos, cur in enumerate(node_time):
-                name: str = self.get_node(node).get_node_def["name"]
+                name: str = self.get_node(node).get_node_def()["name"]
                 node_sums: float = cur.get("total")
                 length = len(node_time)
-                node_ids = self.get_node(nodes[node_ix]).get_id()
+                node_ids = self.get_node(node).get_id()
                 node_obj = node_time_dicts.get(node_ids, {
                     "node_name": name,
                     "node_total": 0.0,
@@ -778,16 +783,15 @@ class PipelineHandle:
         node_timing_sorted = sorted(
             node_timing.items(), key=lambda x: x[1]["node_total"],
             reverse=True)
-        pipe_sums: float = node_time_dicts.get(node_ids, {}).get(
-            "node_total",
-            )
-        pipe_ids = self.get_id()
-        pipe_obj = pipe_timing.get(pipe_ids, {
-            "pipe_total": 0.0,
-            "nodes": node_timing_sorted,
-        })
-        pipe_obj["pipe_total"] += float(pipe_sums)
-        pipe_timing[pipe_ids] = pipe_obj
+        for pos, cur in node_timing.items():
+            pipe_sums: float = cur.get("node_total")
+            pipe_ids = self.get_id()
+            pipe_obj = pipe_timing.get(pipe_ids, {
+                    "pipe_total": 0.0,
+                    "node": node_timing_sorted
+            })
+            pipe_obj["pipe_total"] += pipe_sums
+            pipe_timing[pipe_ids] = pipe_obj
         return pipe_timing
 
     def is_high_priority(self) -> bool:
