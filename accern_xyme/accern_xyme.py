@@ -753,12 +753,14 @@ class PipelineHandle:
         assert self._settings is not None
         return self._settings
 
-    def get_timing(self, blacklist="wait_for_uri") -> Dict[str, TimingResult]:
+    def get_timing(
+        self,
+        blacklist: str ="wait_for_uri") -> Dict[str, TimingResult]:
         nodes = self.get_nodes()
         pipe_timing: Dict[str, TimingResult] = {}
         node_timing: Dict[str, NodeTiming] = {}
 
-        def filter_blacklist(node_time) -> Iterator[str]:
+        def filter_blacklist(node_time: List[Timing]) -> Iterator[List[Timing]]:
             for k, v in enumerate(node_time):
                 if v.get("name") != blacklist:
                     yield v
@@ -767,12 +769,12 @@ class PipelineHandle:
             node_times = [time for time in filter_blacklist(node_time)]
             node_time_dicts: Dict[str, NodeTiming] = {}
             for pos, cur in enumerate(node_times):
-                name: str = self.get_node(node).get_node_def()["name"]
+                node_name: str = self.get_node(node).get_node_def()["name"]
                 node_sums: float = cur.get("total")
-                length = len(node_time)
                 node_ids = self.get_node(node).get_id()
+                length = len(node_time)
                 node_obj = node_time_dicts.get(node_ids, {
-                    "node_name": name,
+                    "node_name": node_name,
                     "node_total": 0.0,
                     "node_avg": 0.0,
                     "fns": node_time,
