@@ -47,6 +47,7 @@ from .types import (
     CSVOp,
     CustomCodeResponse,
     CustomImportsResponse,
+    DynamicStatusResponse,
     FlushAllQueuesResponse,
     InCursors,
     JobInfo,
@@ -68,6 +69,7 @@ from .types import (
     PipelineInit,
     PipelineList,
     QueueStatsResponse,
+    QueueStatus,
     ReadNode,
     TaskStatus,
     Timing,
@@ -853,6 +855,24 @@ class PipelineHandle:
         return cast(QueueStatsResponse, self._client._request_json(
             METHOD_GET, "/queue_stats", {}, capture_err=True))
 
+    def get_dynamic_status(
+            self,
+            data_ids: List[str]) -> Dict['ComputationHandle', QueueStatus]:
+        res = cast(DynamicStatusResponse, self._client._request_json(
+            METHOD_GET, "/dynamic_status", {
+                "data_ids": ",".join(data_ids),
+                "pipeline": self._pipe_id,
+            }, capture_err=True))
+        status = res["status"]
+        return {
+            ComputationHandle(
+                self,
+                key,
+                self.get_dynamic_error_message,
+                self.set_dynamic_error_message): cast(QueueStatus, value)
+            for key, value in status.items()
+        }
+
     def get_dynamic_bulk(
             self,
             input_data: List[BytesIO],
@@ -867,6 +887,7 @@ class PipelineHandle:
             self.dynamic_async,
             get,
             self.check_queue_stats,
+            self.get_dynamic_status,
             max_buff,
             block_size)
 
@@ -884,6 +905,7 @@ class PipelineHandle:
             self.dynamic_async_obj,
             get,
             self.check_queue_stats,
+            self.get_dynamic_status,
             max_buff,
             block_size)
 
@@ -1689,6 +1711,9 @@ class ComputationHandle:
         except ServerSideError as e:
             self._set_dyn_error(str(e))
             raise e
+
+    def get_id(self) -> str:
+        return self._data_id
 
     def __str__(self) -> str:
         if self._value is None:

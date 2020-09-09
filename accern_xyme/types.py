@@ -186,3 +186,13 @@ QueueStatsResponse = TypedDict('QueueStatsResponse', {
     "restarted": int,
     "results": int,
 })
+QueueStatus = Literal[
+    "waiting",
+    "running",
+    "result",
+    "error",
+    "void",
+]
+DynamicStatusResponse = TypedDict('DynamicStatusResponse', {
+    "status": Dict[str, QueueStatus],
+})
