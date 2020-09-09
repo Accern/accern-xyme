@@ -764,9 +764,9 @@ class PipelineHandle:
                     yield v
         for node_ix, node in enumerate(nodes):
             node_time = self.get_node(node).get_timing()
-            node_time = [time for time in filter_blacklist(node_time)]
+            node_times = [time for time in filter_blacklist(node_time)]
             node_time_dicts: Dict[str, NodeTiming] = {}
-            for pos, cur in enumerate(node_time):
+            for pos, cur in enumerate(node_times):
                 name: str = self.get_node(node).get_node_def()["name"]
                 node_sums: float = cur.get("total")
                 length = len(node_time)
@@ -785,7 +785,7 @@ class PipelineHandle:
             node_timing.items(), key=lambda x: x[1]["node_total"],
             reverse=True)
         for key, value in node_timing.items():
-            pipe_sums: float = cur.get("node_total")
+            pipe_sums: float = value.get("node_total")
             pipe_ids = self.get_id()
             pipe_obj = pipe_timing.get(pipe_ids, {
                     "pipe_total": 0.0,
