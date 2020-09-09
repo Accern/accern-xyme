@@ -67,6 +67,7 @@ from .types import (
     PipelineInfo,
     PipelineInit,
     PipelineList,
+    QueueStatsResponse,
     ReadNode,
     TaskStatus,
     Timing,
@@ -848,12 +849,15 @@ class PipelineHandle:
             })
         return interpret_ctype(cur_res, ctype)
 
+    def check_queue_stats(self) -> QueueStatsResponse:
+        return cast(QueueStatsResponse, self._client._request_json(
+            METHOD_GET, "/queue_stats", {}, capture_err=True))
+
     def get_dynamic_bulk(
             self,
             input_data: List[BytesIO],
-            batch_size: int = 4000,
-            block_size: int = 2000,
-            max_block: int = 5) -> Iterable[ByteResponse]:
+            max_buff: int = 2000,
+            block_size: int = 5) -> Iterable[ByteResponse]:
 
         def get(hnd: 'ComputationHandle') -> ByteResponse:
             return hnd.get()
@@ -862,16 +866,15 @@ class PipelineHandle:
             input_data,
             self.dynamic_async,
             get,
-            batch_size,
-            block_size,
-            max_block)
+            self.check_queue_stats,
+            max_buff,
+            block_size)
 
     def get_dynamic_bulk_obj(
             self,
             input_data: List[Any],
-            batch_size: int = 4000,
-            block_size: int = 2000,
-            max_block: int = 5) -> Iterable[ByteResponse]:
+            max_buff: int = 2000,
+            block_size: int = 5) -> Iterable[ByteResponse]:
 
         def get(hnd: 'ComputationHandle') -> ByteResponse:
             return hnd.get()
@@ -880,9 +883,9 @@ class PipelineHandle:
             input_data,
             self.dynamic_async_obj,
             get,
-            batch_size,
-            block_size,
-            max_block)
+            self.check_queue_stats,
+            max_buff,
+            block_size)
 
     def pretty(self, allow_unicode: bool) -> str:
         nodes = [
@@ -1034,7 +1037,8 @@ class NodeHandle:
             client: XYMEClient,
             pipeline: PipelineHandle,
             node_id: str,
-            kind: str) -> None:
+            kind: str,
+            task_types: List[str]) -> None:
         self._client = client
         self._pipeline = pipeline
         self._node_id = node_id
@@ -1044,6 +1048,7 @@ class NodeHandle:
         self._inputs: Dict[str, Tuple[str, str]] = {}
         self._state: Optional[int] = None
         self._config_error: Optional[bool] = None
+        self._task_types = task_types
 
     @staticmethod
     def from_node_info(
@@ -1053,7 +1058,11 @@ class NodeHandle:
             prev: Optional['NodeHandle']) -> 'NodeHandle':
         if prev is None:
             res = NodeHandle(
-                client, pipeline, node_info["id"], node_info["type"])
+                client,
+                pipeline,
+                node_info["id"],
+                node_info["type"],
+                node_info["task_types"])
         else:
             if prev.get_pipeline() != pipeline:
                 raise ValueError(f"{prev.get_pipeline()} != {pipeline}")

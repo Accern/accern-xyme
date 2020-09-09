@@ -2,22 +2,25 @@ from typing import (
     Any,
     Callable,
     Deque,
+    Dict,
     IO,
     Iterable,
     List,
     Optional,
+    Tuple,
     TypeVar,
     Union,
 )
 import io
 import json
 import shutil
+import time
 import collections
 from io import BytesIO, TextIOWrapper
 import pandas as pd
 from scipy import sparse
 import torch
-
+from .types import QueueStatsResponse
 
 FILE_UPLOAD_CHUNK_SIZE = 100 * 1024  # 100kb
 FILE_HASH_CHUNK_SIZE = FILE_UPLOAD_CHUNK_SIZE
@@ -223,34 +226,44 @@ def async_compute(
         arr: List[Any],
         start: Callable[[List[Any]], List[RT]],
         get: Callable[[RT], ByteResponse],
-        batch_size: int,
-        block_size: int,
-        max_block: int) -> Iterable[ByteResponse]:
-    assert batch_size >= block_size
+        check_queue: Callable[[], QueueStatsResponse],
+        max_buff: int,
+        block_size: int) -> Iterable[ByteResponse]:
+    assert max_buff > 0
     assert block_size > 0
-    assert max_block > 0
+
     pos = 0
-    ids: Deque[RT] = collections.deque()
-    cur_size = batch_size
+    ids: Deque[Tuple[int, RT]] = collections.deque()
+    res: Dict[int, ByteResponse] = {}
+
     try:
         while pos < len(arr):
-            cur = arr[pos:pos + cur_size]
+            start_pos = pos
+            cur = arr[pos:pos + block_size]
+            while check_queue()["data"] >= max_buff:
+                time.sleep(10)
             pos += len(cur)
-            for block_ix in range(0, len(cur), max_block):
-                ids.extend(start(cur[block_ix:block_ix + max_block]))
-            count = 0
-            while count < block_size and ids:
-                yield get(ids.popleft())
-                count += 1
-            cur_size = block_size
-        for cur_id in ids:
-            yield get(cur_id)
-    except ServerSideError as e:
-        for cur_id in ids:
+            ids.extend((
+                (cur_ix + start_pos, cur_id)
+                for (cur_ix, cur_id) in enumerate(start(cur))))
+        while ids:
+            t_ix, t_id = ids.popleft()
+            res[t_ix] = get(t_id)
+        yield_ix = 0
+        while yield_ix < len(arr):
             try:
-                yield get(cur_id)
-            except ServerSideError:
+                while res:
+                    yield res.pop(yield_ix)
+                    yield_ix += 1
+            except KeyError:
                 pass
+    except ServerSideError as e:
+        try:
+            while ids:
+                t_ix, t_id = ids.popleft()
+                res[t_ix] = get(t_id)
+        except ServerSideError:
+            pass
         raise e
 
 
