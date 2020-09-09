@@ -1037,8 +1037,7 @@ class NodeHandle:
             client: XYMEClient,
             pipeline: PipelineHandle,
             node_id: str,
-            kind: str,
-            task_types: List[str]) -> None:
+            kind: str) -> None:
         self._client = client
         self._pipeline = pipeline
         self._node_id = node_id
@@ -1048,7 +1047,6 @@ class NodeHandle:
         self._inputs: Dict[str, Tuple[str, str]] = {}
         self._state: Optional[int] = None
         self._config_error: Optional[bool] = None
-        self._task_types = task_types
 
     @staticmethod
     def from_node_info(
@@ -1061,8 +1059,7 @@ class NodeHandle:
                 client,
                 pipeline,
                 node_info["id"],
-                node_info["type"],
-                node_info["task_types"])
+                node_info["type"])
         else:
             if prev.get_pipeline() != pipeline:
                 raise ValueError(f"{prev.get_pipeline()} != {pipeline}")

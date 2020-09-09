@@ -75,7 +75,6 @@ NodeInfo = TypedDict('NodeInfo', {
     "inputs": Dict[str, Tuple[str, str]],
     "state": Optional[int],
     "config_error": bool,
-    "task_types": List[str],
 })
 PipelineList = TypedDict('PipelineList', {
     "pipelines": List[str],
