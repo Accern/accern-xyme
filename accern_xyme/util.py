@@ -181,6 +181,8 @@ def interpret_ctype(data: IO[bytes], ctype: str) -> ByteResponse:
         return json.load(data)
     if ctype == "application/json-error":
         res = json.load(data)
+        if res["errMessage"] is None:
+            raise NotFoundError()
         raise ServerSideError(res["errMessage"])
     if ctype == "application/parquet":
         return pd.read_parquet(data)
@@ -281,19 +283,19 @@ def async_compute(
                     hnd.get_id() for hnd, _ in ids.items()
                 ])
                 for (t_id, t_status) in status.items():
-                    print("t_id, t_status", t_id, t_status, t_id in ids)
                     if t_status in ("waiting", "running"):
                         continue
                     do_wait = False
                     try:
                         t_ix = ids.pop(t_id)
                         res[t_ix] = get(t_id)
+                    except NotFoundError:
+                        pass
                     except ServerSideError as e:
                         if exc[0] is None:
                             exc[0] = e
                     except KeyError as e:
-                        print(ids, t_id)
-                        raise e
+                        pass
             with cond:
                 cond.notify_all()
 
@@ -334,3 +336,8 @@ class ServerSideError(Exception):
 
     def __str__(self) -> str:
         return f"Error from xyme backend: \n{self._message}"
+
+
+class NotFoundError(Exception):
+    def __str__(self) -> str:
+        return "404 Not Found"

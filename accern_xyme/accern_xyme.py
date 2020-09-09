@@ -1723,6 +1723,16 @@ class ComputationHandle:
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}[{self.__str__()}]"
 
+    def __hash__(self) -> int:
+        return hash(self.get_id())
+
+    def __eq__(self, other: object) -> bool:
+        return self.__str__() == other.__str__()
+
+    def __ne__(self, other: object) -> bool:
+        return self.__str__() != other.__str__()
+
+
 # *** ComputationHandle ***
 
 
