@@ -309,8 +309,6 @@ def async_compute(
                     except ServerSideError as e:
                         if exc[0] is None:
                             exc[0] = e
-                    except KeyError:
-                        pass
             with cond:
                 cond.notify_all()
 

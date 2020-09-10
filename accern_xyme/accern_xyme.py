@@ -331,18 +331,14 @@ class XYMEClient:
                 raise AccessDenied(req.text)
             if req.status_code == 200:
                 return BytesIO(req.content), req.headers["content-type"]
-            raise ValueError(
-                req.status_code,
-                f"error in worker request:\n{req.text}")
+            req.raise_for_status()
         if method == METHOD_POST:
             req = requests.post(url, json=args)
             if req.status_code == 403:
                 raise AccessDenied(req.text)
             if req.status_code == 200:
                 return BytesIO(req.content), req.headers["content-type"]
-            raise ValueError(
-                req.status_code,
-                f"error in worker request:\n{req.text}")
+            req.raise_for_status()
         if method == METHOD_FILE:
             if files is None:
                 raise ValueError(f"file method must have files: {files}")
@@ -357,9 +353,7 @@ class XYMEClient:
                 raise AccessDenied(req.text)
             if req.status_code == 200:
                 return BytesIO(req.content), req.headers["content-type"]
-            raise ValueError(
-                req.status_code,
-                f"error  in worker request:\n{req.text}")
+            req.raise_for_status()
         raise ValueError(f"unknown method {method}")
 
     def _fallible_raw_request_str(
@@ -847,14 +841,15 @@ class PipelineHandle:
         ])
 
     def get_dynamic_result(self, data_id: str) -> ByteResponse:
+        from requests.exceptions import HTTPError
         try:
             cur_res, ctype = self._client.request_bytes(
                 METHOD_GET, "/dynamic_result", {
                     "pipeline": self._pipe_id,
                     "id": data_id,
                 })
-        except ValueError as e:
-            if e.args[0] == 404:
+        except HTTPError as e:
+            if e.response.status_code == 404:
                 raise KeyError(f"data_id {data_id} does not exist") from e
         return interpret_ctype(cur_res, ctype)
 
