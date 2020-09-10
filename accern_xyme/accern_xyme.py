@@ -755,48 +755,42 @@ class PipelineHandle:
 
     def get_timing(
             self,
-            blacklist: str = "wait_for_uri") -> Dict[str, TimingResult]:
+            blacklist: List[str] = "wait_for_uri") -> Dict[str, TimingResult]:
         nodes = self.get_nodes()
         pipe_timing: Dict[str, TimingResult] = {}
         node_timing: Dict[str, NodeTiming] = {}
 
         def filter_blacklist(
                 node_time: List[Timing]) -> Iterator[Timing]:
-            for k, v in enumerate(node_time):
-                if v.get("name") != blacklist:
-                    yield v
-        for node_ix, node in enumerate(nodes):
+            for value in node_time:
+                if value.get("name") not in blacklist:
+                    yield value
+
+        for node in enumerate(nodes):
             node_time = self.get_node(node).get_timing()
-            node_times: List[Timing] = [
-                time for time in filter_blacklist(node_time)]
-            node_time_dicts: Dict[str, NodeTiming] = {}
-            for pos, cur in enumerate(node_times):
-                node_name: str = self.get_node(node).get_node_def()["name"]
-                node_sums: float = cur.get("total")
-                node_ids = self.get_node(node).get_id()
+            node_name: str = self.get_node(node).get_node_def()["name"]
+            for cur in filter_blacklist(node_time):
                 length = len(node_time)
-                node_obj = node_time_dicts.get(node_ids, {
+                node_id = self.get_node(node).get_id()
+                node_sums = cur.get("total")
+                node_timing[node_id] = {
                     "node_name": node_name,
                     "node_total": 0.0,
                     "node_avg": 0.0,
                     "fns": node_time,
-                })
+                }
+                node_obj = node_timing[node_id]
                 node_obj["node_total"] += node_sums
-                node_obj["node_avg"] += node_sums / length
-                node_time_dicts[node_ids] = node_obj
-            node_timing.update(node_time_dicts)
+                node_obj["node_avg"] = node_obj["node_total"] / length
         node_timing_sorted = sorted(
             node_timing.items(), key=lambda x: x[1]["node_total"],
             reverse=True)
-        for key, value in node_timing.items():
-            pipe_sums: float = value.get("node_total")
-            pipe_ids = self.get_id()
-            pipe_obj = pipe_timing.get(pipe_ids, {
-                    "pipe_total": 0.0,
-                    "nodes": node_timing_sorted,
-            })
-            pipe_obj["pipe_total"] += pipe_sums
-            pipe_timing[pipe_ids] = pipe_obj
+        pipe_timing = {
+            "pipe_total": 0.0,
+            "node": node_timing_sorted,
+        }
+        pipe_timing['pipe_total'] = sum(
+            value["node_total"] for value in node_timing.values() if value)
         return pipe_timing
 
     def is_high_priority(self) -> bool:
