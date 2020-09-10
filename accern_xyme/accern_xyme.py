@@ -859,10 +859,9 @@ class PipelineHandle:
             self,
             data_ids: List['ComputationHandle']) -> Dict[
                 'ComputationHandle', QueueStatus]:
-        data_ids_str = ",".join([data_id.get_id() for data_id in data_ids])
         res = cast(DynamicStatusResponse, self._client._request_json(
             METHOD_POST, "/dynamic_status", {
-                "data_ids": data_ids_str,
+                "data_ids": [data_id.get_id() for data_id in data_ids],
                 "pipeline": self._pipe_id,
             }, capture_err=True))
         status = res["status"]
