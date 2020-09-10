@@ -241,7 +241,7 @@ def async_compute(
     ids: Dict[RT, int] = {}
     res: Dict[int, ByteResponse] = {}
 
-    def get_max_count(remote_queue: QueueStatsResponse) -> int:
+    def get_waiting_count(remote_queue: QueueStatsResponse) -> int:
         return remote_queue["total"] - remote_queue["active"]
 
     def can_push_more() -> bool:
@@ -249,7 +249,7 @@ def async_compute(
             return True
         if len(ids) < max_buff:
             return True
-        max_count = get_max_count(check_queue())
+        max_count = get_waiting_count(check_queue())
         return max_count < max_buff
 
     def produce() -> None:
@@ -262,7 +262,7 @@ def async_compute(
                     break
                 start_pos = pos
                 remote_queue = check_queue()
-                max_count = get_max_count(remote_queue)
+                max_count = get_waiting_count(remote_queue)
                 add_more = max(
                     max_buff - len(ids),
                     max_buff - max_count)
@@ -291,9 +291,9 @@ def async_compute(
                 if do_wait:
                     time.sleep(1)
                 do_wait = True
-                val = (th_id, th_id + 10 * num_threads, num_threads)
+                sub = slice(th_id, th_id + 10 * num_threads, num_threads)
                 sorted_ids = sorted(ids.items(), key=lambda v: v[1])
-                check_ids = [v[0] for v in sorted_ids[val[0]:val[1]:val[2]]]
+                check_ids = [v[0] for v in sorted_ids[sub]]
                 if not check_ids:
                     continue
                 status = get_status(check_ids)
