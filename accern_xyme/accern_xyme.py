@@ -28,6 +28,7 @@ from io import BytesIO, StringIO
 import pandas as pd
 import quick_server
 import requests
+from requests.exceptions import HTTPError
 
 from .util import (
     async_compute,
@@ -840,7 +841,6 @@ class PipelineHandle:
         ])
 
     def get_dynamic_result(self, data_id: str) -> ByteResponse:
-        from requests.exceptions import HTTPError
         try:
             cur_res, ctype = self._client.request_bytes(
                 METHOD_GET, "/dynamic_result", {
@@ -850,6 +850,7 @@ class PipelineHandle:
         except HTTPError as e:
             if e.response.status_code == 404:
                 raise KeyError(f"data_id {data_id} does not exist") from e
+            raise e
         return interpret_ctype(cur_res, ctype)
 
     def check_queue_stats(self) -> QueueStatsResponse:

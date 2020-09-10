@@ -179,7 +179,7 @@ def get_file_hash(buff: IO[bytes]) -> str:
 def interpret_ctype(data: IO[bytes], ctype: str) -> ByteResponse:
     if ctype == "application/json":
         return json.load(data)
-    if ctype == "application/json-error":
+    if ctype == "application/problem+json":
         res = json.load(data)
         raise ServerSideError(res["errMessage"])
     if ctype == "application/parquet":
