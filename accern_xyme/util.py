@@ -229,9 +229,11 @@ def async_compute(
         check_queue: Callable[[], QueueStatsResponse],
         get_status: Callable[[List[RT]], Dict[RT, QueueStatus]],
         max_buff: int,
-        block_size: int) -> Iterable[ByteResponse]:
+        block_size: int,
+        num_threads: int) -> Iterable[ByteResponse]:
     assert max_buff > 0
     assert block_size > 0
+    assert num_threads > 0
     done: List[bool] = [False]
     end_produce: List[bool] = [False]
     exc: List[Optional[Exception]] = [None]
@@ -281,7 +283,7 @@ def async_compute(
             with cond:
                 cond.notify_all()
 
-    def consume() -> None:
+    def consume(th_num: int) -> None:
         while not done[0]:
             with cond:
                 cond.wait_for(
@@ -292,10 +294,10 @@ def async_compute(
                     time.sleep(1)
                 do_wait = True
                 status = get_status([
-                    hnd for hnd, _ in ids.items()
+                    hnd
+                    for hnd, _ in list(ids.items())[0:30 * th_num: th_num]
                 ])
                 for (t_id, t_status) in status.items():
-                    # print("t_id, t_status", t_id, t_status, t_id in ids)
                     if t_status in ("waiting", "running"):
                         continue
                     do_wait = False
@@ -314,8 +316,11 @@ def async_compute(
 
     prod_th = threading.Thread(target=produce)
     prod_th.start()
-    consume_th = threading.Thread(target=consume)
-    consume_th.start()
+    consume_ths = [
+        threading.Thread(target=consume, args=(th_num,))
+        for th_num in range(num_threads)]
+    for th in consume_ths:
+        th.start()
     yield_ix = 0
     while yield_ix < len(arr):
         with cond:
@@ -335,7 +340,8 @@ def async_compute(
     with cond:
         cond.notify_all()
     prod_th.join()
-    consume_th.join()
+    for th in consume_ths:
+        th.join()
     raise_e = exc[0]
     if isinstance(raise_e, BaseException):
         raise raise_e  # pylint: disable=raising-bad-type
