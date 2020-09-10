@@ -181,8 +181,6 @@ def interpret_ctype(data: IO[bytes], ctype: str) -> ByteResponse:
         return json.load(data)
     if ctype == "application/json-error":
         res = json.load(data)
-        if res["errMessage"] is None:
-            raise NotFoundError()
         raise ServerSideError(res["errMessage"])
     if ctype == "application/parquet":
         return pd.read_parquet(data)
@@ -352,8 +350,3 @@ class ServerSideError(Exception):
 
     def __str__(self) -> str:
         return f"Error from xyme backend: \n{self._message}"
-
-
-class NotFoundError(Exception):
-    def __str__(self) -> str:
-        return "404 Not Found"
