@@ -239,13 +239,18 @@ def async_compute(
     ids: Dict[RT, int] = {}
     res: Dict[int, ByteResponse] = {}
 
+    def get_max_count(remote_queue: QueueStatsResponse) -> int:
+        return max(
+            remote_queue["total"] - remote_queue["active"],
+            remote_queue["data"] - remote_queue["active"])
+
     def can_push_more() -> bool:
         if exc[0] is not None:
             return True
         if len(ids) < max_buff:
             return True
-        remote_queue = check_queue()
-        return remote_queue["data"] - remote_queue["active"] < max_buff
+        max_count = get_max_count(check_queue())
+        return max_count < max_buff
 
     def produce() -> None:
         try:
@@ -256,7 +261,12 @@ def async_compute(
                 if exc[0] is not None:
                     break
                 start_pos = pos
-                cur = arr[pos:pos + block_size]
+                remote_queue = check_queue()
+                max_count = get_max_count(remote_queue)
+                add_more = max(
+                    max_buff - len(ids),
+                    max_buff - max_count)
+                cur = arr[pos:pos + add_more]
                 pos += len(cur)
                 ids.update({
                     cur_id: cur_ix + start_pos

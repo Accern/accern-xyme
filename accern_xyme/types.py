@@ -185,6 +185,7 @@ QueueStatsResponse = TypedDict('QueueStatsResponse', {
     "extras": Dict[str, int],
     "restarted": int,
     "results": int,
+    "total": int,
 })
 QueueStatus = Literal[
     "waiting",
