@@ -268,10 +268,12 @@ def async_compute(
                     max_buff - max_count)
                 cur = arr[pos:pos + add_more]
                 pos += len(cur)
-                ids.update({
-                    cur_id: cur_ix + start_pos
-                    for (cur_ix, cur_id) in enumerate(start(cur))
-                })
+                for block_ix in range(0, len(cur), block_size):
+                    ids.update({
+                        cur_id: cur_ix + start_pos + block_ix
+                        for (cur_ix, cur_id) in enumerate(
+                            start(cur[block_ix:block_ix + block_size]))
+                    })
                 with cond:
                     cond.notify_all()
         finally:
