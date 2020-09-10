@@ -865,19 +865,16 @@ class PipelineHandle:
                 "pipeline": self._pipe_id,
             }, capture_err=True))
         status = res["status"]
+        hnd_map = {data_id.get_id(): data_id for data_id in data_ids}
         return {
-            ComputationHandle(
-                self,
-                key,
-                self.get_dynamic_error_message,
-                self.set_dynamic_error_message): cast(QueueStatus, value)
+            hnd_map[key]: cast(QueueStatus, value)
             for key, value in status.items()
         }
 
     def get_dynamic_bulk(
             self,
             input_data: List[BytesIO],
-            max_buff: int = 2000,
+            max_buff: int = 4000,
             block_size: int = 5) -> Iterable[ByteResponse]:
 
         def get(hnd: 'ComputationHandle') -> ByteResponse:
@@ -895,7 +892,7 @@ class PipelineHandle:
     def get_dynamic_bulk_obj(
             self,
             input_data: List[Any],
-            max_buff: int = 2000,
+            max_buff: int = 4000,
             block_size: int = 5) -> Iterable[ByteResponse]:
 
         def get(hnd: 'ComputationHandle') -> ByteResponse:
@@ -1728,10 +1725,12 @@ class ComputationHandle:
         return hash(self.get_id())
 
     def __eq__(self, other: object) -> bool:
-        return self.__str__() == other.__str__()
+        if not isinstance(other, self.__class__):
+            return False
+        return self.get_id() == other.get_id()
 
     def __ne__(self, other: object) -> bool:
-        return self.__str__() != other.__str__()
+        return not self.__eq__(other)
 
 
 # *** ComputationHandle ***
