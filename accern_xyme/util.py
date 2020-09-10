@@ -304,7 +304,7 @@ def async_compute(
                     try:
                         t_ix = ids.pop(t_id)
                         res[t_ix] = get(t_id)
-                    except NotFoundError:
+                    except KeyError:
                         pass
                     except ServerSideError as e:
                         if exc[0] is None:
