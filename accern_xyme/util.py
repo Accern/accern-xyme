@@ -283,7 +283,7 @@ def async_compute(
             with cond:
                 cond.notify_all()
 
-    def consume(th_num: int) -> None:
+    def consume(th_id: int) -> None:
         while not done[0]:
             with cond:
                 cond.wait_for(
@@ -293,7 +293,11 @@ def async_compute(
                 if do_wait:
                     time.sleep(1)
                 do_wait = True
-                status = get_status(list(ids.keys())[0:30 * th_num: th_num])
+                check_ids = [
+                    v[0]
+                    for v in sorted(ids.items(), key=lambda v: v[1]) \
+                        [th_id:th_id + 10 * num_threads:num_threads]]
+                status = get_status(check_ids)
                 for (t_id, t_status) in status.items():
                     if t_status in ("waiting", "running"):
                         continue
@@ -314,8 +318,8 @@ def async_compute(
     prod_th = threading.Thread(target=produce)
     prod_th.start()
     consume_ths = [
-        threading.Thread(target=consume, args=(th_num + 1,))
-        for th_num in range(num_threads)]
+        threading.Thread(target=consume, args=(th_id,))
+        for th_id in range(num_threads)]
     for th in consume_ths:
         th.start()
     yield_ix = 0
