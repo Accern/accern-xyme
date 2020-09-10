@@ -809,7 +809,6 @@ class PipelineHandle:
 
     def dynamic_async(
             self, input_data: List[BytesIO]) -> List['ComputationHandle']:
-        self._dynamic_error = None
         names = [f"file{pos}" for pos in range(len(input_data))]
         res: Dict[str, str] = self._client._request_json(
             METHOD_FILE, "/dynamic_async", {
@@ -823,7 +822,7 @@ class PipelineHandle:
                 self.set_dynamic_error_message)
             for name in names]
 
-    def set_dynamic_error_message(self, msg: str) -> None:
+    def set_dynamic_error_message(self, msg: Optional[str]) -> None:
         self._dynamic_error = msg
 
     def get_dynamic_error_message(self) -> Optional[str]:
@@ -883,15 +882,21 @@ class PipelineHandle:
         def get(hnd: 'ComputationHandle') -> ByteResponse:
             return hnd.get()
 
-        yield from async_compute(
-            input_data,
-            self.dynamic_async,
-            get,
-            self.check_queue_stats,
-            self.get_dynamic_status,
-            max_buff,
-            block_size,
-            num_threads)
+        success = False
+        try:
+            yield from async_compute(
+                input_data,
+                self.dynamic_async,
+                get,
+                self.check_queue_stats,
+                self.get_dynamic_status,
+                max_buff,
+                block_size,
+                num_threads)
+            success = True
+        finally:
+            if success:
+                self.set_dynamic_error_message(None)
 
     def get_dynamic_bulk_obj(
             self,
@@ -903,15 +908,21 @@ class PipelineHandle:
         def get(hnd: 'ComputationHandle') -> ByteResponse:
             return hnd.get()
 
-        yield from async_compute(
-            input_data,
-            self.dynamic_async_obj,
-            get,
-            self.check_queue_stats,
-            self.get_dynamic_status,
-            max_buff,
-            block_size,
-            num_threads)
+        success = False
+        try:
+            yield from async_compute(
+                input_data,
+                self.dynamic_async_obj,
+                get,
+                self.check_queue_stats,
+                self.get_dynamic_status,
+                max_buff,
+                block_size,
+                num_threads)
+            success = True
+        finally:
+            if success:
+                self.set_dynamic_error_message(None)
 
     def pretty(self, allow_unicode: bool) -> str:
         nodes = [
@@ -1705,15 +1716,18 @@ class ComputationHandle:
         return self._value is not None
 
     def get(self) -> ByteResponse:
-        maybe_error = self._get_dyn_error()
-        if maybe_error is not None:
-            raise ServerSideError(maybe_error)
         try:
             if self._value is None:
                 self._value = self._pipeline.get_dynamic_result(self._data_id)
             return self._value
         except ServerSideError as e:
-            self._set_dyn_error(str(e))
+            if self._get_dyn_error() is None:
+                self._set_dyn_error(str(e))
+            raise e
+        except KeyError as e:
+            maybe_error = self._get_dyn_error()
+            if maybe_error is not None:
+                raise ServerSideError(maybe_error) from e
             raise e
 
     def get_id(self) -> str:
