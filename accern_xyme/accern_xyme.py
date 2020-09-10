@@ -755,7 +755,7 @@ class PipelineHandle:
 
     def get_timing(
             self,
-            blacklist: List[str] = "wait_for_uri") -> Dict[str, TimingResult]:
+            blacklist: List[str] = ["wait_for_uri"]) -> Dict[str, TimingResult]:
         nodes = self.get_nodes()
         pipe_timing: Dict[str, TimingResult] = {}
         node_timing: Dict[str, NodeTiming] = {}
@@ -780,7 +780,7 @@ class PipelineHandle:
                     "fns": node_time,
                 }
                 node_obj = node_timing[node_id]
-                node_obj["node_total"] += node_sums
+                node_obj["node_total"] += float(node_sums)
                 node_obj["node_avg"] = node_obj["node_total"] / length
         node_timing_sorted = sorted(
             node_timing.items(), key=lambda x: x[1]["node_total"],
