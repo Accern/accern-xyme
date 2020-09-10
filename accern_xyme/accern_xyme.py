@@ -1233,8 +1233,7 @@ class NodeHandle:
             key: str,
             chunk: int,
             force_refresh: bool = False) -> Optional[ByteResponse]:
-        content = self.read_blob(key, chunk, force_refresh).get_content()
-        return content
+        return self.read_blob(key, chunk, force_refresh).get_content()
 
     def reset(self) -> NodeState:
         return cast(NodeState, self._client._request_json(
