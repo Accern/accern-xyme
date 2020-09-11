@@ -854,12 +854,8 @@ class PipelineHandle:
         return interpret_ctype(cur_res, ctype)
 
     def check_queue_stats(self) -> QueueStatsResponse:
-        res = cast(QueueStatsResponse, self._client._request_json(
+        return cast(QueueStatsResponse, self._client._request_json(
             METHOD_GET, "/queue_stats", {}, capture_err=True))
-        print(pd.Timestamp("now"), " check_queue ", res)
-        return res
-        # return cast(QueueStatsResponse, self._client._request_json(
-        #     METHOD_GET, "/queue_stats", {}, capture_err=True))
 
     def get_dynamic_status(
             self,

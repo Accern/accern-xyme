@@ -290,8 +290,6 @@ def async_compute(
                     time.sleep(1)
                 do_wait = True
                 sorted_ids = sorted(ids.items(), key=lambda v: v[1])
-                # sub = slice(th_id, th_id + 10 * num_threads, num_threads)
-                # check_ids = [v[0] for v in sorted_ids[sub]]
                 check_ids = [v[0] for v in sorted_ids[0: 3 * num_threads]]
                 if not check_ids:
                     continue
