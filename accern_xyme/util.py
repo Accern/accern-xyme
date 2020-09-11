@@ -234,7 +234,7 @@ def async_compute(
     assert num_threads > 0
     done: List[bool] = [False]
     end_produce: List[bool] = [False]
-    exc: List[Optional[Exception]] = [None]
+    exc: List[Optional[BaseException]] = [None]
     cond = threading.Condition()
     ids: Dict[RT, int] = {}
     res: Dict[int, ByteResponse] = {}
