@@ -247,8 +247,8 @@ def async_compute(
             return True
         if len(ids) < max_buff:
             return True
-        max_count = get_waiting_count(check_queue())
-        return max_count < max_buff
+        waiting_count = get_waiting_count(check_queue())
+        return waiting_count < max_buff
 
     def produce() -> None:
         try:
@@ -260,10 +260,10 @@ def async_compute(
                     break
                 start_pos = pos
                 remote_queue = check_queue()
-                max_count = get_waiting_count(remote_queue)
+                waiting_count = get_waiting_count(remote_queue)
                 add_more = max(
                     max_buff - len(ids),
-                    max_buff - max_count)
+                    max_buff - waiting_count)
                 cur = arr[pos:pos + add_more]
                 pos += len(cur)
                 for block_ix in range(0, len(cur), block_size):
@@ -286,8 +286,6 @@ def async_compute(
                     lambda: exc[0] is not None or done[0] or len(ids) > 0)
             do_wait = False
             while ids:
-                if do_wait:
-                    time.sleep(1)
                 do_wait = True
                 sorted_ids = sorted(ids.items(), key=lambda v: v[1])
                 check_ids = [v[0] for v in sorted_ids[0: 3 * num_threads]]
@@ -306,8 +304,11 @@ def async_compute(
                     except ServerSideError as e:
                         if exc[0] is None:
                             exc[0] = e
-                with cond:
-                    cond.notify_all()
+                if do_wait:
+                    time.sleep(1)
+                else:
+                    with cond:
+                        cond.notify_all()
 
     prod_th = threading.Thread(target=produce)
     prod_th.start()

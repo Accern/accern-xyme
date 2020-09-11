@@ -330,16 +330,14 @@ class XYMEClient:
             req = requests.get(url, params=args)
             if req.status_code == 403:
                 raise AccessDenied(req.text)
-            if req.status_code == 200:
-                return BytesIO(req.content), req.headers["content-type"]
             req.raise_for_status()
+            return BytesIO(req.content), req.headers["content-type"]
         if method == METHOD_POST:
             req = requests.post(url, json=args)
             if req.status_code == 403:
                 raise AccessDenied(req.text)
-            if req.status_code == 200:
-                return BytesIO(req.content), req.headers["content-type"]
             req.raise_for_status()
+            return BytesIO(req.content), req.headers["content-type"]
         if method == METHOD_FILE:
             if files is None:
                 raise ValueError(f"file method must have files: {files}")
@@ -352,9 +350,8 @@ class XYMEClient:
             })
             if req.status_code == 403:
                 raise AccessDenied(req.text)
-            if req.status_code == 200:
-                return BytesIO(req.content), req.headers["content-type"]
             req.raise_for_status()
+            return BytesIO(req.content), req.headers["content-type"]
         raise ValueError(f"unknown method {method}")
 
     def _fallible_raw_request_str(
@@ -374,18 +371,14 @@ class XYMEClient:
             req = requests.get(url, params=args)
             if req.status_code == 403:
                 raise AccessDenied(req.text)
-            if req.status_code == 200:
-                return StringIO(req.text)
-            raise ValueError(
-                f"error {req.status_code} in worker request:\n{req.text}")
+            req.raise_for_status()
+            return StringIO(req.text)
         if method == METHOD_POST:
             req = requests.post(url, json=args)
             if req.status_code == 403:
                 raise AccessDenied(req.text)
-            if req.status_code == 200:
-                return StringIO(req.text)
-            raise ValueError(
-                f"error {req.status_code} in worker request:\n{req.text}")
+            req.raise_for_status()
+            return StringIO(req.text)
         raise ValueError(f"unknown method {method}")
 
     def _fallible_raw_request_json(
@@ -411,10 +404,8 @@ class XYMEClient:
                 req = requests.get(url, params=args)
                 if req.status_code == 403:
                     raise AccessDenied(req.text)
-                if req.status_code == 200:
-                    return json.loads(req.text)
-                raise ValueError(
-                    f"error {req.status_code} in worker request:\n{req.text}")
+                req.raise_for_status()
+                return json.loads(req.text)
             if method == METHOD_FILE:
                 if files is None:
                     raise ValueError(f"file method must have files: {files}")
@@ -427,34 +418,26 @@ class XYMEClient:
                 })
                 if req.status_code == 403:
                     raise AccessDenied(req.text)
-                if req.status_code == 200:
-                    return json.loads(req.text)
-                raise ValueError(
-                    f"error {req.status_code} in worker request:\n{req.text}")
+                req.raise_for_status()
+                return json.loads(req.text)
             if method == METHOD_POST:
                 req = requests.post(url, json=args)
                 if req.status_code == 403:
                     raise AccessDenied(req.text)
-                if req.status_code == 200:
-                    return json.loads(req.text)
-                raise ValueError(
-                    f"error {req.status_code} in worker request:\n{req.text}")
+                req.raise_for_status()
+                return json.loads(req.text)
             if method == METHOD_PUT:
                 req = requests.put(url, json=args)
                 if req.status_code == 403:
                     raise AccessDenied(req.text)
-                if req.status_code == 200:
-                    return json.loads(req.text)
-                raise ValueError(
-                    f"error {req.status_code} in worker request:\n{req.text}")
+                req.raise_for_status()
+                return json.loads(req.text)
             if method == METHOD_DELETE:
                 req = requests.delete(url, json=args)
                 if req.status_code == 403:
                     raise AccessDenied(req.text)
-                if req.status_code == 200:
-                    return json.loads(req.text)
-                raise ValueError(
-                    f"error {req.status_code} in worker request:\n{req.text}")
+                req.raise_for_status()
+                return json.loads(req.text)
             if method == METHOD_LONGPOST:
                 try:
                     return quick_server.worker_request(url, args)
@@ -859,8 +842,8 @@ class PipelineHandle:
 
     def get_dynamic_status(
             self,
-            data_ids: List['ComputationHandle']) -> Dict[
-                'ComputationHandle', QueueStatus]:
+            data_ids: List['ComputationHandle'],
+    ) -> Dict['ComputationHandle', QueueStatus]:
         res = cast(DynamicStatusResponse, self._client._request_json(
             METHOD_POST, "/dynamic_status", {
                 "data_ids": [data_id.get_id() for data_id in data_ids],
