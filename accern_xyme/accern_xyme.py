@@ -28,6 +28,7 @@ from io import BytesIO, StringIO
 import pandas as pd
 import quick_server
 import requests
+from requests.exceptions import HTTPError
 
 from .util import (
     async_compute,
@@ -39,6 +40,7 @@ from .util import (
     get_progress_bar,
     get_retry_sleep,
     interpret_ctype,
+    ServerSideError,
 )
 from .types import (
     CSVBlobResponse,
@@ -46,6 +48,7 @@ from .types import (
     CSVOp,
     CustomCodeResponse,
     CustomImportsResponse,
+    DynamicStatusResponse,
     FlushAllQueuesResponse,
     InCursors,
     JobInfo,
@@ -66,6 +69,8 @@ from .types import (
     PipelineInfo,
     PipelineInit,
     PipelineList,
+    QueueStatsResponse,
+    QueueStatus,
     ReadNode,
     TaskStatus,
     Timing,
@@ -152,8 +157,8 @@ class XYMEClient:
             server_version = self.get_server_version()
             try:
                 return int(server_version["api_version"])
-            except (ValueError, KeyError):
-                raise LegacyVersion()
+            except (ValueError, KeyError) as e:
+                raise LegacyVersion() from e
 
         self._api_version = min(get_version(), API_VERSION)
         self._init()
@@ -325,18 +330,14 @@ class XYMEClient:
             req = requests.get(url, params=args)
             if req.status_code == 403:
                 raise AccessDenied(req.text)
-            if req.status_code == 200:
-                return BytesIO(req.content), req.headers["content-type"]
-            raise ValueError(
-                f"error {req.status_code} in worker request:\n{req.text}")
+            req.raise_for_status()
+            return BytesIO(req.content), req.headers["content-type"]
         if method == METHOD_POST:
             req = requests.post(url, json=args)
             if req.status_code == 403:
                 raise AccessDenied(req.text)
-            if req.status_code == 200:
-                return BytesIO(req.content), req.headers["content-type"]
-            raise ValueError(
-                f"error {req.status_code} in worker request:\n{req.text}")
+            req.raise_for_status()
+            return BytesIO(req.content), req.headers["content-type"]
         if method == METHOD_FILE:
             if files is None:
                 raise ValueError(f"file method must have files: {files}")
@@ -349,10 +350,8 @@ class XYMEClient:
             })
             if req.status_code == 403:
                 raise AccessDenied(req.text)
-            if req.status_code == 200:
-                return BytesIO(req.content), req.headers["content-type"]
-            raise ValueError(
-                f"error {req.status_code} in worker request:\n{req.text}")
+            req.raise_for_status()
+            return BytesIO(req.content), req.headers["content-type"]
         raise ValueError(f"unknown method {method}")
 
     def _fallible_raw_request_str(
@@ -372,18 +371,14 @@ class XYMEClient:
             req = requests.get(url, params=args)
             if req.status_code == 403:
                 raise AccessDenied(req.text)
-            if req.status_code == 200:
-                return StringIO(req.text)
-            raise ValueError(
-                f"error {req.status_code} in worker request:\n{req.text}")
+            req.raise_for_status()
+            return StringIO(req.text)
         if method == METHOD_POST:
             req = requests.post(url, json=args)
             if req.status_code == 403:
                 raise AccessDenied(req.text)
-            if req.status_code == 200:
-                return StringIO(req.text)
-            raise ValueError(
-                f"error {req.status_code} in worker request:\n{req.text}")
+            req.raise_for_status()
+            return StringIO(req.text)
         raise ValueError(f"unknown method {method}")
 
     def _fallible_raw_request_json(
@@ -409,10 +404,8 @@ class XYMEClient:
                 req = requests.get(url, params=args)
                 if req.status_code == 403:
                     raise AccessDenied(req.text)
-                if req.status_code == 200:
-                    return json.loads(req.text)
-                raise ValueError(
-                    f"error {req.status_code} in worker request:\n{req.text}")
+                req.raise_for_status()
+                return json.loads(req.text)
             if method == METHOD_FILE:
                 if files is None:
                     raise ValueError(f"file method must have files: {files}")
@@ -425,46 +418,38 @@ class XYMEClient:
                 })
                 if req.status_code == 403:
                     raise AccessDenied(req.text)
-                if req.status_code == 200:
-                    return json.loads(req.text)
-                raise ValueError(
-                    f"error {req.status_code} in worker request:\n{req.text}")
+                req.raise_for_status()
+                return json.loads(req.text)
             if method == METHOD_POST:
                 req = requests.post(url, json=args)
                 if req.status_code == 403:
                     raise AccessDenied(req.text)
-                if req.status_code == 200:
-                    return json.loads(req.text)
-                raise ValueError(
-                    f"error {req.status_code} in worker request:\n{req.text}")
+                req.raise_for_status()
+                return json.loads(req.text)
             if method == METHOD_PUT:
                 req = requests.put(url, json=args)
                 if req.status_code == 403:
                     raise AccessDenied(req.text)
-                if req.status_code == 200:
-                    return json.loads(req.text)
-                raise ValueError(
-                    f"error {req.status_code} in worker request:\n{req.text}")
+                req.raise_for_status()
+                return json.loads(req.text)
             if method == METHOD_DELETE:
                 req = requests.delete(url, json=args)
                 if req.status_code == 403:
                     raise AccessDenied(req.text)
-                if req.status_code == 200:
-                    return json.loads(req.text)
-                raise ValueError(
-                    f"error {req.status_code} in worker request:\n{req.text}")
+                req.raise_for_status()
+                return json.loads(req.text)
             if method == METHOD_LONGPOST:
                 try:
                     return quick_server.worker_request(url, args)
                 except quick_server.WorkerError as e:
                     if e.get_status_code() == 403:
-                        raise AccessDenied(e.args)
+                        raise AccessDenied(e.args) from e
                     raise e
             raise ValueError(f"unknown method {method}")
-        except json.decoder.JSONDecodeError:
+        except json.decoder.JSONDecodeError as e:
             if req is None:
                 raise
-            raise ValueError(req.text)
+            raise ValueError(req.text) from e
 
     def _login(self) -> None:
         if self._user is None or self._password is None:
@@ -687,6 +672,7 @@ class PipelineHandle:
         self._is_parallel: Optional[bool] = None
         self._nodes: Dict[str, NodeHandle] = {}
         self._settings: Optional[Dict[str, Any]] = None
+        self._dynamic_error: Optional[str] = None
 
     def refresh(self) -> None:
         self._name = None
@@ -811,8 +797,20 @@ class PipelineHandle:
         res: Dict[str, str] = self._client._request_json(
             METHOD_FILE, "/dynamic_async", {
                 "pipeline": self._pipe_id,
-            }, capture_err=False, files=dict(zip(names, input_data)))
-        return [ComputationHandle(self, res[name]) for name in names]
+            }, capture_err=True, files=dict(zip(names, input_data)))
+        return [
+            ComputationHandle(
+                self,
+                res[name],
+                self.get_dynamic_error_message,
+                self.set_dynamic_error_message)
+            for name in names]
+
+    def set_dynamic_error_message(self, msg: Optional[str]) -> None:
+        self._dynamic_error = msg
+
+    def get_dynamic_error_message(self) -> Optional[str]:
+        return self._dynamic_error
 
     def dynamic_async_obj(
             self, input_data: List[Any]) -> List['ComputationHandle']:
@@ -826,12 +824,37 @@ class PipelineHandle:
         ])
 
     def get_dynamic_result(self, data_id: str) -> ByteResponse:
-        cur_res, ctype = self._client.request_bytes(
-            METHOD_GET, "/dynamic_result", {
-                "pipeline": self._pipe_id,
-                "id": data_id,
-            })
+        try:
+            cur_res, ctype = self._client.request_bytes(
+                METHOD_GET, "/dynamic_result", {
+                    "pipeline": self._pipe_id,
+                    "id": data_id,
+                })
+        except HTTPError as e:
+            if e.response.status_code == 404:
+                raise KeyError(f"data_id {data_id} does not exist") from e
+            raise e
         return interpret_ctype(cur_res, ctype)
+
+    def check_queue_stats(self) -> QueueStatsResponse:
+        return cast(QueueStatsResponse, self._client._request_json(
+            METHOD_GET, "/queue_stats", {}, capture_err=True))
+
+    def get_dynamic_status(
+            self,
+            data_ids: List['ComputationHandle'],
+    ) -> Dict['ComputationHandle', QueueStatus]:
+        res = cast(DynamicStatusResponse, self._client._request_json(
+            METHOD_POST, "/dynamic_status", {
+                "data_ids": [data_id.get_id() for data_id in data_ids],
+                "pipeline": self._pipe_id,
+            }, capture_err=True))
+        status = res["status"]
+        hnd_map = {data_id.get_id(): data_id for data_id in data_ids}
+        return {
+            hnd_map[key]: cast(QueueStatus, value)
+            for key, value in status.items()
+        }
 
     def get_dynamic_bulk(
             self,
@@ -843,13 +866,21 @@ class PipelineHandle:
         def get(hnd: 'ComputationHandle') -> ByteResponse:
             return hnd.get()
 
-        yield from async_compute(
-            input_data,
-            self.dynamic_async,
-            get,
-            max_buff,
-            block_size,
-            num_threads)
+        success = False
+        try:
+            yield from async_compute(
+                input_data,
+                self.dynamic_async,
+                get,
+                self.check_queue_stats,
+                self.get_dynamic_status,
+                max_buff,
+                block_size,
+                num_threads)
+            success = True
+        finally:
+            if success:
+                self.set_dynamic_error_message(None)
 
     def get_dynamic_bulk_obj(
             self,
@@ -861,13 +892,21 @@ class PipelineHandle:
         def get(hnd: 'ComputationHandle') -> ByteResponse:
             return hnd.get()
 
-        yield from async_compute(
-            input_data,
-            self.dynamic_async_obj,
-            get,
-            max_buff,
-            block_size,
-            num_threads)
+        success = False
+        try:
+            yield from async_compute(
+                input_data,
+                self.dynamic_async_obj,
+                get,
+                self.check_queue_stats,
+                self.get_dynamic_status,
+                max_buff,
+                block_size,
+                num_threads)
+            success = True
+        finally:
+            if success:
+                self.set_dynamic_error_message(None)
 
     def pretty(self, allow_unicode: bool) -> str:
         nodes = [
@@ -1038,7 +1077,10 @@ class NodeHandle:
             prev: Optional['NodeHandle']) -> 'NodeHandle':
         if prev is None:
             res = NodeHandle(
-                client, pipeline, node_info["id"], node_info["type"])
+                client,
+                pipeline,
+                node_info["id"],
+                node_info["type"])
         else:
             if prev.get_pipeline() != pipeline:
                 raise ValueError(f"{prev.get_pipeline()} != {pipeline}")
@@ -1146,7 +1188,11 @@ class NodeHandle:
                 "node": self.get_id(),
             }, capture_err=False))["times"]
 
-    def read_blob(self, key: str, chunk: int) -> 'BlobHandle':
+    def read_blob(
+            self,
+            key: str,
+            chunk: int,
+            force_refresh: bool) -> 'BlobHandle':
         res = cast(ReadNode, self._client._request_json(
             METHOD_LONGPOST, "/read_node", {
                 "pipeline": self.get_pipeline().get_id(),
@@ -1154,6 +1200,7 @@ class NodeHandle:
                 "key": key,
                 "chunk": chunk,
                 "is_blocking": True,
+                "force_refresh": force_refresh,
             }, capture_err=False))
         uri = res["result_uri"]
         if uri is None:
@@ -1164,8 +1211,12 @@ class NodeHandle:
             is_full=True,
             pipeline=self.get_pipeline())
 
-    def read(self, key: str, chunk: int) -> Optional[ByteResponse]:
-        return self.read_blob(key, chunk).get_content()
+    def read(
+            self,
+            key: str,
+            chunk: int,
+            force_refresh: bool = False) -> Optional[ByteResponse]:
+        return self.read_blob(key, chunk, force_refresh).get_content()
 
     def reset(self) -> NodeState:
         return cast(NodeState, self._client._request_json(
@@ -1406,21 +1457,33 @@ class BlobHandle:
     def as_str(self) -> str:
         return f"{self.get_uri()}"
 
-    def download_zip(self, save_path: str) -> None:
+    def download_zip(self, to_path: Optional[str]) -> Optional[io.BytesIO]:
         if self.is_full():
             raise ValueError(f"URI must not be full: {self}")
-        cur_res, ctype = self._client._raw_request_bytes(
+        cur_res, _ = self._client._raw_request_bytes(
             METHOD_GET, "/download_zip", {
                 "blob": self._uri,
                 "pipeline": self.get_pipeline().get_id(),
             })
-        with open(save_path, "wb") as file_download:
+        if to_path is None:
+            return io.BytesIO(cur_res.read())
+        with open(to_path, "wb") as file_download:
             file_download.write(cur_res.read())
+        return None
 
-    def upload_zip(self, from_path: str) -> List['BlobHandle']:
-
-        with open(from_path, "rb") as fin:
-            zip_stream = io.BytesIO(fin.read())
+    def upload_zip(
+            self,
+            from_path: Optional[str],
+            from_io: Optional[io.BytesIO]) -> List['BlobHandle']:
+        if from_path is not None and from_io is not None:
+            raise ValueError("cannot have both from_path and from_io")
+        if from_io is not None:
+            zip_stream = from_io
+        elif from_path is not None:
+            with open(from_path, "rb") as fin:
+                zip_stream = io.BytesIO(fin.read())
+        else:
+            raise ValueError("from_path and from_io cannot be both None")
 
         resp = self._client._request_json(
             METHOD_FILE, "/upload_zip", {
@@ -1539,7 +1602,7 @@ class CSVBlobHandle(BlobHandle):
         total_size = file_content.seek(0, io.SEEK_END) - init_pos
         file_content.seek(init_pos, io.SEEK_SET)
         if progress_bar is not None:
-            progress_bar.write(f"Uploading file:\n")
+            progress_bar.write("Uploading file:\n")
         print_progress = get_progress_bar(out=progress_bar)
         cur_size = self.start_data(total_size, file_hash, file_ext)
         while True:
@@ -1620,18 +1683,38 @@ class JSONBlobHandle(BlobHandle):
 
 
 class ComputationHandle:
-    def __init__(self, pipeline: PipelineHandle, data_id: str) -> None:
+    def __init__(
+            self,
+            pipeline: PipelineHandle,
+            data_id: str,
+            get_dyn_error: Callable[[], Optional[str]],
+            set_dyn_error: Callable[[str], None]) -> None:
         self._pipeline = pipeline
         self._data_id = data_id
         self._value: Optional[ByteResponse] = None
+        self._get_dyn_error = get_dyn_error
+        self._set_dyn_error = set_dyn_error
 
     def has_fetched(self) -> bool:
         return self._value is not None
 
     def get(self) -> ByteResponse:
-        if self._value is None:
-            self._value = self._pipeline.get_dynamic_result(self._data_id)
-        return self._value
+        try:
+            if self._value is None:
+                self._value = self._pipeline.get_dynamic_result(self._data_id)
+            return self._value
+        except ServerSideError as e:
+            if self._get_dyn_error() is None:
+                self._set_dyn_error(str(e))
+            raise e
+        except KeyError as e:
+            maybe_error = self._get_dyn_error()
+            if maybe_error is not None:
+                raise ServerSideError(maybe_error) from e
+            raise e
+
+    def get_id(self) -> str:
+        return self._data_id
 
     def __str__(self) -> str:
         if self._value is None:
@@ -1640,6 +1723,18 @@ class ComputationHandle:
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}[{self.__str__()}]"
+
+    def __hash__(self) -> int:
+        return hash(self.get_id())
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, self.__class__):
+            return False
+        return self.get_id() == other.get_id()
+
+    def __ne__(self, other: object) -> bool:
+        return not self.__eq__(other)
+
 
 # *** ComputationHandle ***
 

@@ -178,3 +178,22 @@ ModelParamsResponse = TypedDict('ModelParamsResponse', {
 FlushAllQueuesResponse = TypedDict('FlushAllQueuesResponse', {
     "success": bool,
 })
+QueueStatsResponse = TypedDict('QueueStatsResponse', {
+    "active": int,
+    "data": int,
+    "error": int,
+    "extras": Dict[str, int],
+    "restarted": int,
+    "results": int,
+    "total": int,
+})
+QueueStatus = Literal[
+    "waiting",
+    "running",
+    "result",
+    "error",
+    "void",
+]
+DynamicStatusResponse = TypedDict('DynamicStatusResponse', {
+    "status": Dict[str, QueueStatus],
+})
