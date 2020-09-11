@@ -307,8 +307,8 @@ def async_compute(
                     except ServerSideError as e:
                         if exc[0] is None:
                             exc[0] = e
-            with cond:
-                cond.notify_all()
+                with cond:
+                    cond.notify_all()
 
     prod_th = threading.Thread(target=produce)
     prod_th.start()
