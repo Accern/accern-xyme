@@ -753,7 +753,10 @@ class PipelineHandle:
         assert self._settings is not None
         return self._settings
 
-    def get_timing(self, blacklist: List[str] = []) -> Dict[str, TimingResult]:
+    def get_timing(
+            self,
+            blacklist: List[str] = ["wait_for_uri"],
+            ) -> Dict[str, TimingResult]:
         node_timing: Dict[str, NodeTiming] = {}
         pipe_timing: Dict[str, Any] = {}
         nodes = self.get_nodes()
@@ -766,19 +769,21 @@ class PipelineHandle:
         for node in nodes:
             node_time = self.get_node(node).get_timing()
             node_name: str = self.get_node(node).get_node_def()["name"]
+            node_total = 0.0
             for cur in filter_blacklist(node_time):
                 length = len(node_time)
                 node_id = self.get_node(node).get_id()
                 node_sums = float(cur["total"])
+                node_total += node_sums
                 node_timing[node_id] = {
                     "node_name": node_name,
                     "node_total": 0.0,
                     "node_avg": 0.0,
                     "fns": node_time,
                 }
-                node_obj = node_timing[node_id]
-                node_obj["node_total"] += node_sums
-                node_obj["node_avg"] = node_obj["node_total"] / length
+                node_dicts = node_timing[node_id]
+                node_dicts["node_total"] = node_total
+                node_dicts["node_avg"] = node_dicts["node_total"] / length
         node_timing_sorted = sorted(
             node_timing.items(), key=lambda x: x[1]["node_total"],
             reverse=True,
