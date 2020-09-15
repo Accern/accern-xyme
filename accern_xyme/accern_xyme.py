@@ -753,27 +753,23 @@ class PipelineHandle:
         assert self._settings is not None
         return self._settings
 
-    def get_timing(
-            self,
-            blacklist: List[str] = ["wait_for_uri"],
-            ) -> Dict[str, TimingResult]:
-        nodes = self.get_nodes()
-        pipe_timing: Dict[str, TimingResult] = {}
+    def get_timing(self, blacklist: List[str] = []) -> Dict[str, TimingResult]:
         node_timing: Dict[str, NodeTiming] = {}
+        pipe_timing: Dict[str, Any] = {}
+        nodes = self.get_nodes()
 
-        def filter_blacklist(
-                node_time: List[Timing]) -> Iterator[Timing]:
+        def filter_blacklist(node_time: List[Timing]) -> Iterator[Timing]:
             for value in node_time:
-                if value.get("name") not in blacklist:
+                if value["name"] not in blacklist:
                     yield value
 
-        for node in enumerate(nodes):
+        for node in nodes:
             node_time = self.get_node(node).get_timing()
             node_name: str = self.get_node(node).get_node_def()["name"]
             for cur in filter_blacklist(node_time):
                 length = len(node_time)
                 node_id = self.get_node(node).get_id()
-                node_sums = cur.get("total")
+                node_sums = float(cur["total"])
                 node_timing[node_id] = {
                     "node_name": node_name,
                     "node_total": 0.0,
@@ -781,17 +777,18 @@ class PipelineHandle:
                     "fns": node_time,
                 }
                 node_obj = node_timing[node_id]
-                node_obj["node_total"] += float(node_sums)
+                node_obj["node_total"] += node_sums
                 node_obj["node_avg"] = node_obj["node_total"] / length
         node_timing_sorted = sorted(
             node_timing.items(), key=lambda x: x[1]["node_total"],
-            reverse=True)
+            reverse=True,
+            )
         pipe_timing = {
             "pipe_total": 0.0,
             "node": node_timing_sorted,
         }
-        pipe_timing['pipe_total'] = sum(
-            value["node_total"] for value in node_timing.values() if value)
+        pipe_timing['pipe_total'] = float(sum(
+            value["node_total"] for value in node_timing.values() if value))
         return pipe_timing
 
     def is_high_priority(self) -> bool:
