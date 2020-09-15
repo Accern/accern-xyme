@@ -754,9 +754,9 @@ class PipelineHandle:
         return self._settings
 
     def get_timing(
-            self,
-            blacklist: List[str] = ["wait_for_uri"],
-            ) -> Dict[str, TimingResult]:
+                self,
+                blacklist: List[str] = [],
+                ) -> Dict[str, TimingResult]:
         node_timing: Dict[str, NodeTiming] = {}
         pipe_timing: Dict[str, Any] = {}
         nodes = self.get_nodes()
