@@ -769,12 +769,10 @@ class PipelineHandle:
         for node in nodes:
             node_time = self.get_node(node).get_timing()
             node_name: str = self.get_node(node).get_node_def()["name"]
-            node_total = 0.0
             for cur in filter_blacklist(node_time):
                 length = len(node_time)
                 node_id = self.get_node(node).get_id()
                 node_sums = float(cur["total"])
-                node_total += node_sums
                 node_timing[node_id] = {
                     "node_name": node_name,
                     "node_total": 0.0,
@@ -782,7 +780,7 @@ class PipelineHandle:
                     "fns": node_time,
                 }
                 node_dicts = node_timing[node_id]
-                node_dicts["node_total"] = node_total
+                node_dicts["node_total"] += node_sums
                 node_dicts["node_avg"] = node_dicts["node_total"] / length
         node_timing_sorted = sorted(
             node_timing.items(), key=lambda x: x[1]["node_total"],
