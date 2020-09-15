@@ -756,9 +756,8 @@ class PipelineHandle:
     def get_timing(
                 self,
                 blacklist: List[str] = [],
-                ) -> Dict[str, TimingResult]:
+                ) -> Optional[TimingResult]:
         node_timing: Dict[str, NodeTiming] = {}
-        pipe_timing: Dict[str, Any] = {}
         nodes = self.get_nodes()
 
         def filter_blacklist(node_time: List[Timing]) -> Iterator[Timing]:
@@ -769,30 +768,28 @@ class PipelineHandle:
         for node in nodes:
             node_time = self.get_node(node).get_timing()
             node_name: str = self.get_node(node).get_node_def()["name"]
+            node_total = 0.0
             for cur in filter_blacklist(node_time):
-                length = len(node_time)
+                length: int = len(node_time)
                 node_id = self.get_node(node).get_id()
                 node_sums = float(cur["total"])
+                node_total += (node_sums)
                 node_timing[node_id] = {
                     "node_name": node_name,
-                    "node_total": 0.0,
-                    "node_avg": 0.0,
+                    "node_total": node_total,
+                    "node_avg": node_total / length,
                     "fns": node_time,
                 }
-                node_dicts = node_timing[node_id]
-                node_dicts["node_total"] += node_sums
-                node_dicts["node_avg"] = node_dicts["node_total"] / length
         node_timing_sorted = sorted(
             node_timing.items(), key=lambda x: x[1]["node_total"],
             reverse=True,
             )
-        pipe_timing = {
-            "pipe_total": 0.0,
-            "node": node_timing_sorted,
+        return {
+            "pipe_total": float(sum(
+                value["node_total"]
+                for value in node_timing.values() if value)),
+            "nodes": node_timing_sorted,
         }
-        pipe_timing['pipe_total'] = float(sum(
-            value["node_total"] for value in node_timing.values() if value))
-        return pipe_timing
 
     def is_high_priority(self) -> bool:
         self._maybe_refresh()
