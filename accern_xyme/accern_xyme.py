@@ -642,6 +642,10 @@ class XYMEClient:
         return cast(CustomImportsResponse, self._request_json(
             METHOD_GET, "/allowed_custom_imports", {}, capture_err=False))
 
+    def check_queue_stats(self) -> QueueStatsResponse:
+        return cast(QueueStatsResponse, self._request_json(
+            METHOD_GET, "/queue_stats", {}, capture_err=True))
+
     def flush_all_queue_data(self) -> None:
 
         def do_flush() -> bool:
@@ -836,10 +840,6 @@ class PipelineHandle:
             raise e
         return interpret_ctype(cur_res, ctype)
 
-    def check_queue_stats(self) -> QueueStatsResponse:
-        return cast(QueueStatsResponse, self._client._request_json(
-            METHOD_GET, "/queue_stats", {}, capture_err=True))
-
     def get_dynamic_status(
             self,
             data_ids: List['ComputationHandle'],
@@ -872,7 +872,7 @@ class PipelineHandle:
                 input_data,
                 self.dynamic_async,
                 get,
-                self.check_queue_stats,
+                self._client.check_queue_stats,
                 self.get_dynamic_status,
                 max_buff,
                 block_size,
@@ -898,7 +898,7 @@ class PipelineHandle:
                 input_data,
                 self.dynamic_async_obj,
                 get,
-                self.check_queue_stats,
+                self._client.check_queue_stats,
                 self.get_dynamic_status,
                 max_buff,
                 block_size,
