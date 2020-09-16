@@ -755,14 +755,15 @@ class PipelineHandle:
 
     def get_timing(
                 self,
-                blacklist: List[str] = [],
+                blacklist: Optional[List[str]] = None,
                 ) -> Optional[TimingResult]:
+        blacklist = [] if blacklist is None else blacklist
         node_timing: Dict[str, NodeTiming] = {}
         nodes = self.get_nodes()
 
         def filter_blacklist(node_time: List[Timing]) -> Iterator[Timing]:
             for value in node_time:
-                if value["name"] not in blacklist:
+                if value["name"] != blacklist:
                     yield value
 
         for node in nodes:
@@ -771,6 +772,7 @@ class PipelineHandle:
             node_name: str = node_get.get_node_def()["name"]
             node_id = node_get.get_id()
             node_total = 0.0
+            filter_node = None
             for filter_node in filter_blacklist(node_time):
                 length: int = len(list(filter_blacklist(node_time)))
                 node_total += float(filter_node["total"])
@@ -778,7 +780,7 @@ class PipelineHandle:
                 "node_name": node_name,
                 "node_total": node_total,
                 "node_avg": node_total / length,
-                "fns": node_time,
+                "fns": [filter_node],
             }
             pipe_total = 0.0
             for cur in node_timing.values():
