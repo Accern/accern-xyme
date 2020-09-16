@@ -789,8 +789,8 @@ class PipelineHandle:
             node_timing.items(), key=lambda x: x[1]["node_total"],
             reverse=True)
         return {
-                "pipe_total": pipe_total,
-                "nodes": node_timing_sorted,
+            "pipe_total": pipe_total,
+            "nodes": node_timing_sorted,
         }
 
     def is_high_priority(self) -> bool:
