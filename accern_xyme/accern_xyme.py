@@ -766,20 +766,20 @@ class PipelineHandle:
                     yield value
 
         for node in nodes:
-            node_time = self.get_node(node).get_timing()
-            node_name: str = self.get_node(node).get_node_def()["name"]
+            node_get = self.get_node(node)
+            node_time = node_get.get_timing()
+            node_name: str = node_get.get_node_def()["name"]
+            node_id = node_get.get_id()
             node_total = 0.0
             for cur in filter_blacklist(node_time):
                 length: int = len(node_time)
-                node_id = self.get_node(node).get_id()
-                node_sums = float(cur["total"])
-                node_total += (node_sums)
-                node_timing[node_id] = {
-                    "node_name": node_name,
-                    "node_total": node_total,
-                    "node_avg": node_total / length,
-                    "fns": node_time,
-                }
+                node_total += float(cur["total"])
+            node_timing[node_id] = {
+                "node_name": node_name,
+                "node_total": node_total,
+                "node_avg": node_total / length,
+                "fns": node_time,
+            }
         node_timing_sorted = sorted(
             node_timing.items(), key=lambda x: x[1]["node_total"],
             reverse=True,
