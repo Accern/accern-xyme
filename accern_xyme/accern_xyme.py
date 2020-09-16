@@ -48,6 +48,7 @@ from .types import (
     CSVOp,
     CustomCodeResponse,
     CustomImportsResponse,
+    DynamicResults,
     DynamicStatusResponse,
     FlushAllQueuesResponse,
     InCursors,
@@ -777,6 +778,20 @@ class PipelineHandle:
 
     def update_settings(self, settings: Dict[str, Any]) -> None:
         self._client.update_settings(self.get_id(), settings)
+
+    def dynamic_list(
+            self,
+            inputs: List[Any],
+            input_key: str,
+            output_key: str) -> List[Any]:
+        res = cast(DynamicResults, self._client._request_json(
+            METHOD_POST, "/dynamic_list", {
+                "pipeline": self._pipe_id,
+                "inputs": inputs,
+                "input_key": input_key,
+                "output_key": output_key,
+            }, capture_err=True))
+        return res["results"]
 
     def dynamic(self, input_data: BytesIO) -> ByteResponse:
         cur_res, ctype = self._client.request_bytes(

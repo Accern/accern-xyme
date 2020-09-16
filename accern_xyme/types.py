@@ -197,3 +197,6 @@ QueueStatus = Literal[
 DynamicStatusResponse = TypedDict('DynamicStatusResponse', {
     "status": Dict[str, QueueStatus],
 })
+DynamicResults = TypedDict('DynamicResults', {
+    "results": List[Any],
+})
