@@ -771,24 +771,24 @@ class PipelineHandle:
             node_name: str = node_get.get_node_def()["name"]
             node_id = node_get.get_id()
             node_total = 0.0
-            for cur in filter_blacklist(node_time):
-                length: int = len(node_time)
-                node_total += float(cur["total"])
+            for filter_node in filter_blacklist(node_time):
+                length: int = len(list(filter_blacklist(node_time)))
+                node_total += float(filter_node["total"])
             node_timing[node_id] = {
                 "node_name": node_name,
                 "node_total": node_total,
                 "node_avg": node_total / length,
                 "fns": node_time,
             }
+            pipe_total = 0.0
+            for cur in node_timing.values():
+                pipe_total += float(cur["node_total"])
         node_timing_sorted = sorted(
             node_timing.items(), key=lambda x: x[1]["node_total"],
-            reverse=True,
-            )
+            reverse=True)
         return {
-            "pipe_total": float(sum(
-                value["node_total"]
-                for value in node_timing.values() if value)),
-            "nodes": node_timing_sorted,
+                "pipe_total": pipe_total,
+                "nodes": node_timing_sorted,
         }
 
     def is_high_priority(self) -> bool:
