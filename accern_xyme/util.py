@@ -1,7 +1,7 @@
 from typing import (
     Any,
     Callable,
-    Deque,
+    Dict,
     IO,
     Iterable,
     List,
@@ -12,14 +12,15 @@ from typing import (
 import io
 import json
 import shutil
-import collections
+import time
+import threading
 from io import BytesIO, TextIOWrapper
 import pandas as pd
 from scipy import sparse
 import torch
+from .types import QueueStatsResponse, QueueStatus
 
-
-FILE_UPLOAD_CHUNK_SIZE = 8 * 1024 * 1024  # 8MB
+FILE_UPLOAD_CHUNK_SIZE = 100 * 1024  # 100kb
 FILE_HASH_CHUNK_SIZE = FILE_UPLOAD_CHUNK_SIZE
 MAX_RETRY = 5
 RETRY_SLEEP = 5.0
@@ -178,6 +179,9 @@ def get_file_hash(buff: IO[bytes]) -> str:
 def interpret_ctype(data: IO[bytes], ctype: str) -> ByteResponse:
     if ctype == "application/json":
         return json.load(data)
+    if ctype == "application/problem+json":
+        res = json.load(data)
+        raise ServerSideError(res["errMessage"])
     if ctype == "application/parquet":
         return pd.read_parquet(data)
     if ctype == "application/torch":
@@ -220,21 +224,129 @@ def async_compute(
         arr: List[Any],
         start: Callable[[List[Any]], List[RT]],
         get: Callable[[RT], ByteResponse],
-        batch_size: int = 1000,
-        block_size: int = 200) -> Iterable[ByteResponse]:
-    assert batch_size >= block_size
+        check_queue: Callable[[], QueueStatsResponse],
+        get_status: Callable[[List[RT]], Dict[RT, QueueStatus]],
+        max_buff: int,
+        block_size: int,
+        num_threads: int) -> Iterable[ByteResponse]:
+    assert max_buff > 0
     assert block_size > 0
-    pos = 0
-    ids: Deque[RT] = collections.deque()
-    cur_size = batch_size
-    while pos < len(arr):
-        cur = arr[pos:pos + cur_size]
-        pos += len(cur)
-        ids.extend(start(cur))
-        count = 0
-        while count < block_size and ids:
-            yield get(ids.popleft())
-            count += 1
-        cur_size = block_size
-    for cur_id in ids:
-        yield get(cur_id)
+    assert num_threads > 0
+    done: List[bool] = [False]
+    end_produce: List[bool] = [False]
+    exc: List[Optional[BaseException]] = [None]
+    cond = threading.Condition()
+    ids: Dict[RT, int] = {}
+    res: Dict[int, ByteResponse] = {}
+
+    def get_waiting_count(remote_queue: QueueStatsResponse) -> int:
+        return remote_queue["total"] - remote_queue["active"]
+
+    def can_push_more() -> bool:
+        if exc[0] is not None:
+            return True
+        if len(ids) < max_buff:
+            return True
+        waiting_count = get_waiting_count(check_queue())
+        return waiting_count < max_buff
+
+    def produce() -> None:
+        try:
+            pos = 0
+            while pos < len(arr):
+                with cond:
+                    cond.wait_for(can_push_more)
+                if exc[0] is not None:
+                    break
+                start_pos = pos
+                remote_queue = check_queue()
+                waiting_count = get_waiting_count(remote_queue)
+                add_more = max(
+                    max_buff - len(ids),
+                    max_buff - waiting_count)
+                cur = arr[pos:pos + add_more]
+                pos += len(cur)
+                for block_ix in range(0, len(cur), block_size):
+                    ids.update({
+                        cur_id: cur_ix + start_pos + block_ix
+                        for (cur_ix, cur_id) in enumerate(
+                            start(cur[block_ix:block_ix + block_size]))
+                    })
+                with cond:
+                    cond.notify_all()
+        finally:
+            end_produce[0] = True
+            with cond:
+                cond.notify_all()
+
+    def consume() -> None:
+        while not done[0]:
+            with cond:
+                cond.wait_for(
+                    lambda: exc[0] is not None or done[0] or len(ids) > 0)
+            do_wait = False
+            while ids:
+                do_wait = True
+                sorted_ids = sorted(ids.items(), key=lambda v: v[1])
+                check_ids = [v[0] for v in sorted_ids[0: 3 * num_threads]]
+                if not check_ids:
+                    continue
+                status = get_status(check_ids)
+                for (t_id, t_status) in status.items():
+                    if t_status in ("waiting", "running"):
+                        continue
+                    do_wait = False
+                    try:
+                        t_ix = ids.pop(t_id)
+                        res[t_ix] = get(t_id)
+                    except KeyError:
+                        pass
+                    except ServerSideError as e:
+                        if exc[0] is None:
+                            exc[0] = e
+                if do_wait:
+                    time.sleep(1)
+                else:
+                    with cond:
+                        cond.notify_all()
+
+    prod_th = threading.Thread(target=produce)
+    prod_th.start()
+    consume_ths = [
+        threading.Thread(target=consume)
+        for _ in range(num_threads)]
+    for th in consume_ths:
+        th.start()
+    yield_ix = 0
+    while yield_ix < len(arr):
+        with cond:
+            cond.wait_for(lambda: exc[0] is not None or bool(res))
+        if exc[0] is not None:
+            break
+        try:
+            while res:
+                yield res.pop(yield_ix)
+                yield_ix += 1
+        except KeyError:
+            pass
+    if exc[0] is not None:
+        with cond:
+            cond.wait_for(lambda: end_produce[0])
+    done[0] = True
+    with cond:
+        cond.notify_all()
+    prod_th.join()
+    for th in consume_ths:
+        th.join()
+    raise_e = exc[0]
+    if isinstance(raise_e, BaseException):
+        raise raise_e  # pylint: disable=raising-bad-type
+
+
+class ServerSideError(Exception):
+    def __init__(self, message: str) -> None:
+        self._message = message
+        super().__init__(self._message)
+
+    def __str__(self) -> str:
+        return f"Error from xyme backend: \n{self._message}"
