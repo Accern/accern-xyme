@@ -761,23 +761,17 @@ class PipelineHandle:
         node_timing: Dict[str, NodeTiming] = {}
         nodes = self.get_nodes()
 
-        # def filter_blacklist(node_time: List[Timing]) -> Iterator[Timing]:
-        #     for value in node_time:
-        #         if value["name"] not in blist:
-        #             yield value
-
-        def get_filter_times(
-                node_time: List[Timing]) -> Tuple[float, float, list]:
+        def get_filterd_times(
+                node_time: List[Timing]) -> Tuple[float, float, List[Timing]]:
             fns = []
-            total_time = 0.0
+            node_total = 0.0
             for value in node_time:
                 if value["name"] not in blist:
                     fns.append(value)
-                    total_time += value["total"]
+                    node_total += value["total"]
             if not fns:
                 return (0, 0, fns)
-
-            return total_time, total_time / len(fns), fns
+            return (node_total, node_total / len(fns), fns)
 
         pipe_total = 0.0
         for node in nodes:
@@ -785,27 +779,17 @@ class PipelineHandle:
             node_time = node_get.get_timing()
             node_name = node_get.get_node_def()["name"]
             node_id = node_get.get_id()
-
-            total_time, avg_time, fns = get_filter_times(node_time)
+            node_total, avg_time, fns = get_filterd_times(node_time)
             node_timing[node_id] = {
                 "node_name": node_name,
-                "node_total": total_time,
+                "node_total": node_total,
                 "node_avg": avg_time,
                 "fns": fns,
             }
-            # filter_node_time = list(filter_blacklist(node_time))
-            # node_total = sum(
-            #     (float(fnode["total"]) for fnode in filter_node_time))
-            # length = len(filter_node_time)
-            # node_timing[node_id] = {
-            #     "node_name": node_name,
-            #     "node_total": node_total,
-            #     "node_avg": node_total / length,
-            #     "fns": filter_node_time,
-            # }
-            pipe_total += total_time
+            pipe_total += node_total
         node_timing_sorted = sorted(
-            node_timing.items(), key=lambda x: x[1]["node_total"],
+            node_timing.items(),
+            key=lambda x: x[1]["node_total"],
             reverse=True)
         return {
             "pipe_total": pipe_total,
