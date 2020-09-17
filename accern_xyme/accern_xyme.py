@@ -772,16 +772,15 @@ class PipelineHandle:
             node_time = node_get.get_timing()
             node_name: str = node_get.get_node_def()["name"]
             node_id = node_get.get_id()
-            node_total = 0.0
-            filter_node = None
-            for filter_node in filter_blacklist(node_time):
-                node_total += float(filter_node["total"])
-            length: int = len(list(filter_blacklist(node_time)))
+            filter_node_time = list(filter_blacklist(node_time))
+            node_total = sum(
+                (float(fnode["total"]) for fnode in filter_node_time))
+            length = len(filter_node_time)
             node_timing[node_id] = {
                 "node_name": node_name,
                 "node_total": node_total,
                 "node_avg": node_total / length,
-                "fns": [filter_node],
+                "fns": filter_node_time,
             }
             pipe_total += float(node_total)
         node_timing_sorted = sorted(
