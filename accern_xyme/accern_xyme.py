@@ -43,6 +43,7 @@ from .util import (
     ServerSideError,
 )
 from .types import (
+    BlobInit,
     CSVBlobResponse,
     CSVList,
     CSVOp,
@@ -67,6 +68,7 @@ from .types import (
     NodeTypes,
     PipelineCreate,
     PipelineDef,
+    PipelineDupResponse,
     PipelineInfo,
     PipelineInit,
     PipelineList,
@@ -137,17 +139,11 @@ class XYMEClient:
     def __init__(
             self,
             url: str,
-            user: Optional[str],
-            password: Optional[str],
             token: Optional[str]) -> None:
         self._url = url.rstrip("/")
-        if user is None:
-            user = os.environ.get("ACCERN_USER")
-        self._user = user
-        if password is None:
-            password = os.environ.get("ACCERN_PASSWORD")
-        self._password = password
-        self._token: Optional[str] = token
+        if token is None:
+            token = os.environ.get("XYME_TOKEN")
+        self._token = token
         self._last_action = time.monotonic()
         self._auto_refresh = True
         self._pipeline_cache: WVD = weakref.WeakValueDictionary()
@@ -162,26 +158,13 @@ class XYMEClient:
                 raise LegacyVersion() from e
 
         self._api_version = min(get_version(), API_VERSION)
-        self._init()
 
     def get_api_version(self) -> int:
         return self._api_version
 
-    def _init(self) -> None:
-        if self._token is None:
-            self._login()
-            return
-        # FIXME
-        # res = cast(UserLogin, self._request_json(
-        #     METHOD_GET, "/init", {}, capture_err=False))
-        # if not res["success"]:
-        #     raise AccessDenied("init was not successful")
-        # self._token = res["token"]
-        # self._permissions = res["permissions"]
-
     def get_permissions(self) -> List[str]:
         if self._permissions is None:
-            self._init()
+            raise NotImplementedError("permissions are not implemented")
         assert self._permissions is not None
         return self._permissions
 
@@ -327,14 +310,17 @@ class XYMEClient:
                 api_version = self._api_version
             prefix = f"{PREFIX}/v{api_version}"
         url = f"{self._url}{prefix}{path}"
+        headers = {
+            "authorization": self._token,
+        }
         if method == METHOD_GET:
-            req = requests.get(url, params=args)
+            req = requests.get(url, params=args, headers=headers)
             if req.status_code == 403:
                 raise AccessDenied(req.text)
             req.raise_for_status()
             return BytesIO(req.content), req.headers["content-type"]
         if method == METHOD_POST:
-            req = requests.post(url, json=args)
+            req = requests.post(url, json=args, headers=headers)
             if req.status_code == 403:
                 raise AccessDenied(req.text)
             req.raise_for_status()
@@ -342,13 +328,17 @@ class XYMEClient:
         if method == METHOD_FILE:
             if files is None:
                 raise ValueError(f"file method must have files: {files}")
-            req = requests.post(url, data=args, files={
-                key: (
-                    getattr(value, "name", key),
-                    value,
-                    "application/octet-stream",
-                ) for (key, value) in files.items()
-            })
+            req = requests.post(
+                url,
+                data=args,
+                files={
+                    key: (
+                        getattr(value, "name", key),
+                        value,
+                        "application/octet-stream",
+                    ) for (key, value) in files.items()
+                },
+                headers=headers)
             if req.status_code == 403:
                 raise AccessDenied(req.text)
             req.raise_for_status()
@@ -368,14 +358,17 @@ class XYMEClient:
                 api_version = self._api_version
             prefix = f"{PREFIX}/v{api_version}"
         url = f"{self._url}{prefix}{path}"
+        headers = {
+            "authorization": self._token,
+        }
         if method == METHOD_GET:
-            req = requests.get(url, params=args)
+            req = requests.get(url, params=args, headers=headers)
             if req.status_code == 403:
                 raise AccessDenied(req.text)
             req.raise_for_status()
             return StringIO(req.text)
         if method == METHOD_POST:
-            req = requests.post(url, json=args)
+            req = requests.post(url, json=args, headers=headers)
             if req.status_code == 403:
                 raise AccessDenied(req.text)
             req.raise_for_status()
@@ -396,13 +389,16 @@ class XYMEClient:
                 api_version = self._api_version
             prefix = f"{PREFIX}/v{api_version}"
         url = f"{self._url}{prefix}{path}"
+        headers = {
+            "authorization": self._token,
+        }
         if method != METHOD_FILE and files is not None:
             raise ValueError(
                 f"files are only allow for post (got {method}): {files}")
         req = None
         try:
             if method == METHOD_GET:
-                req = requests.get(url, params=args)
+                req = requests.get(url, params=args, headers=headers)
                 if req.status_code == 403:
                     raise AccessDenied(req.text)
                 req.raise_for_status()
@@ -410,36 +406,41 @@ class XYMEClient:
             if method == METHOD_FILE:
                 if files is None:
                     raise ValueError(f"file method must have files: {files}")
-                req = requests.post(url, data=args, files={
-                    key: (
-                        getattr(value, "name", key),
-                        value,
-                        "application/octet-stream",
-                    ) for (key, value) in files.items()
-                })
+                req = requests.post(
+                    url,
+                    data=args,
+                    files={
+                        key: (
+                            getattr(value, "name", key),
+                            value,
+                            "application/octet-stream",
+                        ) for (key, value) in files.items()
+                    },
+                    headers=headers)
                 if req.status_code == 403:
                     raise AccessDenied(req.text)
                 req.raise_for_status()
                 return json.loads(req.text)
             if method == METHOD_POST:
-                req = requests.post(url, json=args)
+                req = requests.post(url, json=args, headers=headers)
                 if req.status_code == 403:
                     raise AccessDenied(req.text)
                 req.raise_for_status()
                 return json.loads(req.text)
             if method == METHOD_PUT:
-                req = requests.put(url, json=args)
+                req = requests.put(url, json=args, headers=headers)
                 if req.status_code == 403:
                     raise AccessDenied(req.text)
                 req.raise_for_status()
                 return json.loads(req.text)
             if method == METHOD_DELETE:
-                req = requests.delete(url, json=args)
+                req = requests.delete(url, json=args, headers=headers)
                 if req.status_code == 403:
                     raise AccessDenied(req.text)
                 req.raise_for_status()
                 return json.loads(req.text)
             if method == METHOD_LONGPOST:
+                args["token"] = self._token
                 try:
                     return quick_server.worker_request(url, args)
                 except quick_server.WorkerError as e:
@@ -452,27 +453,6 @@ class XYMEClient:
                 raise
             raise ValueError(req.text) from e
 
-    def _login(self) -> None:
-        if self._user is None or self._password is None:
-            raise ValueError("cannot login without user or password")
-        # FIXME
-        # res = cast(UserLogin, self._raw_request_json(METHOD_POST, "/login", {
-        #     "user": self._user,
-        #     "pw": self._password,
-        # }))
-        # if not res["success"]:
-        #     raise AccessDenied("login was not successful")
-        # self._token = res["token"]
-        # self._permissions = res["permissions"]
-
-    def logout(self) -> None:
-        if self._token is None:
-            return
-        # FIXME
-        # self._raw_request_json(METHOD_POST, "/logout", {
-        #     "token": self._token,
-        # })
-
     def request_bytes(
             self,
             method: str,
@@ -481,19 +461,8 @@ class XYMEClient:
             files: Optional[Dict[str, BytesIO]] = None,
             add_prefix: bool = True,
             api_version: Optional[int] = None) -> Tuple[BytesIO, str]:
-        if self._token is None:
-            self._login()
-
-        def execute() -> Tuple[BytesIO, str]:
-            args["token"] = self._token
-            return self._raw_request_bytes(
-                method, path, args, files, add_prefix, api_version)
-
-        try:
-            return execute()
-        except AccessDenied:
-            self._login()
-            return execute()
+        return self._raw_request_bytes(
+            method, path, args, files, add_prefix, api_version)
 
     def _request_json(
             self,
@@ -505,27 +474,11 @@ class XYMEClient:
             files: Optional[Dict[str, IO[bytes]]] = None,
             api_version: Optional[int] = None,
                 ) -> Dict[str, Any]:
-        if self._token is None:
-            self._login()
-
-        def execute() -> Dict[str, Any]:
-            args["token"] = self._token
-            res = self._raw_request_json(
-                method, path, args, add_prefix, files, api_version)
-            if capture_err and "errMessage" in res and res["errMessage"]:
-                raise ValueError(res["errMessage"])
-            return res
-
-        try:
-            return execute()
-        except AccessDenied:
-            self._login()
-            return execute()
-
-    # FIXME
-    # def get_user_info(self) -> UserInfo:
-    #     return cast(UserInfo, self._request_json(
-    #         METHOD_POST, "/username", {}, capture_err=False))
+        res = self._raw_request_json(
+            method, path, args, add_prefix, files, api_version)
+        if capture_err and "errMessage" in res and res["errMessage"]:
+            raise ValueError(res["errMessage"])
+        return res
 
     def get_server_version(self) -> VersionResponse:
         return cast(VersionResponse, self._raw_request_json(
@@ -572,9 +525,25 @@ class XYMEClient:
         self._node_defs = res
         return res
 
+    def create_new_blob(self, blob_type: str) -> str:
+        return cast(BlobInit, self._request_json(
+            METHOD_POST, "/blob_init", {
+                "type": blob_type,
+            }, capture_err=False))["blob"]
+
     def create_new_pipeline(self) -> str:
         return cast(PipelineInit, self._request_json(
             METHOD_POST, "/pipeline_init", {}, capture_err=False))["pipeline"]
+
+    def duplicate_pipeline(
+            self, pipe_id: str, dest_id: Optional[str] = None) -> str:
+        args = {
+            "pipeline": pipe_id,
+        }
+        if dest_id is not None:
+            args["dest"] = dest_id
+        return cast(PipelineDupResponse, self._request_json(
+            METHOD_POST, "/pipeline_dup", args, capture_err=False))["pipeline"]
 
     def set_pipeline(
             self, pipe_id: str, defs: PipelineDef) -> 'PipelineHandle':
@@ -1754,24 +1723,5 @@ class ComputationHandle:
 # *** ComputationHandle ***
 
 
-def create_xyme_client(
-        url: str,
-        user: Optional[str] = None,
-        password: Optional[str] = None,
-        token: Optional[str] = None) -> XYMEClient:
-    return XYMEClient(url, user, password, token)
-
-
-@contextlib.contextmanager
-def create_xyme_session(
-        url: str,
-        user: Optional[str] = None,
-        password: Optional[str] = None,
-        token: Optional[str] = None) -> Iterator[XYMEClient]:
-    client = None
-    try:
-        client = XYMEClient(url, user, password, token)
-        yield client
-    finally:
-        if client is not None:
-            client.logout()
+def create_xyme_client(url: str, token: Optional[str] = None) -> XYMEClient:
+    return XYMEClient(url, token)

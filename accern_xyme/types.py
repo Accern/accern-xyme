@@ -90,7 +90,13 @@ PipelineInfo = TypedDict('PipelineInfo', {
     "is_parallel": bool,
     "settings": Dict[str, Any],
 })
+BlobInit = TypedDict('BlobInit', {
+    "blob": str,
+})
 PipelineInit = TypedDict('PipelineInit', {
+    "pipeline": str,
+})
+PipelineDupResponse = TypedDict('PipelineDupResponse', {
     "pipeline": str,
 })
 PipelineCreate = TypedDict('PipelineCreate', {
