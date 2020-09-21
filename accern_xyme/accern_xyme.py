@@ -142,7 +142,7 @@ class XYMEClient:
             token: Optional[str]) -> None:
         self._url = url.rstrip("/")
         if token is None:
-            token = os.environ.get("XYME_TOKEN")
+            token = os.environ.get("XYME_SERVER_TOKEN")
         self._token = token
         self._last_action = time.monotonic()
         self._auto_refresh = True
