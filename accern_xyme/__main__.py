@@ -15,13 +15,9 @@ def run() -> None:
         type=str,
         help="the server URL")
     parser.add_argument(
-        "user",
+        "token",
         type=str,
-        help="the username")
-    parser.add_argument(
-        "password",
-        type=str,
-        help="the password")
+        help="the server token")
     parser.add_argument(
         "--pipeline",
         type=str,
@@ -33,10 +29,9 @@ def run() -> None:
         help="avoid unicode characters in the output")
     args = parser.parse_args()
 
-    with accern_xyme.create_xyme_session(
-            args.server, args.user, args.password) as xyme:
-        pipe = xyme.get_pipeline(args.pipeline)
-        print(pipe.pretty(not args.no_uni))
+    xyme = accern_xyme.create_xyme_client(args.server, args.token)
+    pipe = xyme.get_pipeline(args.pipeline)
+    print(pipe.pretty(not args.no_uni))
 
 
 if __name__ == "__main__":
