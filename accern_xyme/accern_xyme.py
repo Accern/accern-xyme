@@ -892,7 +892,7 @@ class PipelineHandle:
             if success:
                 self.set_dynamic_error_message(None)
 
-    def pretty(self, allow_unicode: bool) -> str:
+    def pretty(self, allow_unicode: bool = True) -> str:
         nodes = [
             self.get_node(node_id)
             for node_id in sorted(self.get_nodes())
@@ -1151,7 +1151,7 @@ class NodeHandle:
                 "node": self.get_id(),
             }, capture_err=False))["chunk"]
 
-    def get_short_status(self, allow_unicode: bool) -> str:
+    def get_short_status(self, allow_unicode: bool = True) -> str:
         status_map: Dict[TaskStatus, str] = {
             "blocked": "B",
             "waiting": "W",
