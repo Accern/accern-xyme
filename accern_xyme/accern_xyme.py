@@ -752,9 +752,9 @@ class PipelineHandle:
         return self._settings
 
     def get_timing(
-                self,
-                blacklist: Optional[List[str]] = None,
-                ) -> Optional[TimingResult]:
+            self,
+            blacklist: Optional[List[str]] = None,
+            ) -> Optional[TimingResult]:
         blist = [] if blacklist is None else blacklist
         node_timing: Dict[str, NodeTiming] = {}
         nodes = self.get_nodes()
