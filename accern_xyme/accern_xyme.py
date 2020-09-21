@@ -63,6 +63,7 @@ from .types import (
     NodeInfo,
     NodeState,
     NodeStatus,
+    NodeTiming,
     NodeTypes,
     PipelineCreate,
     PipelineDef,
@@ -75,6 +76,7 @@ from .types import (
     TaskStatus,
     Timing,
     Timings,
+    TimingResult,
     UserColumnsResponse,
     VersionResponse,
 )
@@ -748,6 +750,49 @@ class PipelineHandle:
         self._maybe_fetch()
         assert self._settings is not None
         return self._settings
+
+    def get_timing(
+                self,
+                blacklist: Optional[List[str]] = None,
+                ) -> Optional[TimingResult]:
+        blist = [] if blacklist is None else blacklist
+        node_timing: Dict[str, NodeTiming] = {}
+        nodes = self.get_nodes()
+
+        def get_filterd_times(
+                node_time: List[Timing]) -> Tuple[float, float, List[Timing]]:
+            fns = []
+            node_total = 0.0
+            for value in node_time:
+                if value["name"] not in blist:
+                    fns.append(value)
+                    node_total += value["total"]
+            if not fns:
+                return (0, 0, fns)
+            return (node_total, node_total / len(fns), fns)
+
+        pipe_total = 0.0
+        for node in nodes:
+            node_get = self.get_node(node)
+            node_time = node_get.get_timing()
+            node_name = node_get.get_node_def()["name"]
+            node_id = node_get.get_id()
+            node_total, avg_time, fns = get_filterd_times(node_time)
+            node_timing[node_id] = {
+                "node_name": node_name,
+                "node_total": node_total,
+                "node_avg": avg_time,
+                "fns": fns,
+            }
+            pipe_total += node_total
+        node_timing_sorted = sorted(
+            node_timing.items(),
+            key=lambda x: x[1]["node_total"],
+            reverse=True)
+        return {
+            "pipe_total": pipe_total,
+            "nodes": node_timing_sorted,
+        }
 
     def is_high_priority(self) -> bool:
         self._maybe_refresh()
