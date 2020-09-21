@@ -647,6 +647,8 @@ class PipelineHandle:
         self._nodes: Dict[str, NodeHandle] = {}
         self._settings: Optional[Dict[str, Any]] = None
         self._dynamic_error: Optional[str] = None
+        self._ins: Optional[List[str]] = None
+        self._outs: Optional[List[Tuple[str, str]]] = None
 
     def refresh(self) -> None:
         self._name = None
@@ -656,6 +658,8 @@ class PipelineHandle:
         self._state = None
         self._is_high_priority = None
         self._is_parallel = None
+        self._ins = None
+        self._outs = None
         # NOTE: we don't reset nodes
 
     def _maybe_refresh(self) -> None:
@@ -679,6 +683,8 @@ class PipelineHandle:
         self._is_high_priority = info["high_priority"]
         self._is_parallel = info["is_parallel"]
         self._settings = info["settings"]
+        self._ins = info["ins"]
+        self._outs = [(el[0], el[1]) for el in info["outs"]]
         old_nodes = {} if self._nodes is None else self._nodes
         self._nodes = {
             node["id"]: NodeHandle.from_node_info(
@@ -734,6 +740,18 @@ class PipelineHandle:
         self._maybe_fetch()
         assert self._is_parallel is not None
         return self._is_parallel
+
+    def get_ins(self) -> List[str]:
+        self._maybe_refresh()
+        self._maybe_fetch()
+        assert self._ins is not None
+        return self._ins
+
+    def get_outs(self) -> List[Tuple[str, str]]:
+        self._maybe_refresh()
+        self._maybe_fetch()
+        assert self._outs is not None
+        return self._outs
 
     @contextlib.contextmanager
     def bulk_operation(self) -> Iterator[bool]:
@@ -1051,7 +1069,7 @@ class NodeHandle:
         self._blobs: Dict[str, BlobHandle] = {}
         self._inputs: Dict[str, Tuple[str, str]] = {}
         self._state: Optional[int] = None
-        self._config_error: Optional[bool] = None
+        self._config_error: Optional[str] = None
 
     @staticmethod
     def from_node_info(
@@ -1116,7 +1134,9 @@ class NodeHandle:
             }, capture_err=False))["status"]
 
     def has_config_error(self) -> bool:
-        assert self._config_error is not None
+        return self._config_error is not None
+
+    def get_config_error(self) -> Optional[str]:
         return self._config_error
 
     def get_blobs(self) -> List[str]:
