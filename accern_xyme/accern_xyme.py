@@ -1175,7 +1175,7 @@ class NodeHandle:
     def read_blob(
             self,
             key: str,
-            chunk: int,
+            chunk: Optional[int],
             force_refresh: bool) -> 'BlobHandle':
         res = cast(ReadNode, self._client._request_json(
             METHOD_LONGPOST, "/read_node", {

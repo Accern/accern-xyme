@@ -80,15 +80,17 @@ PipelineList = TypedDict('PipelineList', {
     "pipelines": List[str],
 })
 PipelineInfo = TypedDict('PipelineInfo', {
-    "name": str,
-    "state_publisher": Optional[str],
-    "notify_publisher": Optional[str],
     "company": str,
-    "nodes": List[NodeInfo],
-    "state": str,
     "high_priority": bool,
+    "ins": List[str],
     "is_parallel": bool,
+    "name": str,
+    "nodes": List[NodeInfo],
+    "notify_publisher": Optional[str],
+    "outs": List[Tuple[str, str]],
     "settings": Dict[str, Any],
+    "state_publisher": Optional[str],
+    "state": str,
 })
 BlobInit = TypedDict('BlobInit', {
     "blob": str,
