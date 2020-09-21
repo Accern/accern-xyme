@@ -1128,6 +1128,15 @@ class NodeHandle:
     def get_blob_handle(self, key: str) -> 'BlobHandle':
         return self._blobs[key]
 
+    def set_blob_uri(self, key: str, blob_uri: str) -> None:
+        self._client._request_json(
+            METHOD_PUT, "/node_blob", {
+                "pipeline": self.get_pipeline().get_id(),
+                "node": self.get_id(),
+                "blob_key": key,
+                "blob_uri": blob_uri,
+            }, capture_err=True)
+
     def get_in_cursor_states(self) -> Dict[str, int]:
         return cast(InCursors, self._client._request_json(
             METHOD_GET, "/node_in_cursors", {
