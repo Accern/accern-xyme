@@ -187,6 +187,10 @@ ModelParamsResponse = TypedDict('ModelParamsResponse', {
 FlushAllQueuesResponse = TypedDict('FlushAllQueuesResponse', {
     "success": bool,
 })
+PutNodeBlob = TypedDict('PutNodeBlob', {
+    "key": str,
+    "new_uri": str,
+})
 QueueStatsResponse = TypedDict('QueueStatsResponse', {
     "active": int,
     "data": int,

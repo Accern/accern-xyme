@@ -72,6 +72,7 @@ from .types import (
     PipelineInfo,
     PipelineInit,
     PipelineList,
+    PutNodeBlob,
     QueueStatsResponse,
     QueueStatus,
     ReadNode,
@@ -686,11 +687,14 @@ class PipelineHandle:
         if self._name is None:
             self._fetch_info()
 
-    def _fetch_info(self) -> None:
-        info = cast(PipelineInfo, self._client._request_json(
+    def get_info(self) -> PipelineInfo:
+        return cast(PipelineInfo, self._client._request_json(
             METHOD_GET, "/pipeline_info", {
                 "pipeline": self._pipe_id,
             }, capture_err=False))
+
+    def _fetch_info(self) -> None:
+        info = self.get_info()
         self._name = info["name"]
         self._company = info["company"]
         self._state_publisher = info["state_publisher"]
@@ -1164,14 +1168,14 @@ class NodeHandle:
     def get_blob_handle(self, key: str) -> 'BlobHandle':
         return self._blobs[key]
 
-    def set_blob_uri(self, key: str, blob_uri: str) -> None:
-        self._client._request_json(
+    def set_blob_uri(self, key: str, blob_uri: str) -> str:
+        return cast(PutNodeBlob, self._client._request_json(
             METHOD_PUT, "/node_blob", {
                 "pipeline": self.get_pipeline().get_id(),
                 "node": self.get_id(),
                 "blob_key": key,
                 "blob_uri": blob_uri,
-            }, capture_err=True)
+            }, capture_err=True))["new_uri"]
 
     def get_in_cursor_states(self) -> Dict[str, int]:
         return cast(InCursors, self._client._request_json(
