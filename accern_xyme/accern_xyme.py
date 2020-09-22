@@ -546,12 +546,28 @@ class XYMEClient:
             METHOD_POST, "/pipeline_dup", args, capture_err=False))["pipeline"]
 
     def set_pipeline(
-            self, pipe_id: str, defs: PipelineDef) -> 'PipelineHandle':
-        pipe_id = cast(PipelineCreate, self._request_json(
+            self,
+            pipe_id: str,
+            defs: PipelineDef,
+            warnings_io: Optional[IO[Any]] = sys.stderr) -> 'PipelineHandle':
+        pipe_create = cast(PipelineCreate, self._request_json(
             METHOD_POST, "/pipeline_create", {
                 "pipeline": pipe_id,
                 "defs": defs,
-            }, capture_err=True))["pipeline"]
+            }, capture_err=True))
+        pipe_id = pipe_create["pipeline"]
+        if warnings_io is not None:
+            warnings = pipe_create["warnings"]
+            if len(warnings) > 1:
+                warnings_io.write(
+                    f"{len(warnings)} warnings while "
+                    f"setting pipeline {pipe_id}:\n")
+            elif len(warnings) == 1:
+                warnings_io.write(
+                    f"Warning while setting pipeline {pipe_id}:\n")
+            for warn in warnings:
+                warnings_io.write(f"{warn}\n")
+            warnings_io.flush()
         return self.get_pipeline(pipe_id)
 
     def update_settings(

@@ -104,6 +104,7 @@ PipelineDupResponse = TypedDict('PipelineDupResponse', {
 PipelineCreate = TypedDict('PipelineCreate', {
     "pipeline": str,
     "nodes": List[str],
+    "warnings": List[str],
 })
 NodeDef = TypedDict('NodeDef', {
     "id": str,
