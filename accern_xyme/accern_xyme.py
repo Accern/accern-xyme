@@ -1130,10 +1130,12 @@ class NodeHandle:
             client: XYMEClient,
             pipeline: PipelineHandle,
             node_id: str,
+            node_name: str,
             kind: str) -> None:
         self._client = client
         self._pipeline = pipeline
         self._node_id = node_id
+        self._node_name = node_name
         self._type = kind
         self._state_key: Optional[str] = None
         self._blobs: Dict[str, BlobHandle] = {}
@@ -1152,6 +1154,7 @@ class NodeHandle:
                 client,
                 pipeline,
                 node_info["id"],
+                node_info["name"],
                 node_info["type"])
         else:
             if prev.get_pipeline() != pipeline:
@@ -1163,6 +1166,7 @@ class NodeHandle:
     def update_info(self, node_info: NodeInfo) -> None:
         if self._node_id != node_info["id"]:
             raise ValueError(f"{self._node_id} != {node_info['id']}")
+        self._node_name = node_info["name"]
         self._state_key = node_info["state_key"]
         self._type = node_info["type"]
         self._blobs = {
@@ -1182,6 +1186,9 @@ class NodeHandle:
 
     def get_id(self) -> str:
         return self._node_id
+
+    def get_name(self) -> str:
+        return self._node_name
 
     def get_type(self) -> str:
         return self._type

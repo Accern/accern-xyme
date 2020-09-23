@@ -75,6 +75,7 @@ NodeTypes = TypedDict('NodeTypes', {
 })
 NodeInfo = TypedDict('NodeInfo', {
     "id": str,
+    "name": str,
     "state_key": Optional[str],
     "type": str,
     "blobs": Dict[str, str],
