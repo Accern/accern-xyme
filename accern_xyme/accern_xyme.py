@@ -669,6 +669,7 @@ class PipelineHandle:
         self._is_high_priority: Optional[bool] = None
         self._is_parallel: Optional[bool] = None
         self._nodes: Dict[str, NodeHandle] = {}
+        self._node_lookup: Dict[str, str] = {}
         self._settings: Optional[Dict[str, Any]] = None
         self._dynamic_error: Optional[str] = None
         self._ins: Optional[List[str]] = None
@@ -718,6 +719,11 @@ class PipelineHandle:
                 self._client, self, node, old_nodes.get(node["id"]))
             for node in info["nodes"]
         }
+        self._node_lookup = {
+            node["name"]: node["id"]
+            for node in info["nodes"]
+            if node["name"] is not None
+        }
 
     def get_nodes(self) -> List[str]:
         self._maybe_refresh()
@@ -727,6 +733,7 @@ class PipelineHandle:
     def get_node(self, node_id: str) -> 'NodeHandle':
         self._maybe_refresh()
         self._maybe_fetch()
+        node_id = self._node_lookup.get(node_id, node_id)
         return self._nodes[node_id]
 
     def get_id(self) -> str:
