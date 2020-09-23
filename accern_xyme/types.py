@@ -22,6 +22,12 @@ ParamType = Literal[
     "mapping_str_str",
     "list_str",
 ]
+InstanceStatus = Literal[
+    "busy_queue",
+    "busy_task",
+    "ready_queue",
+    "ready_task",
+]
 ParamDef = TypedDict('ParamDef', {
     "name": str,
     "help": str,

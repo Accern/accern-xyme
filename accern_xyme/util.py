@@ -20,6 +20,7 @@ from scipy import sparse
 import torch
 from .types import QueueStatsResponse, QueueStatus
 
+VERBOSE = False
 FILE_UPLOAD_CHUNK_SIZE = 100 * 1024  # 100kb
 FILE_HASH_CHUNK_SIZE = FILE_UPLOAD_CHUNK_SIZE
 MAX_RETRY = 5
@@ -30,6 +31,25 @@ RT = TypeVar('RT')
 
 
 ByteResponse = Union[pd.DataFrame, dict, IO[bytes], List[dict]]
+
+
+def set_verbose() -> None:
+    global VERBOSE
+
+    import logging
+    import http.client as http_client
+
+    http_client.HTTPConnection.debuglevel = 1  # type: ignore
+    logging.basicConfig()
+    logging.getLogger().setLevel(logging.DEBUG)
+    requests_log = logging.getLogger("requests.packages.urllib3")
+    requests_log.setLevel(logging.DEBUG)
+    requests_log.propagate = True
+    VERBOSE = True
+
+
+def is_verbose() -> bool:
+    return VERBOSE
 
 
 def set_file_upload_chunk_size(size: int) -> None:

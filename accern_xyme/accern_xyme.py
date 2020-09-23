@@ -53,6 +53,7 @@ from .types import (
     DynamicStatusResponse,
     FlushAllQueuesResponse,
     InCursors,
+    InstanceStatus,
     JobInfo,
     JobList,
     JSONBlobResponse,
@@ -79,8 +80,8 @@ from .types import (
     ReadNode,
     TaskStatus,
     Timing,
-    Timings,
     TimingResult,
+    Timings,
     UserColumnsResponse,
     VersionResponse,
 )
@@ -91,7 +92,7 @@ else:
     WVD = weakref.WeakValueDictionary
 
 
-__version__ = "0.1.2"
+__version__ = "0.1.3"
 # FIXME: async calls, documentation, auth, summary – time it took etc.
 
 
@@ -633,7 +634,11 @@ class XYMEClient:
 
     def check_queue_stats(self) -> QueueStatsResponse:
         return cast(QueueStatsResponse, self._request_json(
-            METHOD_GET, "/queue_stats", {}, capture_err=True))
+            METHOD_GET, "/queue_stats", {}, capture_err=False))
+
+    def get_instance_status(self) -> Dict[InstanceStatus, int]:
+        return cast(Dict[InstanceStatus, int], self._request_json(
+            METHOD_GET, "/instance_status", {}, capture_err=False))
 
     def flush_all_queue_data(self) -> None:
 
