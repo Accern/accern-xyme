@@ -632,10 +632,6 @@ class XYMEClient:
         return cast(CustomImportsResponse, self._request_json(
             METHOD_GET, "/allowed_custom_imports", {}, capture_err=False))
 
-    def check_queue_stats(self) -> QueueStatsResponse:
-        return cast(QueueStatsResponse, self._request_json(
-            METHOD_GET, "/queue_stats", {}, capture_err=False))
-
     def get_instance_status(self) -> Dict[InstanceStatus, int]:
         return cast(Dict[InstanceStatus, int], self._request_json(
             METHOD_GET, "/instance_status", {}, capture_err=False))
@@ -951,7 +947,7 @@ class PipelineHandle:
                 input_data,
                 self.dynamic_async,
                 get,
-                self._client.check_queue_stats,
+                self.check_queue_stats,
                 self.get_dynamic_status,
                 max_buff,
                 block_size,
@@ -977,7 +973,7 @@ class PipelineHandle:
                 input_data,
                 self.dynamic_async_obj,
                 get,
-                self._client.check_queue_stats,
+                self.check_queue_stats,
                 self.get_dynamic_status,
                 max_buff,
                 block_size,
@@ -1108,6 +1104,12 @@ class PipelineHandle:
     def get_def(self) -> PipelineDef:
         return cast(PipelineDef, self._client._request_json(
             METHOD_GET, "/pipeline_def", {
+                "pipeline": self.get_id(),
+            }, capture_err=False))
+
+    def check_queue_stats(self) -> QueueStatsResponse:
+        return cast(QueueStatsResponse, self._request_json(
+            METHOD_GET, "/queue_stats", {
                 "pipeline": self.get_id(),
             }, capture_err=False))
 
