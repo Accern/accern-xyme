@@ -1108,7 +1108,7 @@ class PipelineHandle:
             }, capture_err=False))
 
     def check_queue_stats(self) -> QueueStatsResponse:
-        return cast(QueueStatsResponse, self._request_json(
+        return cast(QueueStatsResponse, self._client._request_json(
             METHOD_GET, "/queue_stats", {
                 "pipeline": self.get_id(),
             }, capture_err=False))
