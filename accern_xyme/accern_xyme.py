@@ -43,14 +43,17 @@ from .util import (
     ServerSideError,
 )
 from .types import (
+    BlobInit,
     CSVBlobResponse,
     CSVList,
     CSVOp,
     CustomCodeResponse,
     CustomImportsResponse,
+    DynamicResults,
     DynamicStatusResponse,
     FlushAllQueuesResponse,
     InCursors,
+    InstanceStatus,
     JobInfo,
     JobList,
     JSONBlobResponse,
@@ -67,16 +70,18 @@ from .types import (
     NodeTypes,
     PipelineCreate,
     PipelineDef,
+    PipelineDupResponse,
     PipelineInfo,
     PipelineInit,
     PipelineList,
+    PutNodeBlob,
     QueueStatsResponse,
     QueueStatus,
     ReadNode,
     TaskStatus,
     Timing,
-    Timings,
     TimingResult,
+    Timings,
     UserColumnsResponse,
     VersionResponse,
 )
@@ -87,7 +92,7 @@ else:
     WVD = weakref.WeakValueDictionary
 
 
-__version__ = "0.1.2"
+__version__ = "0.1.3"
 # FIXME: async calls, documentation, auth, summary – time it took etc.
 
 
@@ -138,17 +143,11 @@ class XYMEClient:
     def __init__(
             self,
             url: str,
-            user: Optional[str],
-            password: Optional[str],
             token: Optional[str]) -> None:
         self._url = url.rstrip("/")
-        if user is None:
-            user = os.environ.get("ACCERN_USER")
-        self._user = user
-        if password is None:
-            password = os.environ.get("ACCERN_PASSWORD")
-        self._password = password
-        self._token: Optional[str] = token
+        if token is None:
+            token = os.environ.get("XYME_SERVER_TOKEN")
+        self._token = token
         self._last_action = time.monotonic()
         self._auto_refresh = True
         self._pipeline_cache: WVD = weakref.WeakValueDictionary()
@@ -163,26 +162,13 @@ class XYMEClient:
                 raise LegacyVersion() from e
 
         self._api_version = min(get_version(), API_VERSION)
-        self._init()
 
     def get_api_version(self) -> int:
         return self._api_version
 
-    def _init(self) -> None:
-        if self._token is None:
-            self._login()
-            return
-        # FIXME
-        # res = cast(UserLogin, self._request_json(
-        #     METHOD_GET, "/init", {}, capture_err=False))
-        # if not res["success"]:
-        #     raise AccessDenied("init was not successful")
-        # self._token = res["token"]
-        # self._permissions = res["permissions"]
-
     def get_permissions(self) -> List[str]:
         if self._permissions is None:
-            self._init()
+            raise NotImplementedError("permissions are not implemented")
         assert self._permissions is not None
         return self._permissions
 
@@ -328,14 +314,17 @@ class XYMEClient:
                 api_version = self._api_version
             prefix = f"{PREFIX}/v{api_version}"
         url = f"{self._url}{prefix}{path}"
+        headers = {
+            "authorization": self._token,
+        }
         if method == METHOD_GET:
-            req = requests.get(url, params=args)
+            req = requests.get(url, params=args, headers=headers)
             if req.status_code == 403:
                 raise AccessDenied(req.text)
             req.raise_for_status()
             return BytesIO(req.content), req.headers["content-type"]
         if method == METHOD_POST:
-            req = requests.post(url, json=args)
+            req = requests.post(url, json=args, headers=headers)
             if req.status_code == 403:
                 raise AccessDenied(req.text)
             req.raise_for_status()
@@ -343,13 +332,17 @@ class XYMEClient:
         if method == METHOD_FILE:
             if files is None:
                 raise ValueError(f"file method must have files: {files}")
-            req = requests.post(url, data=args, files={
-                key: (
-                    getattr(value, "name", key),
-                    value,
-                    "application/octet-stream",
-                ) for (key, value) in files.items()
-            })
+            req = requests.post(
+                url,
+                data=args,
+                files={
+                    key: (
+                        getattr(value, "name", key),
+                        value,
+                        "application/octet-stream",
+                    ) for (key, value) in files.items()
+                },
+                headers=headers)
             if req.status_code == 403:
                 raise AccessDenied(req.text)
             req.raise_for_status()
@@ -369,14 +362,17 @@ class XYMEClient:
                 api_version = self._api_version
             prefix = f"{PREFIX}/v{api_version}"
         url = f"{self._url}{prefix}{path}"
+        headers = {
+            "authorization": self._token,
+        }
         if method == METHOD_GET:
-            req = requests.get(url, params=args)
+            req = requests.get(url, params=args, headers=headers)
             if req.status_code == 403:
                 raise AccessDenied(req.text)
             req.raise_for_status()
             return StringIO(req.text)
         if method == METHOD_POST:
-            req = requests.post(url, json=args)
+            req = requests.post(url, json=args, headers=headers)
             if req.status_code == 403:
                 raise AccessDenied(req.text)
             req.raise_for_status()
@@ -397,13 +393,16 @@ class XYMEClient:
                 api_version = self._api_version
             prefix = f"{PREFIX}/v{api_version}"
         url = f"{self._url}{prefix}{path}"
+        headers = {
+            "authorization": self._token,
+        }
         if method != METHOD_FILE and files is not None:
             raise ValueError(
                 f"files are only allow for post (got {method}): {files}")
         req = None
         try:
             if method == METHOD_GET:
-                req = requests.get(url, params=args)
+                req = requests.get(url, params=args, headers=headers)
                 if req.status_code == 403:
                     raise AccessDenied(req.text)
                 req.raise_for_status()
@@ -411,36 +410,41 @@ class XYMEClient:
             if method == METHOD_FILE:
                 if files is None:
                     raise ValueError(f"file method must have files: {files}")
-                req = requests.post(url, data=args, files={
-                    key: (
-                        getattr(value, "name", key),
-                        value,
-                        "application/octet-stream",
-                    ) for (key, value) in files.items()
-                })
+                req = requests.post(
+                    url,
+                    data=args,
+                    files={
+                        key: (
+                            getattr(value, "name", key),
+                            value,
+                            "application/octet-stream",
+                        ) for (key, value) in files.items()
+                    },
+                    headers=headers)
                 if req.status_code == 403:
                     raise AccessDenied(req.text)
                 req.raise_for_status()
                 return json.loads(req.text)
             if method == METHOD_POST:
-                req = requests.post(url, json=args)
+                req = requests.post(url, json=args, headers=headers)
                 if req.status_code == 403:
                     raise AccessDenied(req.text)
                 req.raise_for_status()
                 return json.loads(req.text)
             if method == METHOD_PUT:
-                req = requests.put(url, json=args)
+                req = requests.put(url, json=args, headers=headers)
                 if req.status_code == 403:
                     raise AccessDenied(req.text)
                 req.raise_for_status()
                 return json.loads(req.text)
             if method == METHOD_DELETE:
-                req = requests.delete(url, json=args)
+                req = requests.delete(url, json=args, headers=headers)
                 if req.status_code == 403:
                     raise AccessDenied(req.text)
                 req.raise_for_status()
                 return json.loads(req.text)
             if method == METHOD_LONGPOST:
+                args["token"] = self._token
                 try:
                     return quick_server.worker_request(url, args)
                 except quick_server.WorkerError as e:
@@ -453,27 +457,6 @@ class XYMEClient:
                 raise
             raise ValueError(req.text) from e
 
-    def _login(self) -> None:
-        if self._user is None or self._password is None:
-            raise ValueError("cannot login without user or password")
-        # FIXME
-        # res = cast(UserLogin, self._raw_request_json(METHOD_POST, "/login", {
-        #     "user": self._user,
-        #     "pw": self._password,
-        # }))
-        # if not res["success"]:
-        #     raise AccessDenied("login was not successful")
-        # self._token = res["token"]
-        # self._permissions = res["permissions"]
-
-    def logout(self) -> None:
-        if self._token is None:
-            return
-        # FIXME
-        # self._raw_request_json(METHOD_POST, "/logout", {
-        #     "token": self._token,
-        # })
-
     def request_bytes(
             self,
             method: str,
@@ -482,19 +465,8 @@ class XYMEClient:
             files: Optional[Dict[str, BytesIO]] = None,
             add_prefix: bool = True,
             api_version: Optional[int] = None) -> Tuple[BytesIO, str]:
-        if self._token is None:
-            self._login()
-
-        def execute() -> Tuple[BytesIO, str]:
-            args["token"] = self._token
-            return self._raw_request_bytes(
-                method, path, args, files, add_prefix, api_version)
-
-        try:
-            return execute()
-        except AccessDenied:
-            self._login()
-            return execute()
+        return self._raw_request_bytes(
+            method, path, args, files, add_prefix, api_version)
 
     def _request_json(
             self,
@@ -506,27 +478,11 @@ class XYMEClient:
             files: Optional[Dict[str, IO[bytes]]] = None,
             api_version: Optional[int] = None,
                 ) -> Dict[str, Any]:
-        if self._token is None:
-            self._login()
-
-        def execute() -> Dict[str, Any]:
-            args["token"] = self._token
-            res = self._raw_request_json(
-                method, path, args, add_prefix, files, api_version)
-            if capture_err and "errMessage" in res and res["errMessage"]:
-                raise ValueError(res["errMessage"])
-            return res
-
-        try:
-            return execute()
-        except AccessDenied:
-            self._login()
-            return execute()
-
-    # FIXME
-    # def get_user_info(self) -> UserInfo:
-    #     return cast(UserInfo, self._request_json(
-    #         METHOD_POST, "/username", {}, capture_err=False))
+        res = self._raw_request_json(
+            method, path, args, add_prefix, files, api_version)
+        if capture_err and "errMessage" in res and res["errMessage"]:
+            raise ValueError(res["errMessage"])
+        return res
 
     def get_server_version(self) -> VersionResponse:
         return cast(VersionResponse, self._raw_request_json(
@@ -573,17 +529,49 @@ class XYMEClient:
         self._node_defs = res
         return res
 
+    def create_new_blob(self, blob_type: str) -> str:
+        return cast(BlobInit, self._request_json(
+            METHOD_POST, "/blob_init", {
+                "type": blob_type,
+            }, capture_err=False))["blob"]
+
     def create_new_pipeline(self) -> str:
         return cast(PipelineInit, self._request_json(
             METHOD_POST, "/pipeline_init", {}, capture_err=False))["pipeline"]
 
+    def duplicate_pipeline(
+            self, pipe_id: str, dest_id: Optional[str] = None) -> str:
+        args = {
+            "pipeline": pipe_id,
+        }
+        if dest_id is not None:
+            args["dest"] = dest_id
+        return cast(PipelineDupResponse, self._request_json(
+            METHOD_POST, "/pipeline_dup", args, capture_err=False))["pipeline"]
+
     def set_pipeline(
-            self, pipe_id: str, defs: PipelineDef) -> 'PipelineHandle':
-        pipe_id = cast(PipelineCreate, self._request_json(
+            self,
+            pipe_id: str,
+            defs: PipelineDef,
+            warnings_io: Optional[IO[Any]] = sys.stderr) -> 'PipelineHandle':
+        pipe_create = cast(PipelineCreate, self._request_json(
             METHOD_POST, "/pipeline_create", {
                 "pipeline": pipe_id,
                 "defs": defs,
-            }, capture_err=True))["pipeline"]
+            }, capture_err=True))
+        pipe_id = pipe_create["pipeline"]
+        if warnings_io is not None:
+            warnings = pipe_create["warnings"]
+            if len(warnings) > 1:
+                warnings_io.write(
+                    f"{len(warnings)} warnings while "
+                    f"setting pipeline {pipe_id}:\n")
+            elif len(warnings) == 1:
+                warnings_io.write(
+                    f"Warning while setting pipeline {pipe_id}:\n")
+            for warn in warnings:
+                warnings_io.write(f"{warn}\n")
+            warnings_io.flush()
         return self.get_pipeline(pipe_id)
 
     def update_settings(
@@ -644,6 +632,14 @@ class XYMEClient:
         return cast(CustomImportsResponse, self._request_json(
             METHOD_GET, "/allowed_custom_imports", {}, capture_err=False))
 
+    def check_queue_stats(self) -> QueueStatsResponse:
+        return cast(QueueStatsResponse, self._request_json(
+            METHOD_GET, "/queue_stats", {}, capture_err=False))
+
+    def get_instance_status(self) -> Dict[InstanceStatus, int]:
+        return cast(Dict[InstanceStatus, int], self._request_json(
+            METHOD_GET, "/instance_status", {}, capture_err=False))
+
     def flush_all_queue_data(self) -> None:
 
         def do_flush() -> bool:
@@ -673,8 +669,11 @@ class PipelineHandle:
         self._is_high_priority: Optional[bool] = None
         self._is_parallel: Optional[bool] = None
         self._nodes: Dict[str, NodeHandle] = {}
+        self._node_lookup: Dict[str, str] = {}
         self._settings: Optional[Dict[str, Any]] = None
         self._dynamic_error: Optional[str] = None
+        self._ins: Optional[List[str]] = None
+        self._outs: Optional[List[Tuple[str, str]]] = None
 
     def refresh(self) -> None:
         self._name = None
@@ -684,6 +683,8 @@ class PipelineHandle:
         self._state = None
         self._is_high_priority = None
         self._is_parallel = None
+        self._ins = None
+        self._outs = None
         # NOTE: we don't reset nodes
 
     def _maybe_refresh(self) -> None:
@@ -694,11 +695,14 @@ class PipelineHandle:
         if self._name is None:
             self._fetch_info()
 
-    def _fetch_info(self) -> None:
-        info = cast(PipelineInfo, self._client._request_json(
+    def get_info(self) -> PipelineInfo:
+        return cast(PipelineInfo, self._client._request_json(
             METHOD_GET, "/pipeline_info", {
                 "pipeline": self._pipe_id,
             }, capture_err=False))
+
+    def _fetch_info(self) -> None:
+        info = self.get_info()
         self._name = info["name"]
         self._company = info["company"]
         self._state_publisher = info["state_publisher"]
@@ -707,11 +711,18 @@ class PipelineHandle:
         self._is_high_priority = info["high_priority"]
         self._is_parallel = info["is_parallel"]
         self._settings = info["settings"]
+        self._ins = info["ins"]
+        self._outs = [(el[0], el[1]) for el in info["outs"]]
         old_nodes = {} if self._nodes is None else self._nodes
         self._nodes = {
             node["id"]: NodeHandle.from_node_info(
                 self._client, self, node, old_nodes.get(node["id"]))
             for node in info["nodes"]
+        }
+        self._node_lookup = {
+            node["name"]: node["id"]
+            for node in info["nodes"]
+            if node["name"] is not None
         }
 
     def get_nodes(self) -> List[str]:
@@ -722,6 +733,7 @@ class PipelineHandle:
     def get_node(self, node_id: str) -> 'NodeHandle':
         self._maybe_refresh()
         self._maybe_fetch()
+        node_id = self._node_lookup.get(node_id, node_id)
         return self._nodes[node_id]
 
     def get_id(self) -> str:
@@ -806,6 +818,18 @@ class PipelineHandle:
         assert self._is_parallel is not None
         return self._is_parallel
 
+    def get_ins(self) -> List[str]:
+        self._maybe_refresh()
+        self._maybe_fetch()
+        assert self._ins is not None
+        return self._ins
+
+    def get_outs(self) -> List[Tuple[str, str]]:
+        self._maybe_refresh()
+        self._maybe_fetch()
+        assert self._outs is not None
+        return self._outs
+
     @contextlib.contextmanager
     def bulk_operation(self) -> Iterator[bool]:
         with self._client.bulk_operation() as do_refresh:
@@ -818,6 +842,20 @@ class PipelineHandle:
 
     def update_settings(self, settings: Dict[str, Any]) -> None:
         self._client.update_settings(self.get_id(), settings)
+
+    def dynamic_list(
+            self,
+            inputs: List[Any],
+            input_key: str,
+            output_key: str) -> List[Any]:
+        res = cast(DynamicResults, self._client._request_json(
+            METHOD_POST, "/dynamic_list", {
+                "pipeline": self._pipe_id,
+                "inputs": inputs,
+                "input_key": input_key,
+                "output_key": output_key,
+            }, capture_err=True))
+        return res["results"]
 
     def dynamic(self, input_data: BytesIO) -> ByteResponse:
         cur_res, ctype = self._client.request_bytes(
@@ -881,10 +919,6 @@ class PipelineHandle:
             raise e
         return interpret_ctype(cur_res, ctype)
 
-    def check_queue_stats(self) -> QueueStatsResponse:
-        return cast(QueueStatsResponse, self._client._request_json(
-            METHOD_GET, "/queue_stats", {}, capture_err=True))
-
     def get_dynamic_status(
             self,
             data_ids: List['ComputationHandle'],
@@ -917,7 +951,7 @@ class PipelineHandle:
                 input_data,
                 self.dynamic_async,
                 get,
-                self.check_queue_stats,
+                self._client.check_queue_stats,
                 self.get_dynamic_status,
                 max_buff,
                 block_size,
@@ -943,7 +977,7 @@ class PipelineHandle:
                 input_data,
                 self.dynamic_async_obj,
                 get,
-                self.check_queue_stats,
+                self._client.check_queue_stats,
                 self.get_dynamic_status,
                 max_buff,
                 block_size,
@@ -953,7 +987,7 @@ class PipelineHandle:
             if success:
                 self.set_dynamic_error_message(None)
 
-    def pretty(self, allow_unicode: bool) -> str:
+    def pretty(self, allow_unicode: bool = True) -> str:
         nodes = [
             self.get_node(node_id)
             for node_id in sorted(self.get_nodes())
@@ -1103,16 +1137,18 @@ class NodeHandle:
             client: XYMEClient,
             pipeline: PipelineHandle,
             node_id: str,
+            node_name: str,
             kind: str) -> None:
         self._client = client
         self._pipeline = pipeline
         self._node_id = node_id
+        self._node_name = node_name
         self._type = kind
         self._state_key: Optional[str] = None
         self._blobs: Dict[str, BlobHandle] = {}
         self._inputs: Dict[str, Tuple[str, str]] = {}
         self._state: Optional[int] = None
-        self._config_error: Optional[bool] = None
+        self._config_error: Optional[str] = None
 
     @staticmethod
     def from_node_info(
@@ -1125,6 +1161,7 @@ class NodeHandle:
                 client,
                 pipeline,
                 node_info["id"],
+                node_info["name"],
                 node_info["type"])
         else:
             if prev.get_pipeline() != pipeline:
@@ -1136,6 +1173,7 @@ class NodeHandle:
     def update_info(self, node_info: NodeInfo) -> None:
         if self._node_id != node_info["id"]:
             raise ValueError(f"{self._node_id} != {node_info['id']}")
+        self._node_name = node_info["name"]
         self._state_key = node_info["state_key"]
         self._type = node_info["type"]
         self._blobs = {
@@ -1155,6 +1193,9 @@ class NodeHandle:
 
     def get_id(self) -> str:
         return self._node_id
+
+    def get_name(self) -> str:
+        return self._node_name
 
     def get_type(self) -> str:
         return self._type
@@ -1177,7 +1218,9 @@ class NodeHandle:
             }, capture_err=False))["status"]
 
     def has_config_error(self) -> bool:
-        assert self._config_error is not None
+        return self._config_error is not None
+
+    def get_config_error(self) -> Optional[str]:
         return self._config_error
 
     def get_blobs(self) -> List[str]:
@@ -1188,6 +1231,15 @@ class NodeHandle:
 
     def get_blob_handle(self, key: str) -> 'BlobHandle':
         return self._blobs[key]
+
+    def set_blob_uri(self, key: str, blob_uri: str) -> str:
+        return cast(PutNodeBlob, self._client._request_json(
+            METHOD_PUT, "/node_blob", {
+                "pipeline": self.get_pipeline().get_id(),
+                "node": self.get_id(),
+                "blob_key": key,
+                "blob_uri": blob_uri,
+            }, capture_err=True))["new_uri"]
 
     def get_in_cursor_states(self) -> Dict[str, int]:
         return cast(InCursors, self._client._request_json(
@@ -1203,7 +1255,7 @@ class NodeHandle:
                 "node": self.get_id(),
             }, capture_err=False))["chunk"]
 
-    def get_short_status(self, allow_unicode: bool) -> str:
+    def get_short_status(self, allow_unicode: bool = True) -> str:
         status_map: Dict[TaskStatus, str] = {
             "blocked": "B",
             "waiting": "W",
@@ -1236,7 +1288,7 @@ class NodeHandle:
     def read_blob(
             self,
             key: str,
-            chunk: int,
+            chunk: Optional[int],
             force_refresh: bool) -> 'BlobHandle':
         res = cast(ReadNode, self._client._request_json(
             METHOD_LONGPOST, "/read_node", {
@@ -1784,24 +1836,5 @@ class ComputationHandle:
 # *** ComputationHandle ***
 
 
-def create_xyme_client(
-        url: str,
-        user: Optional[str] = None,
-        password: Optional[str] = None,
-        token: Optional[str] = None) -> XYMEClient:
-    return XYMEClient(url, user, password, token)
-
-
-@contextlib.contextmanager
-def create_xyme_session(
-        url: str,
-        user: Optional[str] = None,
-        password: Optional[str] = None,
-        token: Optional[str] = None) -> Iterator[XYMEClient]:
-    client = None
-    try:
-        client = XYMEClient(url, user, password, token)
-        yield client
-    finally:
-        if client is not None:
-            client.logout()
+def create_xyme_client(url: str, token: Optional[str] = None) -> XYMEClient:
+    return XYMEClient(url, token)

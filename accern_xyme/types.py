@@ -22,6 +22,12 @@ ParamType = Literal[
     "mapping_str_str",
     "list_str",
 ]
+InstanceStatus = Literal[
+    "busy_queue",
+    "busy_task",
+    "ready_queue",
+    "ready_task",
+]
 ParamDef = TypedDict('ParamDef', {
     "name": str,
     "help": str,
@@ -69,33 +75,43 @@ NodeTypes = TypedDict('NodeTypes', {
 })
 NodeInfo = TypedDict('NodeInfo', {
     "id": str,
+    "name": str,
     "state_key": Optional[str],
     "type": str,
     "blobs": Dict[str, str],
     "inputs": Dict[str, Tuple[str, str]],
     "state": Optional[int],
-    "config_error": bool,
+    "config_error": Optional[str],
 })
 PipelineList = TypedDict('PipelineList', {
     "pipelines": List[str],
 })
 PipelineInfo = TypedDict('PipelineInfo', {
-    "name": str,
-    "state_publisher": Optional[str],
-    "notify_publisher": Optional[str],
     "company": str,
-    "nodes": List[NodeInfo],
-    "state": str,
     "high_priority": bool,
+    "ins": List[str],
     "is_parallel": bool,
+    "name": str,
+    "nodes": List[NodeInfo],
+    "notify_publisher": Optional[str],
+    "outs": List[Tuple[str, str]],
     "settings": Dict[str, Any],
+    "state_publisher": Optional[str],
+    "state": str,
+})
+BlobInit = TypedDict('BlobInit', {
+    "blob": str,
 })
 PipelineInit = TypedDict('PipelineInit', {
+    "pipeline": str,
+})
+PipelineDupResponse = TypedDict('PipelineDupResponse', {
     "pipeline": str,
 })
 PipelineCreate = TypedDict('PipelineCreate', {
     "pipeline": str,
     "nodes": List[str],
+    "warnings": List[str],
 })
 NodeDef = TypedDict('NodeDef', {
     "id": str,
@@ -188,6 +204,10 @@ ModelParamsResponse = TypedDict('ModelParamsResponse', {
 FlushAllQueuesResponse = TypedDict('FlushAllQueuesResponse', {
     "success": bool,
 })
+PutNodeBlob = TypedDict('PutNodeBlob', {
+    "key": str,
+    "new_uri": str,
+})
 QueueStatsResponse = TypedDict('QueueStatsResponse', {
     "active": int,
     "data": int,
@@ -206,4 +226,7 @@ QueueStatus = Literal[
 ]
 DynamicStatusResponse = TypedDict('DynamicStatusResponse', {
     "status": Dict[str, QueueStatus],
+})
+DynamicResults = TypedDict('DynamicResults', {
+    "results": List[Any],
 })
