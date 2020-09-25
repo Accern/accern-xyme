@@ -259,6 +259,7 @@ def async_compute(
     cond = threading.Condition()
     ids: Dict[RT, int] = {}
     res: Dict[int, ByteResponse] = {}
+    mul = 4
 
     def get_waiting_count(remote_queue: QueueStatsResponse) -> int:
         return remote_queue["total"] - remote_queue["active"]
@@ -286,14 +287,15 @@ def async_compute(
                 add_more = max(
                     max_buff - len(ids),
                     max_buff - waiting_count)
-                cur = arr[pos:pos + add_more]
-                pos += len(cur)
-                for block_ix in range(0, len(cur), block_size):
-                    ids.update({
-                        cur_id: cur_ix + start_pos + block_ix
-                        for (cur_ix, cur_id) in enumerate(
-                            start(cur[block_ix:block_ix + block_size]))
-                    })
+                if add_more > 0:
+                    cur = arr[pos:pos + add_more]
+                    pos += len(cur)
+                    for block_ix in range(0, len(cur), block_size):
+                        ids.update({
+                            cur_id: cur_ix + start_pos + block_ix
+                            for (cur_ix, cur_id) in enumerate(
+                                start(cur[block_ix:block_ix + block_size]))
+                        })
                 with cond:
                     cond.notify_all()
         finally:
@@ -312,7 +314,7 @@ def async_compute(
             while ids:
                 do_wait = True
                 sorted_ids = sorted(ids.items(), key=lambda v: v[1])
-                check_ids = [v[0] for v in sorted_ids[0: 3 * num_threads]]
+                check_ids = [v[0] for v in sorted_ids[0:mul * num_threads]]
                 if not check_ids:
                     continue
                 status = get_status(check_ids)
@@ -329,7 +331,7 @@ def async_compute(
                         if exc[0] is None:
                             exc[0] = e
                 if do_wait:
-                    time.sleep(1)
+                    time.sleep(0.1)
                 else:
                     with cond:
                         cond.notify_all()
