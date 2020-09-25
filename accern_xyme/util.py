@@ -252,6 +252,7 @@ def async_compute(
     assert max_buff > 0
     assert block_size > 0
     assert num_threads > 0
+    arr = list(arr)
     done: List[bool] = [False]
     end_produce: List[bool] = [False]
     exc: List[Optional[BaseException]] = [None]
