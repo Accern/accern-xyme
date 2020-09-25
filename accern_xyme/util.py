@@ -259,6 +259,7 @@ def async_compute(
     cond = threading.Condition()
     ids: Dict[RT, int] = {}
     res: Dict[int, ByteResponse] = {}
+    min_size_th = 20
     mul = 4
 
     def get_waiting_count(remote_queue: QueueStatsResponse) -> int:
@@ -271,6 +272,22 @@ def async_compute(
             return True
         waiting_count = get_waiting_count(check_queue())
         return waiting_count < max_buff
+
+    def push(cur: List[Any], start_pos: int) -> None:
+        if len(cur) <= min_size_th * block_size:
+            for block_ix in range(0, len(cur), block_size):
+                ids.update({
+                    cur_id: cur_ix + start_pos + block_ix
+                    for (cur_ix, cur_id) in enumerate(
+                        start(cur[block_ix:block_ix + block_size]))
+                })
+        else:
+            half_ix: int = len(cur) // 2
+            args = (cur[half_ix:], start_pos + half_ix)
+            push_th = threading.Thread(target=push, args=args)
+            push_th.start()
+            push(cur[:half_ix], start_pos)
+            push_th.join()
 
     def produce() -> None:
         try:
@@ -290,12 +307,7 @@ def async_compute(
                 if add_more > 0:
                     cur = arr[pos:pos + add_more]
                     pos += len(cur)
-                    for block_ix in range(0, len(cur), block_size):
-                        ids.update({
-                            cur_id: cur_ix + start_pos + block_ix
-                            for (cur_ix, cur_id) in enumerate(
-                                start(cur[block_ix:block_ix + block_size]))
-                        })
+                    push(cur, start_pos)
                 with cond:
                     cond.notify_all()
         finally:
