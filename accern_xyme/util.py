@@ -331,29 +331,31 @@ def async_compute(
                     with cond:
                         cond.notify_all()
 
-    prod_th = threading.Thread(target=produce)
-    prod_th.start()
-    consume_ths = [
-        threading.Thread(target=consume)
-        for _ in range(num_threads)]
-    for th in consume_ths:
-        th.start()
-    yield_ix = 0
-    while yield_ix < len(arr):
-        with cond:
-            cond.wait_for(lambda: exc[0] is not None or bool(res))
+    try:
+        prod_th = threading.Thread(target=produce)
+        prod_th.start()
+        consume_ths = [
+            threading.Thread(target=consume)
+            for _ in range(num_threads)]
+        for th in consume_ths:
+            th.start()
+        yield_ix = 0
+        while yield_ix < len(arr):
+            with cond:
+                cond.wait_for(lambda: exc[0] is not None or bool(res))
+            if exc[0] is not None:
+                break
+            try:
+                while res:
+                    yield res.pop(yield_ix)
+                    yield_ix += 1
+            except KeyError:
+                pass
         if exc[0] is not None:
-            break
-        try:
-            while res:
-                yield res.pop(yield_ix)
-                yield_ix += 1
-        except KeyError:
-            pass
-    if exc[0] is not None:
-        with cond:
-            cond.wait_for(lambda: end_produce[0])
-    done[0] = True
+            with cond:
+                cond.wait_for(lambda: end_produce[0])
+    finally:
+        done[0] = True
     with cond:
         cond.notify_all()
     prod_th.join()
