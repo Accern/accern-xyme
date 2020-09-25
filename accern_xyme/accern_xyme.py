@@ -846,7 +846,7 @@ class PipelineHandle:
     def dynamic_list(
             self,
             inputs: List[Any],
-            input_key: str,
+            input_key: Optional[str],
             output_key: str) -> List[Any]:
         res = cast(DynamicResults, self._client._request_json(
             METHOD_POST, "/dynamic_list", {
