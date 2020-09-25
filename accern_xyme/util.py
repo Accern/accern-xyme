@@ -276,7 +276,8 @@ def async_compute(
             pos = 0
             while pos < len(arr):
                 with cond:
-                    cond.wait_for(can_push_more)
+                    while not cond.wait_for(can_push_more, timeout=0.1):
+                        pass
                 if exc[0] is not None:
                     break
                 start_pos = pos
@@ -303,8 +304,10 @@ def async_compute(
     def consume() -> None:
         while not done[0]:
             with cond:
-                cond.wait_for(
-                    lambda: exc[0] is not None or done[0] or len(ids) > 0)
+                while not cond.wait_for(
+                        lambda: exc[0] is not None or done[0] or len(ids) > 0,
+                        timeout=0.1):
+                    pass
             do_wait = False
             while ids:
                 do_wait = True
@@ -339,10 +342,14 @@ def async_compute(
             for _ in range(num_threads)]
         for th in consume_ths:
             th.start()
+        with cond:
+            cond.notify_all()
         yield_ix = 0
         while yield_ix < len(arr):
             with cond:
-                cond.wait_for(lambda: exc[0] is not None or bool(res))
+                while not cond.wait_for(
+                        lambda: exc[0] is not None or bool(res), timeout=0.1):
+                    pass
             if exc[0] is not None:
                 break
             try:
