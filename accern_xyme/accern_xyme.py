@@ -15,13 +15,14 @@ from typing import (
     Union,
 )
 import io
-import inspect
 import os
 import sys
 import json
-import textwrap
 import time
 import weakref
+import inspect
+import textwrap
+import threading
 import contextlib
 import collections
 from io import BytesIO, StringIO
@@ -225,7 +226,7 @@ class XYMEClient:
             try:
                 return self._fallible_raw_request_bytes(
                     method, path, args, files, add_prefix, api_version)
-            except requests.ConnectionError:
+            except requests.exceptions.RequestException:
                 if retry >= get_max_retry():
                     raise
                 if not reset_files():
@@ -250,7 +251,7 @@ class XYMEClient:
             try:
                 return self._fallible_raw_request_str(
                     method, path, args, add_prefix, api_version)
-            except requests.ConnectionError:
+            except requests.exceptions.RequestException:
                 if retry >= get_max_retry():
                     raise
                 time.sleep(get_retry_sleep())
@@ -287,7 +288,7 @@ class XYMEClient:
             try:
                 return self._fallible_raw_request_json(
                     method, path, args, add_prefix, files, api_version)
-            except requests.ConnectionError:
+            except requests.exceptions.RequestException:
                 if retry >= get_max_retry():
                     raise
                 if not reset_files():
@@ -847,15 +848,60 @@ class PipelineHandle:
             self,
             inputs: List[Any],
             input_key: Optional[str],
-            output_key: str) -> List[Any]:
-        res = cast(DynamicResults, self._client._request_json(
-            METHOD_POST, "/dynamic_list", {
-                "pipeline": self._pipe_id,
-                "inputs": inputs,
-                "input_key": input_key,
-                "output_key": output_key,
-            }, capture_err=True))
-        return res["results"]
+            output_key: str,
+            split_th: Optional[int] = 1000,
+            max_threads: int = 50) -> List[Any]:
+        if split_th is None or len(inputs) <= split_th:
+            res = cast(DynamicResults, self._client._request_json(
+                METHOD_POST, "/dynamic_list", {
+                    "pipeline": self._pipe_id,
+                    "inputs": inputs,
+                    "input_key": input_key,
+                    "output_key": output_key,
+                }, capture_err=True))
+            return res["results"]
+        split_num: int = split_th
+        assert split_num > 0
+        res_arr: List[Any] = [None] * len(inputs)
+        exc: List[Optional[BaseException]] = [None]
+        active_ths: Set[threading.Thread] = set()
+
+        def compute_half(cur: List[Any], offset: int) -> None:
+            if exc[0] is not None:
+                return
+            if len(cur) <= split_num:
+                try:
+                    cur_res = self.dynamic_list(
+                        cur,
+                        input_key=input_key,
+                        output_key=output_key,
+                        split_th=None)
+                    res_arr[offset:offset + len(cur_res)] = cur_res
+                except BaseException as e:  # pylint: disable=broad-except
+                    exc[0] = e
+            else:
+                half_ix: int = len(cur) // 2
+                args_first = (cur[:half_ix], offset)
+                args_second = (cur[half_ix:], offset + half_ix)
+                if len(active_ths) < max_threads:
+                    comp_th = threading.Thread(
+                        target=compute_half, args=args_first)
+                    active_ths.add(comp_th)
+                    comp_th.start()
+                    compute_half(*args_second)
+                    comp_th.join()
+                    active_ths.remove(comp_th)
+                else:
+                    compute_half(*args_first)
+                    compute_half(*args_second)
+
+        compute_half(inputs, 0)
+        for remain_th in active_ths:
+            remain_th.join()
+        raise_e = exc[0]
+        if isinstance(raise_e, BaseException):
+            raise raise_e  # pylint: disable=raising-bad-type
+        return res_arr
 
     def dynamic(self, input_data: BytesIO) -> ByteResponse:
         cur_res, ctype = self._client.request_bytes(

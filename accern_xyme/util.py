@@ -23,7 +23,7 @@ from .types import QueueStatsResponse, QueueStatus
 VERBOSE = False
 FILE_UPLOAD_CHUNK_SIZE = 100 * 1024  # 100kb
 FILE_HASH_CHUNK_SIZE = FILE_UPLOAD_CHUNK_SIZE
-MAX_RETRY = 5
+MAX_RETRY = 20
 RETRY_SLEEP = 5.0
 
 
@@ -260,7 +260,7 @@ def async_compute(
     ids: Dict[RT, int] = {}
     res: Dict[int, ByteResponse] = {}
     min_size_th = 20
-    mul = 4
+    main_threads = 3
 
     def get_waiting_count(remote_queue: QueueStatsResponse) -> int:
         return remote_queue["total"] - remote_queue["active"]
@@ -270,17 +270,26 @@ def async_compute(
             return True
         if len(ids) < max_buff:
             return True
-        waiting_count = get_waiting_count(check_queue())
+        try:
+            waiting_count = get_waiting_count(check_queue())
+        except BaseException as e:  # pylint: disable=broad-except
+            if exc[0] is None:
+                exc[0] = e
+            return True
         return waiting_count < max_buff
 
     def push(cur: List[Any], start_pos: int) -> None:
         if len(cur) <= min_size_th * block_size:
-            for block_ix in range(0, len(cur), block_size):
-                ids.update({
-                    cur_id: cur_ix + start_pos + block_ix
-                    for (cur_ix, cur_id) in enumerate(
-                        start(cur[block_ix:block_ix + block_size]))
-                })
+            try:
+                for block_ix in range(0, len(cur), block_size):
+                    ids.update({
+                        cur_id: cur_ix + start_pos + block_ix
+                        for (cur_ix, cur_id) in enumerate(
+                            start(cur[block_ix:block_ix + block_size]))
+                    })
+            except BaseException as e:  # pylint: disable=broad-except
+                if exc[0] is None:
+                    exc[0] = e
         else:
             half_ix: int = len(cur) // 2
             args = (cur[half_ix:], start_pos + half_ix)
@@ -299,7 +308,12 @@ def async_compute(
                 if exc[0] is not None:
                     break
                 start_pos = pos
-                remote_queue = check_queue()
+                try:
+                    remote_queue = check_queue()
+                except BaseException as e:  # pylint: disable=broad-except
+                    if exc[0] is None:
+                        exc[0] = e
+                    continue
                 waiting_count = get_waiting_count(remote_queue)
                 add_more = max(
                     max_buff - len(ids),
@@ -315,6 +329,15 @@ def async_compute(
             with cond:
                 cond.notify_all()
 
+    def get_one(t_ix: int, t_id: RT) -> None:
+        try:
+            res[t_ix] = get(t_id)
+        except KeyError:
+            pass
+        except BaseException as e:  # pylint: disable=broad-except
+            if exc[0] is None:
+                exc[0] = e
+
     def consume() -> None:
         while not done[0]:
             with cond:
@@ -326,22 +349,26 @@ def async_compute(
             while ids:
                 do_wait = True
                 sorted_ids = sorted(ids.items(), key=lambda v: v[1])
-                check_ids = [v[0] for v in sorted_ids[0:mul * num_threads]]
+                lookahead = main_threads * num_threads
+                check_ids = [v[0] for v in sorted_ids[0:lookahead]]
                 if not check_ids:
                     continue
                 status = get_status(check_ids)
+                ths: List[threading.Thread] = []
                 for (t_id, t_status) in status.items():
                     if t_status in ("waiting", "running"):
                         continue
                     do_wait = False
                     try:
                         t_ix = ids.pop(t_id)
-                        res[t_ix] = get(t_id)
+                        args = (t_ix, t_id)
+                        r_th = threading.Thread(target=get_one, args=args)
+                        r_th.start()
+                        ths.append(r_th)
                     except KeyError:
                         pass
-                    except ServerSideError as e:
-                        if exc[0] is None:
-                            exc[0] = e
+                for r_th in ths:
+                    r_th.join()
                 if do_wait:
                     time.sleep(0.1)
                 else:
@@ -353,7 +380,8 @@ def async_compute(
         prod_th.start()
         consume_ths = [
             threading.Thread(target=consume)
-            for _ in range(num_threads)]
+            for _ in range(main_threads)
+        ]
         for th in consume_ths:
             th.start()
         with cond:
