@@ -29,7 +29,7 @@ from io import BytesIO, StringIO
 import pandas as pd
 import quick_server
 import requests
-from requests.exceptions import HTTPError
+from requests.exceptions import HTTPError, RequestException
 
 from .util import (
     async_compute,
@@ -226,7 +226,7 @@ class XYMEClient:
             try:
                 return self._fallible_raw_request_bytes(
                     method, path, args, files, add_prefix, api_version)
-            except requests.exceptions.RequestException:
+            except RequestException:
                 if retry >= get_max_retry():
                     raise
                 if not reset_files():
@@ -251,7 +251,7 @@ class XYMEClient:
             try:
                 return self._fallible_raw_request_str(
                     method, path, args, add_prefix, api_version)
-            except requests.exceptions.RequestException:
+            except RequestException:
                 if retry >= get_max_retry():
                     raise
                 time.sleep(get_retry_sleep())
@@ -288,7 +288,7 @@ class XYMEClient:
             try:
                 return self._fallible_raw_request_json(
                     method, path, args, add_prefix, files, api_version)
-            except requests.exceptions.RequestException:
+            except RequestException:
                 if retry >= get_max_retry():
                     raise
                 if not reset_files():
@@ -901,8 +901,13 @@ class PipelineHandle:
         for remain_th in active_ths:
             remain_th.join()
         raise_e = exc[0]
-        if isinstance(raise_e, BaseException):
-            raise raise_e  # pylint: disable=raising-bad-type
+        try:
+            if isinstance(raise_e, BaseException):
+                raise raise_e  # pylint: disable=raising-bad-type
+        except RequestException as e:
+            raise ValueError(
+                "request error while processing. processing time per batch "
+                "might be too large. try reducing split_th") from e
         return res_arr
 
     def dynamic(self, input_data: BytesIO) -> ByteResponse:
