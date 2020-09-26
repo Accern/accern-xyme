@@ -860,6 +860,7 @@ class PipelineHandle:
                     "output_key": output_key,
                 }, capture_err=True))
             return res["results"]
+        # FIXME: write generic spliterator implementation
         split_num: int = split_th
         assert split_num > 0
         res_arr: List[Any] = [None] * len(inputs)
@@ -875,25 +876,26 @@ class PipelineHandle:
                         cur,
                         input_key=input_key,
                         output_key=output_key,
-                        split_th=None)
+                        split_th=None,
+                        max_threads=max_threads)
                     res_arr[offset:offset + len(cur_res)] = cur_res
                 except BaseException as e:  # pylint: disable=broad-except
                     exc[0] = e
+                return
+            half_ix: int = len(cur) // 2
+            args_first = (cur[:half_ix], offset)
+            args_second = (cur[half_ix:], offset + half_ix)
+            if len(active_ths) < max_threads:
+                comp_th = threading.Thread(
+                    target=compute_half, args=args_first)
+                active_ths.add(comp_th)
+                comp_th.start()
+                compute_half(*args_second)
+                comp_th.join()
+                active_ths.remove(comp_th)
             else:
-                half_ix: int = len(cur) // 2
-                args_first = (cur[:half_ix], offset)
-                args_second = (cur[half_ix:], offset + half_ix)
-                if len(active_ths) < max_threads:
-                    comp_th = threading.Thread(
-                        target=compute_half, args=args_first)
-                    active_ths.add(comp_th)
-                    comp_th.start()
-                    compute_half(*args_second)
-                    comp_th.join()
-                    active_ths.remove(comp_th)
-                else:
-                    compute_half(*args_first)
-                    compute_half(*args_second)
+                compute_half(*args_first)
+                compute_half(*args_second)
 
         compute_half(inputs, 0)
         for remain_th in active_ths:
