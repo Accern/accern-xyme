@@ -41,6 +41,7 @@ from .util import (
     get_progress_bar,
     get_retry_sleep,
     interpret_ctype,
+    merge_ctype,
     ServerSideError,
 )
 from .types import (
@@ -536,9 +537,17 @@ class XYMEClient:
                 "type": blob_type,
             }, capture_err=False))["blob"]
 
-    def create_new_pipeline(self) -> str:
+    def create_new_pipeline(
+            self,
+            username: Optional[str] = None,
+            pipename: Optional[str] = None,
+            index: Optional[int] = None) -> str:
         return cast(PipelineInit, self._request_json(
-            METHOD_POST, "/pipeline_init", {}, capture_err=False))["pipeline"]
+            METHOD_POST, "/pipeline_init", {
+                "user": username,
+                "name": pipename,
+                "index": index,
+            }, capture_err=False))["pipeline"]
 
     def duplicate_pipeline(
             self, pipe_id: str, dest_id: Optional[str] = None) -> str:
@@ -1364,9 +1373,32 @@ class NodeHandle:
     def read(
             self,
             key: str,
-            chunk: int,
+            chunk: Optional[int],
             force_refresh: bool = False) -> Optional[ByteResponse]:
         return self.read_blob(key, chunk, force_refresh).get_content()
+
+    def read_all(
+            self,
+            key: str,
+            force_refresh: bool = False) -> Optional[ByteResponse]:
+        self.read(key, chunk=None, force_refresh=force_refresh)
+        res: List[ByteResponse] = []
+        ctype: Optional[str] = None
+        while True:
+            blob = self.read_blob(key, chunk=len(res), force_refresh=False)
+            cur = blob.get_content()
+            if cur is None:
+                break
+            cur_ctype = blob.get_ctype()
+            if ctype is None:
+                ctype = cur_ctype
+            elif ctype != cur_ctype:
+                raise ValueError(
+                    f"inconsistent return types {ctype} != {cur_ctype}")
+            res.append(cur)
+        if not res or ctype is None:
+            return None
+        return merge_ctype(res, ctype)
 
     def reset(self) -> NodeState:
         return cast(NodeState, self._client._request_json(
@@ -1563,6 +1595,7 @@ class BlobHandle:
         self._uri = uri
         self._is_full = is_full
         self._pipeline = pipeline
+        self._ctype: Optional[str] = None
 
     def is_full(self) -> bool:
         return self._is_full
@@ -1576,6 +1609,9 @@ class BlobHandle:
     def get_pipeline(self) -> PipelineHandle:
         return self._pipeline
 
+    def get_ctype(self) -> Optional[str]:
+        return self._ctype
+
     def get_content(self) -> Optional[ByteResponse]:
         if not self.is_full():
             raise ValueError(f"URI must be full: {self}")
@@ -1585,6 +1621,7 @@ class BlobHandle:
             "uri": self._uri,
             "pipeline": self.get_pipeline().get_id(),
         })
+        self._ctype = ctype
         return interpret_ctype(fin, ctype)
 
     def list_files(self) -> List['BlobHandle']:

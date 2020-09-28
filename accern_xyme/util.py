@@ -1,6 +1,7 @@
 from typing import (
     Any,
     Callable,
+    cast,
     Dict,
     IO,
     Iterable,
@@ -238,6 +239,24 @@ def interpret_ctype(data: IO[bytes], ctype: str) -> ByteResponse:
         pass
     content.seek(0)
     return content
+
+
+def merge_ctype(datas: List[ByteResponse], ctype: str) -> ByteResponse:
+    if ctype == "application/json":
+        return cast(ByteResponse, datas)
+    if ctype == "application/parquet":
+        return pd.concat(datas)
+    if ctype == "application/torch":
+        return torch.cat(datas, dim=0)  # pylint: disable=no-member
+    if ctype == "application/npz":
+        return sparse.vstack(datas)
+    if ctype == "application/jsonl":
+        return [
+            cast(Any, obj)
+            for arr in datas
+            for obj in arr
+        ]
+    return cast(ByteResponse, datas)
 
 
 def async_compute(
