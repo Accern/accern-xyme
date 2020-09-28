@@ -673,8 +673,6 @@ class PipelineHandle:
         self._pipe_id = pipe_id
         self._name: Optional[str] = None
         self._company: Optional[str] = None
-        self._state_publisher: Optional[str] = None
-        self._notify_publisher: Optional[str] = None
         self._state: Optional[str] = None
         self._is_high_priority: Optional[bool] = None
         self._is_parallel: Optional[bool] = None
@@ -688,8 +686,6 @@ class PipelineHandle:
     def refresh(self) -> None:
         self._name = None
         self._company = None
-        self._state_publisher = None
-        self._notify_publisher = None
         self._state = None
         self._is_high_priority = None
         self._is_parallel = None
@@ -715,8 +711,6 @@ class PipelineHandle:
         info = self.get_info()
         self._name = info["name"]
         self._company = info["company"]
-        self._state_publisher = info["state_publisher"]
-        self._notify_publisher = info["notify_publisher"]
         self._state = info["state"]
         self._is_high_priority = info["high_priority"]
         self._is_parallel = info["is_parallel"]
