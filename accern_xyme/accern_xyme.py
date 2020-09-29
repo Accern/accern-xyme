@@ -1200,7 +1200,6 @@ class NodeHandle:
         self._node_id = node_id
         self._node_name = node_name
         self._type = kind
-        self._state_key: Optional[str] = None
         self._blobs: Dict[str, BlobHandle] = {}
         self._inputs: Dict[str, Tuple[str, str]] = {}
         self._state: Optional[int] = None
@@ -1230,7 +1229,6 @@ class NodeHandle:
         if self._node_id != node_info["id"]:
             raise ValueError(f"{self._node_id} != {node_info['id']}")
         self._node_name = node_info["name"]
-        self._state_key = node_info["state_key"]
         self._type = node_info["type"]
         self._blobs = {
             key: BlobHandle(
