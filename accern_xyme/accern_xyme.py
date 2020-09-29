@@ -632,6 +632,12 @@ class XYMEClient:
         return cast(CustomImportsResponse, self._request_json(
             METHOD_GET, "/allowed_custom_imports", {}, capture_err=False))
 
+    def check_queue_stats(self, pipeline: Optional[str]) -> QueueStatsResponse:
+        return cast(QueueStatsResponse, self._request_json(
+            METHOD_GET, "/queue_stats", {
+                "pipeline": pipeline,
+            }, capture_err=False))
+
     def get_instance_status(self) -> Dict[InstanceStatus, int]:
         return cast(Dict[InstanceStatus, int], self._request_json(
             METHOD_GET, "/instance_status", {}, capture_err=False))
@@ -1108,10 +1114,7 @@ class PipelineHandle:
             }, capture_err=False))
 
     def check_queue_stats(self) -> QueueStatsResponse:
-        return cast(QueueStatsResponse, self._client._request_json(
-            METHOD_GET, "/queue_stats", {
-                "pipeline": self.get_id(),
-            }, capture_err=False))
+        return self._client.check_queue_stats(self.get_id())
 
     def __hash__(self) -> int:
         return hash(self._pipe_id)
