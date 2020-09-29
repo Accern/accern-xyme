@@ -1400,12 +1400,12 @@ class NodeHandle:
                 "action": "reset",
             }, capture_err=False))
 
-    def notify(self) -> NodeState:
+    def requeue(self) -> NodeState:
         return cast(NodeState, self._client._request_json(
             METHOD_PUT, "/node_state", {
                 "pipeline": self.get_pipeline().get_id(),
                 "node": self.get_id(),
-                "action": "notify",
+                "action": "requeue",
             }, capture_err=False))
 
     def fix_error(self) -> NodeState:
