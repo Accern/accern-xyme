@@ -659,6 +659,14 @@ class XYMEClient:
             minimal: Literal[False]) -> QueueStatsResponse:
         ...
 
+    @overload
+    def check_queue_stats(
+            self,
+            pipeline: Optional[str],
+            minimal: bool) -> Union[
+                MinimalQueueStatsResponse, QueueStatsResponse]:
+        ...
+
     def check_queue_stats(
             self,
             pipeline: Optional[str],
