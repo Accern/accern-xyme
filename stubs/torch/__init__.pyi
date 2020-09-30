@@ -9,6 +9,8 @@ load: Any
 save: Any
 stack: Any
 
+cat: Any
+
 
 def sum(
         input: Tensor,

@@ -1,6 +1,7 @@
 from typing import (
     Any,
     Callable,
+    cast,
     Dict,
     IO,
     Iterable,
@@ -18,12 +19,12 @@ from io import BytesIO, TextIOWrapper
 import pandas as pd
 from scipy import sparse
 import torch
-from .types import QueueStatsResponse, QueueStatus
+from .types import MinimalQueueStatsResponse, QueueStatus
 
 VERBOSE = False
 FILE_UPLOAD_CHUNK_SIZE = 100 * 1024  # 100kb
 FILE_HASH_CHUNK_SIZE = FILE_UPLOAD_CHUNK_SIZE
-MAX_RETRY = 5
+MAX_RETRY = 20
 RETRY_SLEEP = 5.0
 
 
@@ -240,11 +241,29 @@ def interpret_ctype(data: IO[bytes], ctype: str) -> ByteResponse:
     return content
 
 
+def merge_ctype(datas: List[ByteResponse], ctype: str) -> ByteResponse:
+    if ctype == "application/json":
+        return cast(ByteResponse, datas)
+    if ctype == "application/parquet":
+        return pd.concat(datas)
+    if ctype == "application/torch":
+        return torch.cat(datas, dim=0)  # pylint: disable=no-member
+    if ctype == "application/npz":
+        return sparse.vstack(datas)
+    if ctype == "application/jsonl":
+        return [
+            cast(Any, obj)
+            for arr in datas
+            for obj in arr
+        ]
+    return cast(ByteResponse, datas)
+
+
 def async_compute(
         arr: List[Any],
         start: Callable[[List[Any]], List[RT]],
         get: Callable[[RT], ByteResponse],
-        check_queue: Callable[[], QueueStatsResponse],
+        check_queue: Callable[[], MinimalQueueStatsResponse],
         get_status: Callable[[List[RT]], Dict[RT, QueueStatus]],
         max_buff: int,
         block_size: int,
@@ -252,14 +271,17 @@ def async_compute(
     assert max_buff > 0
     assert block_size > 0
     assert num_threads > 0
+    arr = list(arr)
     done: List[bool] = [False]
     end_produce: List[bool] = [False]
     exc: List[Optional[BaseException]] = [None]
     cond = threading.Condition()
     ids: Dict[RT, int] = {}
     res: Dict[int, ByteResponse] = {}
+    min_size_th = 20
+    main_threads = 3
 
-    def get_waiting_count(remote_queue: QueueStatsResponse) -> int:
+    def get_waiting_count(remote_queue: MinimalQueueStatsResponse) -> int:
         return remote_queue["total"] - remote_queue["active"]
 
     def can_push_more() -> bool:
@@ -267,31 +289,58 @@ def async_compute(
             return True
         if len(ids) < max_buff:
             return True
-        waiting_count = get_waiting_count(check_queue())
+        try:
+            waiting_count = get_waiting_count(check_queue())
+        except BaseException as e:  # pylint: disable=broad-except
+            if exc[0] is None:
+                exc[0] = e
+            return True
         return waiting_count < max_buff
 
-    def produce() -> None:
-        try:
-            pos = 0
-            while pos < len(arr):
-                with cond:
-                    cond.wait_for(can_push_more)
-                if exc[0] is not None:
-                    break
-                start_pos = pos
-                remote_queue = check_queue()
-                waiting_count = get_waiting_count(remote_queue)
-                add_more = max(
-                    max_buff - len(ids),
-                    max_buff - waiting_count)
-                cur = arr[pos:pos + add_more]
-                pos += len(cur)
+    def push(cur: List[Any], start_pos: int) -> None:
+        if len(cur) <= min_size_th * block_size:
+            try:
                 for block_ix in range(0, len(cur), block_size):
                     ids.update({
                         cur_id: cur_ix + start_pos + block_ix
                         for (cur_ix, cur_id) in enumerate(
                             start(cur[block_ix:block_ix + block_size]))
                     })
+            except BaseException as e:  # pylint: disable=broad-except
+                if exc[0] is None:
+                    exc[0] = e
+        else:
+            half_ix: int = len(cur) // 2
+            args = (cur[half_ix:], start_pos + half_ix)
+            push_th = threading.Thread(target=push, args=args)
+            push_th.start()
+            push(cur[:half_ix], start_pos)
+            push_th.join()
+
+    def produce() -> None:
+        try:
+            pos = 0
+            while pos < len(arr):
+                with cond:
+                    while not cond.wait_for(can_push_more, timeout=0.1):
+                        pass
+                if exc[0] is not None:
+                    break
+                start_pos = pos
+                try:
+                    remote_queue = check_queue()
+                except BaseException as e:  # pylint: disable=broad-except
+                    if exc[0] is None:
+                        exc[0] = e
+                    continue
+                waiting_count = get_waiting_count(remote_queue)
+                add_more = max(
+                    max_buff - len(ids),
+                    max_buff - waiting_count)
+                if add_more > 0:
+                    cur = arr[pos:pos + add_more]
+                    pos += len(cur)
+                    push(cur, start_pos)
                 with cond:
                     cond.notify_all()
         finally:
@@ -299,60 +348,82 @@ def async_compute(
             with cond:
                 cond.notify_all()
 
+    def get_one(t_ix: int, t_id: RT) -> None:
+        try:
+            res[t_ix] = get(t_id)
+        except KeyError:
+            pass
+        except BaseException as e:  # pylint: disable=broad-except
+            if exc[0] is None:
+                exc[0] = e
+
     def consume() -> None:
         while not done[0]:
             with cond:
-                cond.wait_for(
-                    lambda: exc[0] is not None or done[0] or len(ids) > 0)
+                while not cond.wait_for(
+                        lambda: exc[0] is not None or done[0] or len(ids) > 0,
+                        timeout=0.1):
+                    pass
             do_wait = False
             while ids:
                 do_wait = True
                 sorted_ids = sorted(ids.items(), key=lambda v: v[1])
-                check_ids = [v[0] for v in sorted_ids[0: 3 * num_threads]]
+                lookahead = main_threads * num_threads
+                check_ids = [v[0] for v in sorted_ids[0:lookahead]]
                 if not check_ids:
                     continue
                 status = get_status(check_ids)
+                ths: List[threading.Thread] = []
                 for (t_id, t_status) in status.items():
                     if t_status in ("waiting", "running"):
                         continue
                     do_wait = False
                     try:
                         t_ix = ids.pop(t_id)
-                        res[t_ix] = get(t_id)
+                        args = (t_ix, t_id)
+                        r_th = threading.Thread(target=get_one, args=args)
+                        r_th.start()
+                        ths.append(r_th)
                     except KeyError:
                         pass
-                    except ServerSideError as e:
-                        if exc[0] is None:
-                            exc[0] = e
+                for r_th in ths:
+                    r_th.join()
                 if do_wait:
-                    time.sleep(1)
+                    time.sleep(0.1)
                 else:
                     with cond:
                         cond.notify_all()
 
-    prod_th = threading.Thread(target=produce)
-    prod_th.start()
-    consume_ths = [
-        threading.Thread(target=consume)
-        for _ in range(num_threads)]
-    for th in consume_ths:
-        th.start()
-    yield_ix = 0
-    while yield_ix < len(arr):
+    try:
+        prod_th = threading.Thread(target=produce)
+        prod_th.start()
+        consume_ths = [
+            threading.Thread(target=consume)
+            for _ in range(main_threads)
+        ]
+        for th in consume_ths:
+            th.start()
         with cond:
-            cond.wait_for(lambda: exc[0] is not None or bool(res))
+            cond.notify_all()
+        yield_ix = 0
+        while yield_ix < len(arr):
+            with cond:
+                while not cond.wait_for(
+                        lambda: exc[0] is not None or bool(res), timeout=0.1):
+                    pass
+            if exc[0] is not None:
+                break
+            try:
+                while res:
+                    yield res.pop(yield_ix)
+                    yield_ix += 1
+            except KeyError:
+                pass
         if exc[0] is not None:
-            break
-        try:
-            while res:
-                yield res.pop(yield_ix)
-                yield_ix += 1
-        except KeyError:
-            pass
-    if exc[0] is not None:
-        with cond:
-            cond.wait_for(lambda: end_produce[0])
-    done[0] = True
+            with cond:
+                cond.wait_for(lambda: end_produce[0])
+    finally:
+        done[0] = True
     with cond:
         cond.notify_all()
     prod_th.join()

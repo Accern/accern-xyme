@@ -8,6 +8,7 @@ from typing import (
     Iterator,
     List,
     Optional,
+    overload,
     Set,
     TextIO,
     Tuple,
@@ -15,20 +16,22 @@ from typing import (
     Union,
 )
 import io
-import inspect
 import os
 import sys
 import json
-import textwrap
 import time
 import weakref
+import inspect
+import textwrap
+import threading
 import contextlib
 import collections
 from io import BytesIO, StringIO
 import pandas as pd
 import quick_server
 import requests
-from requests.exceptions import HTTPError
+from requests.exceptions import HTTPError, RequestException
+from typing_extensions import Literal
 
 from .util import (
     async_compute,
@@ -40,6 +43,7 @@ from .util import (
     get_progress_bar,
     get_retry_sleep,
     interpret_ctype,
+    merge_ctype,
     ServerSideError,
 )
 from .types import (
@@ -58,6 +62,7 @@ from .types import (
     JobList,
     JSONBlobResponse,
     MaintenanceResponse,
+    MinimalQueueStatsResponse,
     ModelParamsResponse,
     ModelSetupResponse,
     NodeChunk,
@@ -92,7 +97,7 @@ else:
     WVD = weakref.WeakValueDictionary
 
 
-__version__ = "0.1.3"
+__version__ = "0.1.4"
 # FIXME: async calls, documentation, auth, summary – time it took etc.
 
 
@@ -225,7 +230,7 @@ class XYMEClient:
             try:
                 return self._fallible_raw_request_bytes(
                     method, path, args, files, add_prefix, api_version)
-            except requests.ConnectionError:
+            except RequestException:
                 if retry >= get_max_retry():
                     raise
                 if not reset_files():
@@ -250,7 +255,7 @@ class XYMEClient:
             try:
                 return self._fallible_raw_request_str(
                     method, path, args, add_prefix, api_version)
-            except requests.ConnectionError:
+            except RequestException:
                 if retry >= get_max_retry():
                     raise
                 time.sleep(get_retry_sleep())
@@ -287,7 +292,7 @@ class XYMEClient:
             try:
                 return self._fallible_raw_request_json(
                     method, path, args, add_prefix, files, api_version)
-            except requests.ConnectionError:
+            except RequestException:
                 if retry >= get_max_retry():
                     raise
                 if not reset_files():
@@ -535,9 +540,17 @@ class XYMEClient:
                 "type": blob_type,
             }, capture_err=False))["blob"]
 
-    def create_new_pipeline(self) -> str:
+    def create_new_pipeline(
+            self,
+            username: Optional[str] = None,
+            pipename: Optional[str] = None,
+            index: Optional[int] = None) -> str:
         return cast(PipelineInit, self._request_json(
-            METHOD_POST, "/pipeline_init", {}, capture_err=False))["pipeline"]
+            METHOD_POST, "/pipeline_init", {
+                "user": username,
+                "name": pipename,
+                "index": index,
+            }, capture_err=False))["pipeline"]
 
     def duplicate_pipeline(
             self, pipe_id: str, dest_id: Optional[str] = None) -> str:
@@ -632,10 +645,43 @@ class XYMEClient:
         return cast(CustomImportsResponse, self._request_json(
             METHOD_GET, "/allowed_custom_imports", {}, capture_err=False))
 
-    def check_queue_stats(self, pipeline: Optional[str]) -> QueueStatsResponse:
+    @overload
+    def check_queue_stats(  # pylint: disable=no-self-use
+            self,
+            pipeline: Optional[str],
+            minimal: Literal[True]) -> MinimalQueueStatsResponse:
+        ...
+
+    @overload
+    def check_queue_stats(  # pylint: disable=no-self-use
+            self,
+            pipeline: Optional[str],
+            minimal: Literal[False]) -> QueueStatsResponse:
+        ...
+
+    @overload
+    def check_queue_stats(  # pylint: disable=no-self-use
+            self,
+            pipeline: Optional[str],
+            minimal: bool) -> Union[
+                MinimalQueueStatsResponse, QueueStatsResponse]:
+        ...
+
+    def check_queue_stats(
+            self,
+            pipeline: Optional[str],
+            minimal: bool) -> Union[
+                MinimalQueueStatsResponse, QueueStatsResponse]:
+        if minimal:
+            return cast(MinimalQueueStatsResponse, self._request_json(
+                METHOD_GET, "/queue_stats", {
+                    "pipeline": pipeline,
+                    "minimal": 1,
+                }, capture_err=False))
         return cast(QueueStatsResponse, self._request_json(
             METHOD_GET, "/queue_stats", {
                 "pipeline": pipeline,
+                "minimal": 0,
             }, capture_err=False))
 
     def get_instance_status(self) -> Dict[InstanceStatus, int]:
@@ -665,8 +711,6 @@ class PipelineHandle:
         self._pipe_id = pipe_id
         self._name: Optional[str] = None
         self._company: Optional[str] = None
-        self._state_publisher: Optional[str] = None
-        self._notify_publisher: Optional[str] = None
         self._state: Optional[str] = None
         self._is_high_priority: Optional[bool] = None
         self._is_parallel: Optional[bool] = None
@@ -680,8 +724,6 @@ class PipelineHandle:
     def refresh(self) -> None:
         self._name = None
         self._company = None
-        self._state_publisher = None
-        self._notify_publisher = None
         self._state = None
         self._is_high_priority = None
         self._is_parallel = None
@@ -707,8 +749,6 @@ class PipelineHandle:
         info = self.get_info()
         self._name = info["name"]
         self._company = info["company"]
-        self._state_publisher = info["state_publisher"]
-        self._notify_publisher = info["notify_publisher"]
         self._state = info["state"]
         self._is_high_priority = info["high_priority"]
         self._is_parallel = info["is_parallel"]
@@ -848,16 +888,68 @@ class PipelineHandle:
     def dynamic_list(
             self,
             inputs: List[Any],
-            input_key: str,
-            output_key: str) -> List[Any]:
-        res = cast(DynamicResults, self._client._request_json(
-            METHOD_POST, "/dynamic_list", {
-                "pipeline": self._pipe_id,
-                "inputs": inputs,
-                "input_key": input_key,
-                "output_key": output_key,
-            }, capture_err=True))
-        return res["results"]
+            input_key: Optional[str],
+            output_key: str,
+            split_th: Optional[int] = 1000,
+            max_threads: int = 50) -> List[Any]:
+        if split_th is None or len(inputs) <= split_th:
+            res = cast(DynamicResults, self._client._request_json(
+                METHOD_POST, "/dynamic_list", {
+                    "pipeline": self._pipe_id,
+                    "inputs": inputs,
+                    "input_key": input_key,
+                    "output_key": output_key,
+                }, capture_err=True))
+            return res["results"]
+        # FIXME: write generic spliterator implementation
+        split_num: int = split_th
+        assert split_num > 0
+        res_arr: List[Any] = [None] * len(inputs)
+        exc: List[Optional[BaseException]] = [None]
+        active_ths: Set[threading.Thread] = set()
+
+        def compute_half(cur: List[Any], offset: int) -> None:
+            if exc[0] is not None:
+                return
+            if len(cur) <= split_num:
+                try:
+                    cur_res = self.dynamic_list(
+                        cur,
+                        input_key=input_key,
+                        output_key=output_key,
+                        split_th=None,
+                        max_threads=max_threads)
+                    res_arr[offset:offset + len(cur_res)] = cur_res
+                except BaseException as e:  # pylint: disable=broad-except
+                    exc[0] = e
+                return
+            half_ix: int = len(cur) // 2
+            args_first = (cur[:half_ix], offset)
+            args_second = (cur[half_ix:], offset + half_ix)
+            if len(active_ths) < max_threads:
+                comp_th = threading.Thread(
+                    target=compute_half, args=args_first)
+                active_ths.add(comp_th)
+                comp_th.start()
+                compute_half(*args_second)
+                comp_th.join()
+                active_ths.remove(comp_th)
+            else:
+                compute_half(*args_first)
+                compute_half(*args_second)
+
+        compute_half(inputs, 0)
+        for remain_th in active_ths:
+            remain_th.join()
+        raise_e = exc[0]
+        try:
+            if isinstance(raise_e, BaseException):
+                raise raise_e  # pylint: disable=raising-bad-type
+        except RequestException as e:
+            raise ValueError(
+                "request error while processing. processing time per batch "
+                "might be too large. try reducing split_th") from e
+        return res_arr
 
     def dynamic(self, input_data: BytesIO) -> ByteResponse:
         cur_res, ctype = self._client.request_bytes(
@@ -953,7 +1045,7 @@ class PipelineHandle:
                 input_data,
                 self.dynamic_async,
                 get,
-                self.check_queue_stats,
+                lambda: self.check_queue_stats(minimal=True),
                 self.get_dynamic_status,
                 max_buff,
                 block_size,
@@ -979,7 +1071,7 @@ class PipelineHandle:
                 input_data,
                 self.dynamic_async_obj,
                 get,
-                self.check_queue_stats,
+                lambda: self.check_queue_stats(minimal=True),
                 self.get_dynamic_status,
                 max_buff,
                 block_size,
@@ -1113,8 +1205,27 @@ class PipelineHandle:
                 "pipeline": self.get_id(),
             }, capture_err=False))
 
-    def check_queue_stats(self) -> QueueStatsResponse:
-        return self._client.check_queue_stats(self.get_id())
+    @overload
+    def check_queue_stats(  # pylint: disable=no-self-use
+            self, minimal: Literal[True]) -> MinimalQueueStatsResponse:
+        ...
+
+    @overload
+    def check_queue_stats(  # pylint: disable=no-self-use
+            self, minimal: Literal[False]) -> QueueStatsResponse:
+        ...
+
+    @overload
+    def check_queue_stats(  # pylint: disable=no-self-use
+            self,
+            minimal: bool) -> Union[
+                MinimalQueueStatsResponse, QueueStatsResponse]:
+        ...
+
+    def check_queue_stats(self, minimal: bool) -> Union[
+            MinimalQueueStatsResponse, QueueStatsResponse]:
+        pipe_id: Optional[str] = self.get_id()
+        return self._client.check_queue_stats(pipe_id, minimal=minimal)
 
     def __hash__(self) -> int:
         return hash(self._pipe_id)
@@ -1149,7 +1260,6 @@ class NodeHandle:
         self._node_id = node_id
         self._node_name = node_name
         self._type = kind
-        self._state_key: Optional[str] = None
         self._blobs: Dict[str, BlobHandle] = {}
         self._inputs: Dict[str, Tuple[str, str]] = {}
         self._state: Optional[int] = None
@@ -1179,7 +1289,6 @@ class NodeHandle:
         if self._node_id != node_info["id"]:
             raise ValueError(f"{self._node_id} != {node_info['id']}")
         self._node_name = node_info["name"]
-        self._state_key = node_info["state_key"]
         self._type = node_info["type"]
         self._blobs = {
             key: BlobHandle(
@@ -1316,9 +1425,32 @@ class NodeHandle:
     def read(
             self,
             key: str,
-            chunk: int,
+            chunk: Optional[int],
             force_refresh: bool = False) -> Optional[ByteResponse]:
         return self.read_blob(key, chunk, force_refresh).get_content()
+
+    def read_all(
+            self,
+            key: str,
+            force_refresh: bool = False) -> Optional[ByteResponse]:
+        self.read(key, chunk=None, force_refresh=force_refresh)
+        res: List[ByteResponse] = []
+        ctype: Optional[str] = None
+        while True:
+            blob = self.read_blob(key, chunk=len(res), force_refresh=False)
+            cur = blob.get_content()
+            if cur is None:
+                break
+            cur_ctype = blob.get_ctype()
+            if ctype is None:
+                ctype = cur_ctype
+            elif ctype != cur_ctype:
+                raise ValueError(
+                    f"inconsistent return types {ctype} != {cur_ctype}")
+            res.append(cur)
+        if not res or ctype is None:
+            return None
+        return merge_ctype(res, ctype)
 
     def reset(self) -> NodeState:
         return cast(NodeState, self._client._request_json(
@@ -1328,12 +1460,12 @@ class NodeHandle:
                 "action": "reset",
             }, capture_err=False))
 
-    def notify(self) -> NodeState:
+    def requeue(self) -> NodeState:
         return cast(NodeState, self._client._request_json(
             METHOD_PUT, "/node_state", {
                 "pipeline": self.get_pipeline().get_id(),
                 "node": self.get_id(),
-                "action": "notify",
+                "action": "requeue",
             }, capture_err=False))
 
     def fix_error(self) -> NodeState:
@@ -1515,6 +1647,7 @@ class BlobHandle:
         self._uri = uri
         self._is_full = is_full
         self._pipeline = pipeline
+        self._ctype: Optional[str] = None
 
     def is_full(self) -> bool:
         return self._is_full
@@ -1528,6 +1661,9 @@ class BlobHandle:
     def get_pipeline(self) -> PipelineHandle:
         return self._pipeline
 
+    def get_ctype(self) -> Optional[str]:
+        return self._ctype
+
     def get_content(self) -> Optional[ByteResponse]:
         if not self.is_full():
             raise ValueError(f"URI must be full: {self}")
@@ -1537,6 +1673,7 @@ class BlobHandle:
             "uri": self._uri,
             "pipeline": self.get_pipeline().get_id(),
         })
+        self._ctype = ctype
         return interpret_ctype(fin, ctype)
 
     def list_files(self) -> List['BlobHandle']:

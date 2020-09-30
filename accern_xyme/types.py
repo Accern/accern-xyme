@@ -48,7 +48,6 @@ VersionResponse = TypedDict('VersionResponse', {
 ReadNode = TypedDict('ReadNode', {
     "redis_key": str,
     "result_uri": Optional[str],
-    "publisher": str,
 })
 NodeDefInfo = TypedDict('NodeDefInfo', {
     "name": str,
@@ -76,7 +75,6 @@ NodeTypes = TypedDict('NodeTypes', {
 NodeInfo = TypedDict('NodeInfo', {
     "id": str,
     "name": str,
-    "state_key": Optional[str],
     "type": str,
     "blobs": Dict[str, str],
     "inputs": Dict[str, Tuple[str, str]],
@@ -93,10 +91,8 @@ PipelineInfo = TypedDict('PipelineInfo', {
     "is_parallel": bool,
     "name": str,
     "nodes": List[NodeInfo],
-    "notify_publisher": Optional[str],
     "outs": List[Tuple[str, str]],
     "settings": Dict[str, Any],
-    "state_publisher": Optional[str],
     "state": str,
 })
 BlobInit = TypedDict('BlobInit', {
@@ -210,11 +206,19 @@ PutNodeBlob = TypedDict('PutNodeBlob', {
 })
 QueueStatsResponse = TypedDict('QueueStatsResponse', {
     "active": int,
-    "data": int,
     "error": int,
     "extras": Dict[str, int],
+    "need": bool,
+    "queue_count": int,
     "restarted": int,
     "results": int,
+    "start_blocker": bool,
+    "threshold": int,
+    "total": int,
+    "workers": int,
+})
+MinimalQueueStatsResponse = TypedDict('MinimalQueueStatsResponse', {
+    "active": int,
     "total": int,
 })
 QueueStatus = Literal[
