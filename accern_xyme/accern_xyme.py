@@ -97,7 +97,7 @@ else:
     WVD = weakref.WeakValueDictionary
 
 
-__version__ = "0.1.4"
+__version__ = "0.1.5"
 # FIXME: async calls, documentation, auth, summary – time it took etc.
 
 
@@ -669,8 +669,8 @@ class XYMEClient:
 
     def check_queue_stats(
             self,
-            pipeline: Optional[str],
-            minimal: bool) -> Union[
+            pipeline: Optional[str] = None,
+            minimal: bool = False) -> Union[
                 MinimalQueueStatsResponse, QueueStatsResponse]:
         if minimal:
             return cast(MinimalQueueStatsResponse, self._request_json(
