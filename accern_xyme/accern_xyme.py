@@ -97,7 +97,7 @@ else:
     WVD = weakref.WeakValueDictionary
 
 
-__version__ = "0.1.3"
+__version__ = "0.1.4"
 # FIXME: async calls, documentation, auth, summary – time it took etc.
 
 
@@ -646,21 +646,21 @@ class XYMEClient:
             METHOD_GET, "/allowed_custom_imports", {}, capture_err=False))
 
     @overload
-    def check_queue_stats(
+    def check_queue_stats(  # pylint: disable=no-self-use
             self,
             pipeline: Optional[str],
             minimal: Literal[True]) -> MinimalQueueStatsResponse:
         ...
 
     @overload
-    def check_queue_stats(
+    def check_queue_stats(  # pylint: disable=no-self-use
             self,
             pipeline: Optional[str],
             minimal: Literal[False]) -> QueueStatsResponse:
         ...
 
     @overload
-    def check_queue_stats(
+    def check_queue_stats(  # pylint: disable=no-self-use
             self,
             pipeline: Optional[str],
             minimal: bool) -> Union[
@@ -1206,12 +1206,20 @@ class PipelineHandle:
             }, capture_err=False))
 
     @overload
-    def check_queue_stats(
+    def check_queue_stats(  # pylint: disable=no-self-use
             self, minimal: Literal[True]) -> MinimalQueueStatsResponse:
         ...
 
     @overload
-    def check_queue_stats(self, minimal: Literal[False]) -> QueueStatsResponse:
+    def check_queue_stats(  # pylint: disable=no-self-use
+            self, minimal: Literal[False]) -> QueueStatsResponse:
+        ...
+
+    @overload
+    def check_queue_stats(  # pylint: disable=no-self-use
+            self,
+            minimal: bool) -> Union[
+                MinimalQueueStatsResponse, QueueStatsResponse]:
         ...
 
     def check_queue_stats(self, minimal: bool) -> Union[
