@@ -19,7 +19,7 @@ from io import BytesIO, TextIOWrapper
 import pandas as pd
 from scipy import sparse
 import torch
-from .types import QueueStatsResponse, QueueStatus
+from .types import MinimalQueueStatsResponse, QueueStatus
 
 VERBOSE = False
 FILE_UPLOAD_CHUNK_SIZE = 100 * 1024  # 100kb
@@ -263,7 +263,7 @@ def async_compute(
         arr: List[Any],
         start: Callable[[List[Any]], List[RT]],
         get: Callable[[RT], ByteResponse],
-        check_queue: Callable[[], QueueStatsResponse],
+        check_queue: Callable[[], MinimalQueueStatsResponse],
         get_status: Callable[[List[RT]], Dict[RT, QueueStatus]],
         max_buff: int,
         block_size: int,
@@ -281,7 +281,7 @@ def async_compute(
     min_size_th = 20
     main_threads = 3
 
-    def get_waiting_count(remote_queue: QueueStatsResponse) -> int:
+    def get_waiting_count(remote_queue: MinimalQueueStatsResponse) -> int:
         return remote_queue["total"] - remote_queue["active"]
 
     def can_push_more() -> bool:

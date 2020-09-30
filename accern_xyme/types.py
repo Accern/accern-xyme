@@ -206,11 +206,19 @@ PutNodeBlob = TypedDict('PutNodeBlob', {
 })
 QueueStatsResponse = TypedDict('QueueStatsResponse', {
     "active": int,
-    "data": int,
     "error": int,
     "extras": Dict[str, int],
+    "need": bool,
+    "queue_count": int,
     "restarted": int,
     "results": int,
+    "start_blocker": bool,
+    "threshold": int,
+    "total": int,
+    "workers": int,
+})
+MinimalQueueStatsResponse = TypedDict('MinimalQueueStatsResponse', {
+    "active": int,
     "total": int,
 })
 QueueStatus = Literal[

@@ -8,6 +8,7 @@ from typing import (
     Iterator,
     List,
     Optional,
+    overload,
     Set,
     TextIO,
     Tuple,
@@ -30,6 +31,7 @@ import pandas as pd
 import quick_server
 import requests
 from requests.exceptions import HTTPError, RequestException
+from typing_extensions import Literal
 
 from .util import (
     async_compute,
@@ -60,6 +62,7 @@ from .types import (
     JobList,
     JSONBlobResponse,
     MaintenanceResponse,
+    MinimalQueueStatsResponse,
     ModelParamsResponse,
     ModelSetupResponse,
     NodeChunk,
@@ -642,10 +645,35 @@ class XYMEClient:
         return cast(CustomImportsResponse, self._request_json(
             METHOD_GET, "/allowed_custom_imports", {}, capture_err=False))
 
-    def check_queue_stats(self, pipeline: Optional[str]) -> QueueStatsResponse:
+    @overload
+    def check_queue_stats(
+            self,
+            pipeline: Optional[str],
+            minimal: Literal[True]) -> MinimalQueueStatsResponse:
+        ...
+
+    @overload
+    def check_queue_stats(
+            self,
+            pipeline: Optional[str],
+            minimal: Literal[False]) -> QueueStatsResponse:
+        ...
+
+    def check_queue_stats(
+            self,
+            pipeline: Optional[str],
+            minimal: bool) -> Union[
+                MinimalQueueStatsResponse, QueueStatsResponse]:
+        if minimal:
+            return cast(MinimalQueueStatsResponse, self._request_json(
+                METHOD_GET, "/queue_stats", {
+                    "pipeline": pipeline,
+                    "minimal": 1,
+                }, capture_err=False))
         return cast(QueueStatsResponse, self._request_json(
             METHOD_GET, "/queue_stats", {
                 "pipeline": pipeline,
+                "minimal": 0,
             }, capture_err=False))
 
     def get_instance_status(self) -> Dict[InstanceStatus, int]:
@@ -1009,7 +1037,7 @@ class PipelineHandle:
                 input_data,
                 self.dynamic_async,
                 get,
-                self.check_queue_stats,
+                lambda: self.check_queue_stats(minimal=True),
                 self.get_dynamic_status,
                 max_buff,
                 block_size,
@@ -1035,7 +1063,7 @@ class PipelineHandle:
                 input_data,
                 self.dynamic_async_obj,
                 get,
-                self.check_queue_stats,
+                lambda: self.check_queue_stats(minimal=True),
                 self.get_dynamic_status,
                 max_buff,
                 block_size,
@@ -1169,8 +1197,19 @@ class PipelineHandle:
                 "pipeline": self.get_id(),
             }, capture_err=False))
 
-    def check_queue_stats(self) -> QueueStatsResponse:
-        return self._client.check_queue_stats(self.get_id())
+    @overload
+    def check_queue_stats(
+            self, minimal: Literal[True]) -> MinimalQueueStatsResponse:
+        ...
+
+    @overload
+    def check_queue_stats(self, minimal: Literal[False]) -> QueueStatsResponse:
+        ...
+
+    def check_queue_stats(self, minimal: bool) -> Union[
+            MinimalQueueStatsResponse, QueueStatsResponse]:
+        pipe_id: Optional[str] = self.get_id()
+        return self._client.check_queue_stats(pipe_id, minimal=minimal)
 
     def __hash__(self) -> int:
         return hash(self._pipe_id)
