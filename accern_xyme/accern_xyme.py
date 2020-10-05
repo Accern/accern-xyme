@@ -48,6 +48,7 @@ from .util import (
 )
 from .types import (
     BlobInit,
+    BlobOwner,
     CopyBlob,
     CSVBlobResponse,
     CSVList,
@@ -1696,6 +1697,29 @@ class BlobHandle:
 
     def as_str(self) -> str:
         return f"{self.get_uri()}"
+
+    def set_owner(self, new_owner: str) -> str:
+        if self.is_full():
+            raise ValueError(f"URI must not be full: {self}")
+        pipe = self.get_pipeline()
+        res = cast(BlobOwner, self._client._request_json(
+            METHOD_PUT, "/blob_owner", {
+                "pipeline": pipe.get_id(),
+                "blob": self._uri,
+                "owner": new_owner,
+            }, capture_err=False))
+        return res["owner"]
+
+    def get_owner(self) -> str:
+        if self.is_full():
+            raise ValueError(f"URI must not be full: {self}")
+        pipe = self.get_pipeline()
+        res = cast(BlobOwner, self._client._request_json(
+            METHOD_GET, "/blob_owner", {
+                "pipeline": pipe.get_id(),
+                "blob": self._uri,
+            }, capture_err=False))
+        return res["owner"]
 
     def copy_to(
             self,

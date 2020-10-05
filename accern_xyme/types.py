@@ -204,6 +204,9 @@ PutNodeBlob = TypedDict('PutNodeBlob', {
     "key": str,
     "new_uri": str,
 })
+BlobOwner = TypedDict('BlobOwner', {
+    "owner": str,
+})
 CopyBlob = TypedDict('CopyBlob', {
     "new_uri": str,
 })
