@@ -561,7 +561,7 @@ class XYMEClient:
         if dest_id is not None:
             args["dest"] = dest_id
         return cast(PipelineDupResponse, self._request_json(
-            METHOD_POST, "/pipeline_dup", args, capture_err=False))["pipeline"]
+            METHOD_POST, "/pipeline_dup", args, capture_err=True))["pipeline"]
 
     def set_pipeline(
             self,
