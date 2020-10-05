@@ -48,6 +48,7 @@ from .util import (
 )
 from .types import (
     BlobInit,
+    CopyBlob,
     CSVBlobResponse,
     CSVList,
     CSVOp,
@@ -1696,6 +1697,23 @@ class BlobHandle:
     def as_str(self) -> str:
         return f"{self.get_uri()}"
 
+    def copy_to(
+            self,
+            to_uri: str,
+            new_owner: Optional[str] = None) -> 'BlobHandle':
+        if self.is_full():
+            raise ValueError(f"URI must not be full: {self}")
+        pipe = self.get_pipeline()
+        res = cast(CopyBlob, self._client._request_json(
+            METHOD_POST, "/copy_blob", {
+                "pipeline": pipe.get_id(),
+                "from_uri": self._uri,
+                "owner": new_owner,
+                "to_uri": to_uri,
+            }, capture_err=False))
+        return BlobHandle(
+            self._client, res["new_uri"], is_full=False, pipeline=pipe)
+
     def download_zip(self, to_path: Optional[str]) -> Optional[io.BytesIO]:
         if self.is_full():
             raise ValueError(f"URI must not be full: {self}")
@@ -1711,18 +1729,12 @@ class BlobHandle:
         return None
 
     def upload_zip(
-            self,
-            from_path: Optional[str],
-            from_io: Optional[io.BytesIO]) -> List['BlobHandle']:
-        if from_path is not None and from_io is not None:
-            raise ValueError("cannot have both from_path and from_io")
-        if from_io is not None:
-            zip_stream = from_io
-        elif from_path is not None:
-            with open(from_path, "rb") as fin:
+            self, source: Union[str, io.BytesIO]) -> List['BlobHandle']:
+        if isinstance(source, str) or not hasattr(source, "read"):
+            with open(f"{source}", "rb") as fin:
                 zip_stream = io.BytesIO(fin.read())
         else:
-            raise ValueError("from_path and from_io cannot be both None")
+            zip_stream = source
 
         resp = self._client._request_json(
             METHOD_FILE, "/upload_zip", {
@@ -1730,7 +1742,7 @@ class BlobHandle:
                 "pipeline": self.get_pipeline().get_id(),
             }, files={
                 "file": zip_stream,
-            }, capture_err=False)
+            }, capture_err=True)
         return [
             BlobHandle(
                 self._client,
