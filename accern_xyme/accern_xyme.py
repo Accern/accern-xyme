@@ -99,7 +99,7 @@ else:
     WVD = weakref.WeakValueDictionary
 
 
-__version__ = "0.1.5"
+__version__ = "0.1.6"
 # FIXME: async calls, documentation, auth, summary – time it took etc.
 
 
