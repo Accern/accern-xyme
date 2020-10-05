@@ -1729,18 +1729,12 @@ class BlobHandle:
         return None
 
     def upload_zip(
-            self,
-            from_path: Optional[str],
-            from_io: Optional[io.BytesIO]) -> List['BlobHandle']:
-        if from_path is not None and from_io is not None:
-            raise ValueError("cannot have both from_path and from_io")
-        if from_io is not None:
-            zip_stream = from_io
-        elif from_path is not None:
-            with open(from_path, "rb") as fin:
+            self, source: Union[str, io.BytesIO]) -> List['BlobHandle']:
+        if isinstance(source, str) or not hasattr(source, "read"):
+            with open(f"{source}", "rb") as fin:
                 zip_stream = io.BytesIO(fin.read())
         else:
-            raise ValueError("from_path and from_io cannot be both None")
+            zip_stream = source
 
         resp = self._client._request_json(
             METHOD_FILE, "/upload_zip", {
