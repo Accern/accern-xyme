@@ -48,6 +48,7 @@ from .util import (
 )
 from .types import (
     BlobInit,
+    CopyBlob,
     CSVBlobResponse,
     CSVList,
     CSVOp,
@@ -1695,6 +1696,23 @@ class BlobHandle:
 
     def as_str(self) -> str:
         return f"{self.get_uri()}"
+
+    def copy_to(
+            self,
+            to_uri: str,
+            new_owner: Optional[str] = None) -> 'BlobHandle':
+        if self.is_full():
+            raise ValueError(f"URI must not be full: {self}")
+        pipe = self.get_pipeline()
+        res = cast(CopyBlob, self._client._request_json(
+            METHOD_POST, "/copy_blob", {
+                "pipeline": pipe.get_id(),
+                "from_uri": self._uri,
+                "owner": new_owner,
+                "to_uri": to_uri,
+            }, capture_err=False))
+        return BlobHandle(
+            self._client, res["new_uri"], is_full=False, pipeline=pipe)
 
     def download_zip(self, to_path: Optional[str]) -> Optional[io.BytesIO]:
         if self.is_full():

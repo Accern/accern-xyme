@@ -204,6 +204,9 @@ PutNodeBlob = TypedDict('PutNodeBlob', {
     "key": str,
     "new_uri": str,
 })
+CopyBlob = TypedDict('CopyBlob', {
+    "new_uri": str,
+})
 QueueStatsResponse = TypedDict('QueueStatsResponse', {
     "active": int,
     "error": int,
