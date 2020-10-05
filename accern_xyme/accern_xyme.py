@@ -1742,7 +1742,7 @@ class BlobHandle:
                 "pipeline": self.get_pipeline().get_id(),
             }, files={
                 "file": zip_stream,
-            }, capture_err=False)
+            }, capture_err=True)
         return [
             BlobHandle(
                 self._client,
