@@ -91,6 +91,7 @@ from .types import (
     Timings,
     UserColumnsResponse,
     VersionResponse,
+    VisibleBlobs,
 )
 
 if TYPE_CHECKING:
@@ -1201,11 +1202,18 @@ class PipelineHandle:
 
         return "\n".join(draw())
 
-    def get_def(self) -> PipelineDef:
+    def get_def(self, full: bool = False) -> PipelineDef:
         return cast(PipelineDef, self._client._request_json(
             METHOD_GET, "/pipeline_def", {
                 "pipeline": self.get_id(),
+                "full": 1 if full else 0,
             }, capture_err=False))
+
+    def get_visible_blobs(self) -> List[str]:
+        return cast(VisibleBlobs, self._client._request_json(
+            METHOD_GET, "/visible_blobs", {
+                "pipeline": self.get_id(),
+            }, capture_err=False))["visible"]
 
     @overload
     def check_queue_stats(  # pylint: disable=no-self-use
