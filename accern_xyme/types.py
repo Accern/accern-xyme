@@ -84,6 +84,9 @@ NodeInfo = TypedDict('NodeInfo', {
 PipelineList = TypedDict('PipelineList', {
     "pipelines": List[str],
 })
+VisibleBlobs = TypedDict('VisibleBlobs', {
+    "visible": List[str],
+})
 PipelineInfo = TypedDict('PipelineInfo', {
     "company": str,
     "high_priority": bool,

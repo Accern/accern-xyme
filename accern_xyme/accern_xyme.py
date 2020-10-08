@@ -91,6 +91,7 @@ from .types import (
     Timings,
     UserColumnsResponse,
     VersionResponse,
+    VisibleBlobs,
 )
 
 if TYPE_CHECKING:
@@ -890,10 +891,11 @@ class PipelineHandle:
     def dynamic_list(
             self,
             inputs: List[Any],
-            input_key: Optional[str],
-            output_key: str,
+            input_key: Optional[str] = None,
+            output_key: Optional[str] = None,
             split_th: Optional[int] = 1000,
-            max_threads: int = 50) -> List[Any]:
+            max_threads: int = 50,
+            force: bool = False) -> List[Any]:
         if split_th is None or len(inputs) <= split_th:
             res = cast(DynamicResults, self._client._request_json(
                 METHOD_POST, "/dynamic_list", {
@@ -901,6 +903,7 @@ class PipelineHandle:
                     "inputs": inputs,
                     "input_key": input_key,
                     "output_key": output_key,
+                    "force": force,
                 }, capture_err=True))
             return res["results"]
         # FIXME: write generic spliterator implementation
@@ -1201,11 +1204,18 @@ class PipelineHandle:
 
         return "\n".join(draw())
 
-    def get_def(self) -> PipelineDef:
+    def get_def(self, full: bool = False) -> PipelineDef:
         return cast(PipelineDef, self._client._request_json(
             METHOD_GET, "/pipeline_def", {
                 "pipeline": self.get_id(),
+                "full": 1 if full else 0,
             }, capture_err=False))
+
+    def get_visible_blobs(self) -> List[str]:
+        return cast(VisibleBlobs, self._client._request_json(
+            METHOD_GET, "/visible_blobs", {
+                "pipeline": self.get_id(),
+            }, capture_err=False))["visible"]
 
     @overload
     def check_queue_stats(  # pylint: disable=no-self-use
