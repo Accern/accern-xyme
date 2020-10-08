@@ -891,10 +891,11 @@ class PipelineHandle:
     def dynamic_list(
             self,
             inputs: List[Any],
-            input_key: Optional[str],
-            output_key: str,
+            input_key: Optional[str] = None,
+            output_key: Optional[str] = None,
             split_th: Optional[int] = 1000,
-            max_threads: int = 50) -> List[Any]:
+            max_threads: int = 50,
+            force: bool = False) -> List[Any]:
         if split_th is None or len(inputs) <= split_th:
             res = cast(DynamicResults, self._client._request_json(
                 METHOD_POST, "/dynamic_list", {
@@ -902,6 +903,7 @@ class PipelineHandle:
                     "inputs": inputs,
                     "input_key": input_key,
                     "output_key": output_key,
+                    "force": force,
                 }, capture_err=True))
             return res["results"]
         # FIXME: write generic spliterator implementation
