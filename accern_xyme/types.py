@@ -40,10 +40,11 @@ MaintenanceResponse = TypedDict('MaintenanceResponse', {
     "is_maintenance": bool,
 })
 VersionResponse = TypedDict('VersionResponse', {
-    "xyme_version": str,
-    "time": str,
-    "caller_api_version": int,
     "api_version": int,
+    "caller_api_version": int,
+    "time": str,
+    "xyme_version_full": str,
+    "xyme_version": str,
 })
 ReadNode = TypedDict('ReadNode', {
     "redis_key": str,
