@@ -244,3 +244,8 @@ DynamicStatusResponse = TypedDict('DynamicStatusResponse', {
 DynamicResults = TypedDict('DynamicResults', {
     "results": List[Any],
 })
+CacheStats = TypedDict('CacheStats', {
+    "hits": int,
+    "miss": int,
+    "effectiveness": float,
+})

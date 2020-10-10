@@ -49,6 +49,7 @@ from .util import (
 from .types import (
     BlobInit,
     BlobOwner,
+    CacheStats,
     CopyBlob,
     CSVBlobResponse,
     CSVList,
@@ -700,6 +701,12 @@ class XYMEClient:
 
         while do_flush():  # we flush until there is nothing to flush anymore
             time.sleep(1.0)
+
+    def get_cache_stats(self, reset: bool = False) -> CacheStats:
+        return cast(CacheStats, self._request_json(
+            METHOD_GET, "/cache_stats", {
+                "reset": int(reset),
+            }, capture_err=False))
 
 
 # *** XYMEClient ***
