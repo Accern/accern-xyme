@@ -934,7 +934,10 @@ class PipelineHandle:
                         input_key=input_key,
                         output_key=output_key,
                         split_th=None,
-                        max_threads=max_threads)
+                        max_threads=max_threads,
+                        format_method=format_method,
+                        force_keys=force_keys,
+                        no_cache=no_cache)
                     res_arr[offset:offset + len(cur_res)] = cur_res
                 except BaseException as e:  # pylint: disable=broad-except
                     exc[0] = e
