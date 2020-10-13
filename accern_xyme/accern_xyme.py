@@ -83,6 +83,7 @@ from .types import (
     PipelineInit,
     PipelineList,
     PutNodeBlob,
+    QueueMode,
     QueueStatsResponse,
     QueueStatus,
     ReadNode,
@@ -688,9 +689,25 @@ class XYMEClient:
                 "minimal": 0,
             }, capture_err=False))
 
-    def get_instance_status(self) -> Dict[InstanceStatus, int]:
+    def get_instance_status(
+            self,
+            pipe_id: Optional[str],
+            node_id: Optional[str]) -> Dict[InstanceStatus, int]:
         return cast(Dict[InstanceStatus, int], self._request_json(
-            METHOD_GET, "/instance_status", {}, capture_err=False))
+            METHOD_GET, "/instance_status", {
+                "pipeline": pipe_id,
+                "node": node_id,
+            }, capture_err=False))
+
+    def get_queue_mode(self) -> str:
+        return cast(QueueMode, self._request_json(
+            METHOD_GET, "/queue_mode", {}, capture_err=False))["mode"]
+
+    def set_queue_mode(self, mode: str) -> str:
+        return cast(QueueMode, self._request_json(
+            METHOD_PUT, "/queue_mode", {
+                "mode": mode,
+            }, capture_err=True))["mode"]
 
     def flush_all_queue_data(self) -> None:
 
