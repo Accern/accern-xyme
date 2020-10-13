@@ -691,8 +691,8 @@ class XYMEClient:
 
     def get_instance_status(
             self,
-            pipe_id: Optional[str],
-            node_id: Optional[str]) -> Dict[InstanceStatus, int]:
+            pipe_id: Optional[str] = None,
+            node_id: Optional[str] = None) -> Dict[InstanceStatus, int]:
         return cast(Dict[InstanceStatus, int], self._request_json(
             METHOD_GET, "/instance_status", {
                 "pipeline": pipe_id,
