@@ -1249,7 +1249,7 @@ class PipelineHandle:
 
         return "\n".join(draw())
 
-    def get_def(self, full: bool = False) -> PipelineDef:
+    def get_def(self, full: bool = True) -> PipelineDef:
         return cast(PipelineDef, self._client._request_json(
             METHOD_GET, "/pipeline_def", {
                 "pipeline": self.get_id(),
