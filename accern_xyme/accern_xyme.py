@@ -49,6 +49,7 @@ from .util import (
 from .types import (
     BlobInit,
     BlobOwner,
+    CacheStats,
     CopyBlob,
     CSVBlobResponse,
     CSVList,
@@ -82,6 +83,7 @@ from .types import (
     PipelineInit,
     PipelineList,
     PutNodeBlob,
+    QueueMode,
     QueueStatsResponse,
     QueueStatus,
     ReadNode,
@@ -100,7 +102,7 @@ else:
     WVD = weakref.WeakValueDictionary
 
 
-__version__ = "0.1.7"
+__version__ = "0.1.8"
 # FIXME: async calls, documentation, auth, summary – time it took etc.
 
 
@@ -687,9 +689,25 @@ class XYMEClient:
                 "minimal": 0,
             }, capture_err=False))
 
-    def get_instance_status(self) -> Dict[InstanceStatus, int]:
+    def get_instance_status(
+            self,
+            pipe_id: Optional[str] = None,
+            node_id: Optional[str] = None) -> Dict[InstanceStatus, int]:
         return cast(Dict[InstanceStatus, int], self._request_json(
-            METHOD_GET, "/instance_status", {}, capture_err=False))
+            METHOD_GET, "/instance_status", {
+                "pipeline": pipe_id,
+                "node": node_id,
+            }, capture_err=False))
+
+    def get_queue_mode(self) -> str:
+        return cast(QueueMode, self._request_json(
+            METHOD_GET, "/queue_mode", {}, capture_err=False))["mode"]
+
+    def set_queue_mode(self, mode: str) -> str:
+        return cast(QueueMode, self._request_json(
+            METHOD_PUT, "/queue_mode", {
+                "mode": mode,
+            }, capture_err=True))["mode"]
 
     def flush_all_queue_data(self) -> None:
 
@@ -700,6 +718,12 @@ class XYMEClient:
 
         while do_flush():  # we flush until there is nothing to flush anymore
             time.sleep(1.0)
+
+    def get_cache_stats(self, reset: bool = False) -> CacheStats:
+        return cast(CacheStats, self._request_json(
+            METHOD_GET, "/cache_stats", {
+                "reset": int(reset),
+            }, capture_err=False))
 
 
 # *** XYMEClient ***
@@ -888,6 +912,20 @@ class PipelineHandle:
     def update_settings(self, settings: Dict[str, Any]) -> None:
         self._client.update_settings(self.get_id(), settings)
 
+    def dynamic_model(
+            self,
+            inputs: List[Any],
+            format_method: str = "simple",
+            no_cache: bool = False) -> List[Any]:
+        res = cast(DynamicResults, self._client._request_json(
+            METHOD_POST, "/dynamic_model", {
+                "format": format_method,
+                "inputs": inputs,
+                "no_cache": no_cache,
+                "pipeline": self._pipe_id,
+            }, capture_err=True))
+        return res["results"]
+
     def dynamic_list(
             self,
             inputs: List[Any],
@@ -895,15 +933,19 @@ class PipelineHandle:
             output_key: Optional[str] = None,
             split_th: Optional[int] = 1000,
             max_threads: int = 50,
-            force: bool = False) -> List[Any]:
+            format_method: str = "simple",
+            force_keys: bool = False,
+            no_cache: bool = False) -> List[Any]:
         if split_th is None or len(inputs) <= split_th:
             res = cast(DynamicResults, self._client._request_json(
                 METHOD_POST, "/dynamic_list", {
-                    "pipeline": self._pipe_id,
-                    "inputs": inputs,
+                    "force_keys": force_keys,
+                    "format": format_method,
                     "input_key": input_key,
+                    "inputs": inputs,
+                    "no_cache": no_cache,
                     "output_key": output_key,
-                    "force": force,
+                    "pipeline": self._pipe_id,
                 }, capture_err=True))
             return res["results"]
         # FIXME: write generic spliterator implementation
@@ -923,7 +965,10 @@ class PipelineHandle:
                         input_key=input_key,
                         output_key=output_key,
                         split_th=None,
-                        max_threads=max_threads)
+                        max_threads=max_threads,
+                        format_method=format_method,
+                        force_keys=force_keys,
+                        no_cache=no_cache)
                     res_arr[offset:offset + len(cur_res)] = cur_res
                 except BaseException as e:  # pylint: disable=broad-except
                     exc[0] = e
@@ -1204,7 +1249,7 @@ class PipelineHandle:
 
         return "\n".join(draw())
 
-    def get_def(self, full: bool = False) -> PipelineDef:
+    def get_def(self, full: bool = True) -> PipelineDef:
         return cast(PipelineDef, self._client._request_json(
             METHOD_GET, "/pipeline_def", {
                 "pipeline": self.get_id(),

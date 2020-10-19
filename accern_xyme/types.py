@@ -36,11 +36,22 @@ ParamDef = TypedDict('ParamDef', {
     "default": Optional[Any],
 })
 ParamDefs = Dict[str, ParamDef]
+Backends = TypedDict('Backends', {
+    "executor_mng": str,
+    "jobs": str,
+    "logger": List[str],
+    "mtype": str,
+    "progress": str,
+    "queue_mng": Dict[str, str],
+    "status_emitter": List[str],
+    "task_mng": Dict[str, str],
+})
 MaintenanceResponse = TypedDict('MaintenanceResponse', {
     "is_maintenance": bool,
 })
 VersionResponse = TypedDict('VersionResponse', {
     "api_version": int,
+    "backends": Optional[Backends],
     "caller_api_version": int,
     "time": str,
     "xyme_version_full": str,
@@ -243,4 +254,13 @@ DynamicStatusResponse = TypedDict('DynamicStatusResponse', {
 })
 DynamicResults = TypedDict('DynamicResults', {
     "results": List[Any],
+})
+CacheStats = TypedDict('CacheStats', {
+    "approx_total": int,
+    "effectiveness": float,
+    "hits": int,
+    "miss": int,
+})
+QueueMode = TypedDict('QueueMode', {
+    "mode": str,
 })
