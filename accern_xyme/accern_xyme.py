@@ -912,6 +912,20 @@ class PipelineHandle:
     def update_settings(self, settings: Dict[str, Any]) -> None:
         self._client.update_settings(self.get_id(), settings)
 
+    def dynamic_model(
+            self,
+            inputs: List[Any],
+            format_method: str = "simple",
+            no_cache: bool = False) -> List[Any]:
+        res = cast(DynamicResults, self._client._request_json(
+            METHOD_POST, "/dynamic_model", {
+                "format": format_method,
+                "inputs": inputs,
+                "no_cache": no_cache,
+                "pipeline": self._pipe_id,
+            }, capture_err=True))
+        return res["results"]
+
     def dynamic_list(
             self,
             inputs: List[Any],
