@@ -129,6 +129,7 @@ CUSTOM_NODE_TYPES = {
     "custom_data",
     "custom_json",
     "custom_json_to_data",
+    "custom_json_join_data",
 }
 EMBEDDING_MODEL_NODE_TYPES = {
     "dyn_embedding_model",
@@ -1594,7 +1595,7 @@ class NodeHandle:
         def as_str(fun: FUNC) -> str:
             body = textwrap.dedent(inspect.getsource(fun))
             res = body + textwrap.dedent(f"""
-            result = {fun.__name__}(data)
+            result = {fun.__name__}(*data)
             if result is None:
                 raise ValueError("{fun.__name__} must return a value")
             """)
