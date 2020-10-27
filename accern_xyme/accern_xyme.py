@@ -129,6 +129,7 @@ CUSTOM_NODE_TYPES = {
     "custom_data",
     "custom_json",
     "custom_json_to_data",
+    "custom_json_join_data",
 }
 EMBEDDING_MODEL_NODE_TYPES = {
     "dyn_embedding_model",
