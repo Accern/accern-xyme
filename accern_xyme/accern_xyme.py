@@ -512,15 +512,15 @@ class XYMEClient:
         return cast(MaintenanceResponse, self._request_json(
             METHOD_PUT, "/maintenance", {
                 "is_maintenance": is_maintenance,
-            }, capture_err=False))
+            }, capture_err=True))
 
     def get_maintenance_mode(self) -> MaintenanceResponse:
         return cast(MaintenanceResponse, self._request_json(
-            METHOD_GET, "/maintenance", {}, capture_err=False))
+            METHOD_GET, "/maintenance", {}, capture_err=True))
 
     def get_pipelines(self) -> List[str]:
         return cast(PipelineList, self._request_json(
-            METHOD_GET, "/pipelines", {}, capture_err=False))["pipelines"]
+            METHOD_GET, "/pipelines", {}, capture_err=True))["pipelines"]
 
     def get_pipeline(self, pipe_id: str) -> 'PipelineHandle':
         res = self._pipeline_cache.get(pipe_id)
@@ -535,7 +535,7 @@ class XYMEClient:
         if self._node_defs is not None:
             return self._node_defs
         res = cast(NodeTypes, self._request_json(
-            METHOD_GET, "/node_types", {}, capture_err=False))["info"]
+            METHOD_GET, "/node_types", {}, capture_err=True))["info"]
         self._node_defs = res
         return res
 
@@ -543,7 +543,7 @@ class XYMEClient:
         return cast(BlobInit, self._request_json(
             METHOD_POST, "/blob_init", {
                 "type": blob_type,
-            }, capture_err=False))["blob"]
+            }, capture_err=True))["blob"]
 
     def create_new_pipeline(
             self,
@@ -555,7 +555,7 @@ class XYMEClient:
                 "user": username,
                 "name": pipename,
                 "index": index,
-            }, capture_err=False))["pipeline"]
+            }, capture_err=True))["pipeline"]
 
     def duplicate_pipeline(
             self, pipe_id: str, dest_id: Optional[str] = None) -> str:
@@ -604,51 +604,51 @@ class XYMEClient:
     def get_csvs(self) -> List[str]:
         return cast(CSVList, self._request_json(
             METHOD_GET, "/csvs", {
-            }, capture_err=False))["csvs"]
+            }, capture_err=True))["csvs"]
 
     def add_csv(self, csv_blob_id: str) -> List[str]:
         return cast(CSVList, self._request_json(
             METHOD_PUT, "/csvs", {
                 "blob": csv_blob_id,
-            }, capture_err=False))["csvs"]
+            }, capture_err=True))["csvs"]
 
     def remove_csv(self, csv_blob_id: str) -> List[str]:
         return cast(CSVList, self._request_json(
             METHOD_DELETE, "/csvs", {
                 "blob": csv_blob_id,
-            }, capture_err=False))["csvs"]
+            }, capture_err=True))["csvs"]
 
     def get_jobs(self) -> List[str]:
         return cast(JobList, self._request_json(
             METHOD_GET, "/jobs", {
-            }, capture_err=False))["jobs"]
+            }, capture_err=True))["jobs"]
 
     def remove_job(self, job_id: str) -> List[str]:
         return cast(JobList, self._request_json(
             METHOD_DELETE, "/job", {
                 "job": job_id,
-            }, capture_err=False))["jobs"]
+            }, capture_err=True))["jobs"]
 
     def create_job(self) -> JobInfo:
         return cast(JobInfo, self._request_json(
             METHOD_POST, "/job_init", {
-            }, capture_err=False))
+            }, capture_err=True))
 
     def get_job(self, job_id: str) -> JobInfo:
         return cast(JobInfo, self._request_json(
             METHOD_GET, "/job", {
                 "job": job_id,
-            }, capture_err=False))
+            }, capture_err=True))
 
     def set_job(self, job: JobInfo) -> JobInfo:
         return cast(JobInfo, self._request_json(
             METHOD_PUT, "/job", {
                 "job": job,
-            }, capture_err=False))
+            }, capture_err=True))
 
     def get_allowed_custom_imports(self) -> CustomImportsResponse:
         return cast(CustomImportsResponse, self._request_json(
-            METHOD_GET, "/allowed_custom_imports", {}, capture_err=False))
+            METHOD_GET, "/allowed_custom_imports", {}, capture_err=True))
 
     @overload
     def check_queue_stats(  # pylint: disable=no-self-use
@@ -682,12 +682,12 @@ class XYMEClient:
                 METHOD_GET, "/queue_stats", {
                     "pipeline": pipeline,
                     "minimal": 1,
-                }, capture_err=False))
+                }, capture_err=True))
         return cast(QueueStatsResponse, self._request_json(
             METHOD_GET, "/queue_stats", {
                 "pipeline": pipeline,
                 "minimal": 0,
-            }, capture_err=False))
+            }, capture_err=True))
 
     def get_instance_status(
             self,
@@ -697,11 +697,11 @@ class XYMEClient:
             METHOD_GET, "/instance_status", {
                 "pipeline": pipe_id,
                 "node": node_id,
-            }, capture_err=False))
+            }, capture_err=True))
 
     def get_queue_mode(self) -> str:
         return cast(QueueMode, self._request_json(
-            METHOD_GET, "/queue_mode", {}, capture_err=False))["mode"]
+            METHOD_GET, "/queue_mode", {}, capture_err=True))["mode"]
 
     def set_queue_mode(self, mode: str) -> str:
         return cast(QueueMode, self._request_json(
@@ -713,7 +713,7 @@ class XYMEClient:
 
         def do_flush() -> bool:
             res = cast(FlushAllQueuesResponse, self._request_json(
-                METHOD_POST, "/flush_all_queues", {}, capture_err=False))
+                METHOD_POST, "/flush_all_queues", {}, capture_err=True))
             return bool(res["success"])
 
         while do_flush():  # we flush until there is nothing to flush anymore
@@ -723,7 +723,7 @@ class XYMEClient:
         return cast(CacheStats, self._request_json(
             METHOD_GET, "/cache_stats", {
                 "reset": int(reset),
-            }, capture_err=False))
+            }, capture_err=True))
 
 
 # *** XYMEClient ***
@@ -770,7 +770,7 @@ class PipelineHandle:
         return cast(PipelineInfo, self._client._request_json(
             METHOD_GET, "/pipeline_info", {
                 "pipeline": self._pipe_id,
-            }, capture_err=False))
+            }, capture_err=True))
 
     def _fetch_info(self) -> None:
         info = self.get_info()
@@ -1254,13 +1254,13 @@ class PipelineHandle:
             METHOD_GET, "/pipeline_def", {
                 "pipeline": self.get_id(),
                 "full": 1 if full else 0,
-            }, capture_err=False))
+            }, capture_err=True))
 
     def get_visible_blobs(self) -> List[str]:
         return cast(VisibleBlobs, self._client._request_json(
             METHOD_GET, "/visible_blobs", {
                 "pipeline": self.get_id(),
-            }, capture_err=False))["visible"]
+            }, capture_err=True))["visible"]
 
     @overload
     def check_queue_stats(  # pylint: disable=no-self-use
@@ -1386,7 +1386,7 @@ class NodeHandle:
             METHOD_GET, "/node_status", {
                 "pipeline": self.get_pipeline().get_id(),
                 "node": self.get_id(),
-            }, capture_err=False))["status"]
+            }, capture_err=True))["status"]
 
     def has_config_error(self) -> bool:
         return self._config_error is not None
@@ -1417,14 +1417,14 @@ class NodeHandle:
             METHOD_GET, "/node_in_cursors", {
                 "pipeline": self.get_pipeline().get_id(),
                 "node": self.get_id(),
-            }, capture_err=False))["cursors"]
+            }, capture_err=True))["cursors"]
 
     def get_highest_chunk(self) -> int:
         return cast(NodeChunk, self._client._request_json(
             METHOD_GET, "/node_chunk", {
                 "pipeline": self.get_pipeline().get_id(),
                 "node": self.get_id(),
-            }, capture_err=False))["chunk"]
+            }, capture_err=True))["chunk"]
 
     def get_short_status(self, allow_unicode: bool = True) -> str:
         status_map: Dict[TaskStatus, str] = {
@@ -1454,7 +1454,7 @@ class NodeHandle:
             METHOD_GET, "/node_perf", {
                 "pipeline": self.get_pipeline().get_id(),
                 "node": self.get_id(),
-            }, capture_err=False))["times"]
+            }, capture_err=True))["times"]
 
     def read_blob(
             self,
@@ -1469,7 +1469,7 @@ class NodeHandle:
                 "chunk": chunk,
                 "is_blocking": True,
                 "force_refresh": force_refresh,
-            }, capture_err=False))
+            }, capture_err=True))
         uri = res["result_uri"]
         if uri is None:
             raise ValueError(f"uri is None: {res}")
@@ -1515,7 +1515,7 @@ class NodeHandle:
                 "pipeline": self.get_pipeline().get_id(),
                 "node": self.get_id(),
                 "action": "reset",
-            }, capture_err=False))
+            }, capture_err=True))
 
     def requeue(self) -> NodeState:
         return cast(NodeState, self._client._request_json(
@@ -1523,7 +1523,7 @@ class NodeHandle:
                 "pipeline": self.get_pipeline().get_id(),
                 "node": self.get_id(),
                 "action": "requeue",
-            }, capture_err=False))
+            }, capture_err=True))
 
     def fix_error(self) -> NodeState:
         return cast(NodeState, self._client._request_json(
@@ -1531,7 +1531,7 @@ class NodeHandle:
                 "pipeline": self.get_pipeline().get_id(),
                 "node": self.get_id(),
                 "action": "fix_error",
-            }, capture_err=False))
+            }, capture_err=True))
 
     def get_csv_blob(self) -> 'CSVBlobHandle':
         if self.get_type() != "csv_reader":
@@ -1540,7 +1540,7 @@ class NodeHandle:
             METHOD_GET, "/csv_blob", {
                 "pipeline": self.get_pipeline().get_id(),
                 "node": self.get_id(),
-            }, capture_err=False))
+            }, capture_err=True))
         return CSVBlobHandle(
             self._client,
             self.get_pipeline(),
@@ -1557,7 +1557,7 @@ class NodeHandle:
             METHOD_GET, "/json_blob", {
                 "pipeline": self.get_pipeline().get_id(),
                 "node": self.get_id(),
-            }, capture_err=False))
+            }, capture_err=True))
         return JSONBlobHandle(
             self._client,
             self.get_pipeline(),
@@ -1584,7 +1584,7 @@ class NodeHandle:
             METHOD_GET, "/custom_imports", {
                 "pipeline": self.get_pipeline().get_id(),
                 "node": self.get_id(),
-            }, capture_err=False))
+            }, capture_err=True))
 
     def set_custom_code(self, func: FUNC) -> CustomCodeResponse:
         from RestrictedPython import compile_restricted
@@ -1615,7 +1615,7 @@ class NodeHandle:
             METHOD_GET, "/custom_code", {
                 "pipeline": self.get_pipeline().get_id(),
                 "node": self.get_id(),
-            }, capture_err=False))
+            }, capture_err=True))
 
     def get_user_columns(self, key: str) -> UserColumnsResponse:
         return cast(UserColumnsResponse, self._client._request_json(
@@ -1623,7 +1623,7 @@ class NodeHandle:
                 "pipeline": self.get_pipeline().get_id(),
                 "node": self.get_id(),
                 "key": key,
-            }, capture_err=False))
+            }, capture_err=True))
 
     def get_input_example(self) -> Dict[str, Optional[ByteResponse]]:
         if self.get_type() != "custom_data":
@@ -1668,7 +1668,7 @@ class NodeHandle:
             METHOD_GET, "/node_def", {
                 "pipeline": self.get_pipeline().get_id(),
                 "node": self.get_id(),
-            }, capture_err=False))
+            }, capture_err=True))
 
     def __hash__(self) -> int:
         return hash(self._node_id)
@@ -1740,7 +1740,7 @@ class BlobHandle:
             METHOD_GET, "/blob_files", {
                 "blob": self._uri,
                 "pipeline": self.get_pipeline().get_id(),
-            }, capture_err=False)
+            }, capture_err=True)
         return [
             BlobHandle(
                 self._client,
@@ -1762,7 +1762,7 @@ class BlobHandle:
                 "pipeline": pipe.get_id(),
                 "blob": self._uri,
                 "owner": new_owner,
-            }, capture_err=False))
+            }, capture_err=True))
         return res["owner"]
 
     def get_owner(self) -> str:
@@ -1773,7 +1773,7 @@ class BlobHandle:
             METHOD_GET, "/blob_owner", {
                 "pipeline": pipe.get_id(),
                 "blob": self._uri,
-            }, capture_err=False))
+            }, capture_err=True))
         return res["owner"]
 
     def copy_to(
@@ -1789,7 +1789,7 @@ class BlobHandle:
                 "from_uri": self._uri,
                 "owner": new_owner,
                 "to_uri": to_uri,
-            }, capture_err=False))
+            }, capture_err=True))
         return BlobHandle(
             self._client, res["new_uri"], is_full=False, pipeline=pipe)
 
@@ -1900,7 +1900,7 @@ class CSVBlobHandle(BlobHandle):
             method = METHOD_POST
             files = None
         res = cast(CSVOp, self._client._request_json(
-            method, "/csv_action", args, capture_err=False, files=files))
+            method, "/csv_action", args, capture_err=True, files=files))
         self._count = res["count"]
         self._has_tmp = res["tmp"]
         self._pos = res["pos"]
