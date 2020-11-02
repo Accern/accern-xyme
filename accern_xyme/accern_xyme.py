@@ -1592,7 +1592,7 @@ class NodeHandle:
 
         self.check_custom_code_node()
 
-        def as_str(fun: FUNC) -> str:
+        def fn_as_str(fun: FUNC) -> str:
             body = textwrap.dedent(inspect.getsource(fun))
             res = body + textwrap.dedent(f"""
             result = {fun.__name__}(*data)
@@ -1602,7 +1602,7 @@ class NodeHandle:
             compile_restricted(res, "inline", "exec")
             return res
 
-        raw_code = as_str(func)
+        raw_code = fn_as_str(func)
         return cast(CustomCodeResponse, self._client._request_json(
             METHOD_PUT, "/custom_code", {
                 "pipeline": self.get_pipeline().get_id(),
