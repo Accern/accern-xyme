@@ -103,10 +103,10 @@ PipelineInfo = TypedDict('PipelineInfo', {
     "company": str,
     "high_priority": bool,
     "ins": List[str],
-    "is_parallel": bool,
     "name": str,
     "nodes": List[NodeInfo],
     "outs": List[Tuple[str, str]],
+    "queue_mng": Optional[str],
     "settings": Dict[str, Any],
     "state": str,
 })
@@ -137,7 +137,7 @@ PipelineDef = TypedDict('PipelineDef', {
     "nodes": List[NodeDef],
     "state": str,
     "high_priority": bool,
-    "is_parallel": bool,
+    "queue_mng": Optional[str],
 }, total=False)
 Timing = TypedDict('Timing', {
     "name": str,
@@ -190,7 +190,7 @@ JobInfo = TypedDict('JobInfo', {
     "owner": str,
     "company": str,
     "high_priority": bool,
-    "is_parallel": bool,
+    "queue_mng": Optional[str],
     "entry_points": JobInfoEntries,
 })
 CustomCodeResponse = TypedDict('CustomCodeResponse', {

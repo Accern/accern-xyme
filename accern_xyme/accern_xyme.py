@@ -231,12 +231,18 @@ class XYMEClient:
             return True
 
         retry = 0
+        max_retry = get_max_retry()
         while True:
             try:
-                return self._fallible_raw_request_bytes(
-                    method, path, args, files, add_prefix, api_version)
+                try:
+                    return self._fallible_raw_request_bytes(
+                        method, path, args, files, add_prefix, api_version)
+                except HTTPError as e:
+                    if e.response.status_code in (404, 500):
+                        retry = max_retry
+                    raise e
             except RequestException:
-                if retry >= get_max_retry():
+                if retry >= max_retry:
                     raise
                 if not reset_files():
                     raise
@@ -256,12 +262,18 @@ class XYMEClient:
             add_prefix: bool = True,
             api_version: Optional[int] = None) -> TextIO:
         retry = 0
+        max_retry = get_max_retry()
         while True:
             try:
-                return self._fallible_raw_request_str(
-                    method, path, args, add_prefix, api_version)
+                try:
+                    return self._fallible_raw_request_str(
+                        method, path, args, add_prefix, api_version)
+                except HTTPError as e:
+                    if e.response.status_code in (404, 500):
+                        retry = max_retry
+                    raise e
             except RequestException:
-                if retry >= get_max_retry():
+                if retry >= max_retry:
                     raise
                 time.sleep(get_retry_sleep())
             retry += 1
@@ -293,12 +305,18 @@ class XYMEClient:
             return True
 
         retry = 0
+        max_retry = get_max_retry()
         while True:
             try:
-                return self._fallible_raw_request_json(
-                    method, path, args, add_prefix, files, api_version)
+                try:
+                    return self._fallible_raw_request_json(
+                        method, path, args, add_prefix, files, api_version)
+                except HTTPError as e:
+                    if e.response.status_code in (404, 500):
+                        retry = max_retry
+                    raise e
             except RequestException:
-                if retry >= get_max_retry():
+                if retry >= max_retry:
                     raise
                 if not reset_files():
                     raise
@@ -740,7 +758,7 @@ class PipelineHandle:
         self._company: Optional[str] = None
         self._state: Optional[str] = None
         self._is_high_priority: Optional[bool] = None
-        self._is_parallel: Optional[bool] = None
+        self._queue_mng: Optional[str] = None
         self._nodes: Dict[str, NodeHandle] = {}
         self._node_lookup: Dict[str, str] = {}
         self._settings: Optional[Dict[str, Any]] = None
@@ -753,7 +771,7 @@ class PipelineHandle:
         self._company = None
         self._state = None
         self._is_high_priority = None
-        self._is_parallel = None
+        self._queue_mng = None
         self._ins = None
         self._outs = None
         # NOTE: we don't reset nodes
@@ -778,7 +796,7 @@ class PipelineHandle:
         self._company = info["company"]
         self._state = info["state"]
         self._is_high_priority = info["high_priority"]
-        self._is_parallel = info["is_parallel"]
+        self._queue_mng = info["queue_mng"]
         self._settings = info["settings"]
         self._ins = info["ins"]
         self._outs = [(el[0], el[1]) for el in info["outs"]]
@@ -881,11 +899,15 @@ class PipelineHandle:
         assert self._is_high_priority is not None
         return self._is_high_priority
 
-    def is_parallel(self) -> bool:
+    def is_queue(self) -> bool:
         self._maybe_refresh()
         self._maybe_fetch()
-        assert self._is_parallel is not None
-        return self._is_parallel
+        return self._queue_mng is not None
+
+    def get_queue_mng(self) -> Optional[str]:
+        self._maybe_refresh()
+        self._maybe_fetch()
+        return self._queue_mng
 
     def get_ins(self) -> List[str]:
         self._maybe_refresh()

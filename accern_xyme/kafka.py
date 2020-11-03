@@ -1,6 +1,9 @@
-from typing import Any, IO, Dict, Optional, Iterable
+from typing import Any, IO, Dict, Optional, Iterable, TYPE_CHECKING
 import sys
 import json
+if TYPE_CHECKING:
+    from concurrent.futures import Future
+    import confluent_kafka
 
 
 class KafkaConnect:
@@ -16,18 +19,9 @@ class KafkaConnect:
         self._input_prefix = input_prefix
         self._output_prefix = output_prefix
         self._error_topic = error_topic
-
-    def _get_setting(
-            self, pipeline_id: str, consumer: bool) -> Dict[str, str]:
-        res = {
-            "bootstrap.servers": self._bootstrap,
-        }
-        if consumer:
-            res.update({
-                "group.id": f"{self._group_prefix}{pipeline_id}",
-                "auto.offset.reset": "earliest",  # FIXME: !!!!! configurable
-            })
-        return res
+        self._consumers: Dict[Optional[str], 'confluent_kafka.Consumer'] = {}
+        self._producer: Optional['confluent_kafka.Producer'] = None
+        self._admin: Optional['confluent_kafka.admin.AdminClient'] = None
 
     def _get_input_topic(self, pipeline_id: str) -> str:
         return f"{self._input_prefix}{pipeline_id}"
@@ -38,11 +32,68 @@ class KafkaConnect:
     def _get_error_topic(self) -> str:
         return self._error_topic
 
-    def create_topics(self, pipeline_id: str) -> None:
-        from confluent_kafka.admin import AdminClient, NewTopic
+    def _get_consumer(
+            self, pipe_id: Optional[str]) -> 'confluent_kafka.Consumer':
+        from confluent_kafka import Consumer
 
-        setting = self._get_setting(pipeline_id, consumer=False)
-        admin_client = AdminClient(setting)
+        res = self._consumers.get(pipe_id)
+        if res is None:
+            group_id = \
+                f"{self._group_prefix}" \
+                f"{'err' if pipe_id is None else pipe_id}"
+            setting = {
+                "bootstrap.servers": self._bootstrap,
+                "group.id": group_id,
+                # "auto.offset.reset": "earliest",  # FIXME: !!!!! configurable
+            }
+            consumer = Consumer(setting)
+            if pipe_id is not None:
+                consumer.subscribe([self._get_output_topic(pipe_id)])
+            else:
+                consumer.subscribe([self._get_error_topic()])
+            self._consumers[pipe_id] = consumer
+            res = consumer
+        return res
+
+    def _get_producer(self) -> 'confluent_kafka.Producer':
+        from confluent_kafka import Producer
+
+        res = self._producer
+        if res is None:
+            setting = {
+                "bootstrap.servers": self._bootstrap,
+            }
+            producer = Producer(setting)
+            self._producer = producer
+            res = producer
+        return res
+
+    def _get_admin(self) -> 'confluent_kafka.admin.AdminClient':
+        from confluent_kafka.admin import AdminClient
+
+        res = self._admin
+        if res is None:
+            setting = {
+                "bootstrap.servers": self._bootstrap,
+            }
+            admin = AdminClient(setting)
+            self._admin = admin
+            res = admin
+        return res
+
+    def close_all(self) -> None:
+        consumers = list(self._consumers.values())
+        self._consumers = {}
+        for consumer in consumers:
+            consumer.close()
+
+    def create_topics(
+            self,
+            pipeline_id: str,
+            sync: bool = True) -> Dict[str, 'Future']:
+        from confluent_kafka.admin import NewTopic
+
+        admin_client = self._get_admin()
         topic_list = [
             NewTopic(
                 self._get_input_topic(pipeline_id),
@@ -57,17 +108,22 @@ class KafkaConnect:
                 num_partitions=1,
                 replication_factor=1),
         ]
-        admin_client.create_topics(topic_list)
+        res = admin_client.create_topics(topic_list)
+        if sync:
+            try:
+                for val in res.values():
+                    val.result()
+            except KeyboardInterrupt:
+                for val in res.values():
+                    val.cancel()
+        return res
 
     def push_data(
             self,
             pipeline_id: str,
             inputs: Iterable[bytes],
             stdout: Optional[IO[Any]] = sys.stdout) -> None:
-        from confluent_kafka import Producer
-
-        setting = self._get_setting(pipeline_id, consumer=False)
-        producer = Producer(setting)
+        producer = self._get_producer()
 
         def delivery_report(err: Optional[str], msg: Any) -> None:
             if stdout is None:
@@ -101,25 +157,16 @@ class KafkaConnect:
             self,
             pipeline_id: str,
             stderr: Optional[IO[Any]] = sys.stderr) -> Iterable[bytes]:
-        from confluent_kafka import Consumer
-
-        setting = self._get_setting(pipeline_id, consumer=True)
-        consumer = None
-        try:
-            consumer = Consumer(setting)
-            consumer.subscribe([self._get_output_topic(pipeline_id)])
-            while True:
-                msg = consumer.poll(1.0)
-                if msg is None:
-                    break
-                if msg.error():
-                    if stderr is not None:
-                        print(f"{msg.error()}", file=stderr)
-                    continue
-                yield msg.value()
-        finally:
-            if consumer is not None:
-                consumer.close()
+        consumer = self._get_consumer(pipeline_id)
+        while True:
+            msg = consumer.poll(1.0)
+            if msg is None:
+                break
+            if msg.error():
+                if stderr is not None:
+                    print(f"{msg.error()}", file=stderr)
+                continue
+            yield msg.value()
 
     def read_json_output(
             self,
@@ -132,24 +179,18 @@ class KafkaConnect:
 
     def read_error(
             self,
-            pipeline_id: str,
             stderr: Optional[IO[Any]] = sys.stderr) -> Iterable[str]:
-        from confluent_kafka import Consumer
+        consumer = self._get_consumer(None)
+        while True:
+            msg = consumer.poll(1.0)
+            if msg is None:
+                break
+            if msg.error():
+                if stderr is not None:
+                    print(f"{msg.error()}", file=stderr)
+                continue
+            yield msg.value().decose("utf-8")
 
-        setting = self._get_setting(pipeline_id, consumer=True)
-        consumer = None
-        try:
-            consumer = Consumer(setting)
-            consumer.subscribe([self._get_error_topic()])
-            while True:
-                msg = consumer.poll(1.0)
-                if msg is None:
-                    break
-                if msg.error():
-                    if stderr is not None:
-                        print(f"{msg.error()}", file=stderr)
-                    continue
-                yield msg.value().decose("utf-8")
-        finally:
-            if consumer is not None:
-                consumer.close()
+    def list_topics(self) -> 'confluent_kafka.admin.ClusterMetadata':
+        consumer = self._get_consumer(None)
+        return consumer.list_topics()
