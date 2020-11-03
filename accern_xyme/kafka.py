@@ -39,11 +39,11 @@ class KafkaConnect:
         if res is None:
             group_id = \
                 f"{self._group_prefix}" \
-                f"{'err' if pipe_id is None else pipe_id}"
+                f"{'err' if pipe_id is None else pipe_id}-output"
             setting = {
                 "bootstrap.servers": self._bootstrap,
                 "group.id": group_id,
-                # "auto.offset.reset": "earliest",  # FIXME: !!!!! configurable
+                # "auto.offset.reset": "latest",  # FIXME: !!!!! configurable
             }
             consumer = Consumer(setting)
             if pipe_id is not None:
