@@ -1,9 +1,10 @@
-from typing import Any, IO, Dict, Optional, Iterable, TYPE_CHECKING
+from typing import Any, IO, Dict, Optional, Iterable
 import sys
 import json
-if TYPE_CHECKING:
-    from concurrent.futures import Future
-    import confluent_kafka
+from concurrent.futures import Future
+
+from confluent_kafka import Consumer, Producer
+from confluent_kafka.admin import AdminClient, NewTopic, ClusterMetadata
 
 
 class KafkaConnect:
@@ -19,9 +20,9 @@ class KafkaConnect:
         self._input_prefix = input_prefix
         self._output_prefix = output_prefix
         self._error_topic = error_topic
-        self._consumers: Dict[Optional[str], 'confluent_kafka.Consumer'] = {}
-        self._producer: Optional['confluent_kafka.Producer'] = None
-        self._admin: Optional['confluent_kafka.admin.AdminClient'] = None
+        self._consumers: Dict[Optional[str], Consumer] = {}
+        self._producer: Optional[Producer] = None
+        self._admin: Optional[AdminClient] = None
 
     def _get_input_topic(self, pipeline_id: str) -> str:
         return f"{self._input_prefix}{pipeline_id}"
@@ -33,9 +34,7 @@ class KafkaConnect:
         return self._error_topic
 
     def _get_consumer(
-            self, pipe_id: Optional[str]) -> 'confluent_kafka.Consumer':
-        from confluent_kafka import Consumer
-
+            self, pipe_id: Optional[str]) -> Consumer:
         res = self._consumers.get(pipe_id)
         if res is None:
             group_id = \
@@ -55,9 +54,7 @@ class KafkaConnect:
             res = consumer
         return res
 
-    def _get_producer(self) -> 'confluent_kafka.Producer':
-        from confluent_kafka import Producer
-
+    def _get_producer(self) -> Producer:
         res = self._producer
         if res is None:
             setting = {
@@ -68,9 +65,7 @@ class KafkaConnect:
             res = producer
         return res
 
-    def _get_admin(self) -> 'confluent_kafka.admin.AdminClient':
-        from confluent_kafka.admin import AdminClient
-
+    def _get_admin(self) -> AdminClient:
         res = self._admin
         if res is None:
             setting = {
@@ -90,9 +85,7 @@ class KafkaConnect:
     def create_topics(
             self,
             pipeline_id: str,
-            sync: bool = True) -> Dict[str, 'Future']:
-        from confluent_kafka.admin import NewTopic
-
+            sync: bool = True) -> Dict[str, Future]:
         admin_client = self._get_admin()
         topic_list = [
             NewTopic(
@@ -191,6 +184,6 @@ class KafkaConnect:
                 continue
             yield msg.value().decose("utf-8")
 
-    def list_topics(self) -> 'confluent_kafka.admin.ClusterMetadata':
+    def list_topics(self) -> ClusterMetadata:
         consumer = self._get_consumer(None)
         return consumer.list_topics()
