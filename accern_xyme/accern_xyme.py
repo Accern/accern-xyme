@@ -630,8 +630,7 @@ class XYMEClient:
 
     def create_job(self) -> JobInfo:
         return cast(JobInfo, self._request_json(
-            METHOD_POST, "/job_init", {
-            }))
+            METHOD_POST, "/job_init", {}))
 
     def get_job(self, job_id: str) -> JobInfo:
         return cast(JobInfo, self._request_json(
