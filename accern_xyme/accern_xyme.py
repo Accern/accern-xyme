@@ -30,6 +30,7 @@ from io import BytesIO, StringIO
 import pandas as pd
 import quick_server
 import requests
+from requests import Response
 from requests.exceptions import HTTPError, RequestException
 from typing_extensions import Literal
 
@@ -376,17 +377,24 @@ class XYMEClient:
         headers = {
             "authorization": self._token,
         }
+
+        def check_error(req: Response) -> None:
+            if req.headers["content-type"] == "application/problem+json":
+                raise ServerSideError(json.loads(req.text)["errMessage"])
+
         if method == METHOD_GET:
             req = requests.get(url, params=args, headers=headers)
             if req.status_code == 403:
                 raise AccessDenied(req.text)
             req.raise_for_status()
+            check_error(req)
             return StringIO(req.text)
         if method == METHOD_POST:
             req = requests.post(url, json=args, headers=headers)
             if req.status_code == 403:
                 raise AccessDenied(req.text)
             req.raise_for_status()
+            check_error(req)
             return StringIO(req.text)
         raise ValueError(f"unknown method {method}")
 
@@ -411,12 +419,18 @@ class XYMEClient:
             raise ValueError(
                 f"files are only allow for post (got {method}): {files}")
         req = None
+
+        def check_error(req: Response) -> None:
+            if req.headers["content-type"] == "application/problem+json":
+                raise ServerSideError(json.loads(req.text)["errMessage"])
+
         try:
             if method == METHOD_GET:
                 req = requests.get(url, params=args, headers=headers)
                 if req.status_code == 403:
                     raise AccessDenied(req.text)
                 req.raise_for_status()
+                check_error(req)
                 return json.loads(req.text)
             if method == METHOD_FILE:
                 if files is None:
@@ -435,29 +449,35 @@ class XYMEClient:
                 if req.status_code == 403:
                     raise AccessDenied(req.text)
                 req.raise_for_status()
+                check_error(req)
                 return json.loads(req.text)
             if method == METHOD_POST:
                 req = requests.post(url, json=args, headers=headers)
                 if req.status_code == 403:
                     raise AccessDenied(req.text)
                 req.raise_for_status()
+                check_error(req)
                 return json.loads(req.text)
             if method == METHOD_PUT:
                 req = requests.put(url, json=args, headers=headers)
                 if req.status_code == 403:
                     raise AccessDenied(req.text)
                 req.raise_for_status()
+                check_error(req)
                 return json.loads(req.text)
             if method == METHOD_DELETE:
                 req = requests.delete(url, json=args, headers=headers)
                 if req.status_code == 403:
                     raise AccessDenied(req.text)
                 req.raise_for_status()
+                check_error(req)
                 return json.loads(req.text)
             if method == METHOD_LONGPOST:
                 args["token"] = self._token
                 try:
-                    return quick_server.worker_request(url, args)
+                    res = quick_server.worker_request(url, args)
+                    if "errMessage" in res:
+                        raise ServerSideError(res["errMessage"])
                 except quick_server.WorkerError as e:
                     if e.get_status_code() == 403:
                         raise AccessDenied(e.args) from e
