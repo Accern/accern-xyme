@@ -209,7 +209,7 @@ class KafkaConnect:
                 if stderr is not None:
                     print(f"{msg.error()}", file=stderr)
                 continue
-            yield msg.value().decose("utf-8")
+            yield msg.value().decode("utf-8")
 
     def list_topics(self) -> ClusterMetadata:
         consumer = self._get_consumer(None)
