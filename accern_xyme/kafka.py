@@ -1,4 +1,4 @@
-from typing import Any, IO, Dict, Optional, Iterable
+from typing import Any, List, IO, Dict, Optional, Iterable
 import sys
 import json
 from concurrent.futures import Future
@@ -85,12 +85,13 @@ class KafkaConnect:
     def create_topics(
             self,
             pipeline_id: str,
+            num_partition: int,
             sync: bool = True) -> Dict[str, Future]:
         admin_client = self._get_admin()
         topic_list = [
             NewTopic(
                 self._get_input_topic(pipeline_id),
-                num_partitions=1,
+                num_partitions=num_partition,
                 replication_factor=1),
             NewTopic(
                 self._get_output_topic(pipeline_id),
@@ -102,6 +103,32 @@ class KafkaConnect:
                 replication_factor=1),
         ]
         res = admin_client.create_topics(topic_list)
+        if sync:
+            try:
+                for val in res.values():
+                    val.result()
+            except KeyboardInterrupt:
+                for val in res.values():
+                    val.cancel()
+        return res
+
+    def delete_topics(
+            self,
+            pipeline_id: Optional[str],
+            error_topic: bool,
+            sync: bool = True) -> Dict[str, Future]:
+        topics: List[str] = []
+        if pipeline_id is not None:
+            topics += [
+                self._get_input_topic(pipeline_id),
+                self._get_output_topic(pipeline_id),
+            ]
+        if error_topic:
+            topics.append(self._get_error_topic())
+        if not topics:
+            return {}
+        admin_client = self._get_admin()
+        res = admin_client.delete_topics(topics)
         if sync:
             try:
                 for val in res.values():

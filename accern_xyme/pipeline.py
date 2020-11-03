@@ -169,7 +169,7 @@ class DataPipeline:
             "nodes": node_defs,
             "state": pipe.get_state_type(),
             "high_priority": pipe.is_high_priority(),
-            "is_parallel": pipe.is_parallel(),
+            "queue_mng": pipe.get_queue_mng(),
         }
         pipe.set_pipeline(pipe_def)
         self._dirty = False
