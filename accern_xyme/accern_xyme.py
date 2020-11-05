@@ -30,6 +30,7 @@ from io import BytesIO, StringIO
 import pandas as pd
 import quick_server
 import requests
+from requests import Response
 from requests.exceptions import HTTPError, RequestException
 from typing_extensions import Literal
 
@@ -132,6 +133,7 @@ CUSTOM_NODE_TYPES = {
     "custom_data",
     "custom_json",
     "custom_json_to_data",
+    "custom_json_join_data",
 }
 EMBEDDING_MODEL_NODE_TYPES = {
     "dyn_embedding_model",
@@ -241,7 +243,7 @@ class XYMEClient:
                     return self._fallible_raw_request_bytes(
                         method, path, args, files, add_prefix, api_version)
                 except HTTPError as e:
-                    if e.response.status_code in (404, 500):
+                    if e.response.status_code in (403, 404, 500):
                         retry = max_retry
                     raise e
             except RequestException:
@@ -250,11 +252,6 @@ class XYMEClient:
                 if not reset_files():
                     raise
                 time.sleep(get_retry_sleep())
-            except AccessDenied as adex:
-                if not reset_files():
-                    raise ValueError(
-                        "cannot reset file buffers for retry") from adex
-                raise adex
             retry += 1
 
     def _raw_request_str(
@@ -272,7 +269,7 @@ class XYMEClient:
                     return self._fallible_raw_request_str(
                         method, path, args, add_prefix, api_version)
                 except HTTPError as e:
-                    if e.response.status_code in (404, 500):
+                    if e.response.status_code in (403, 404, 500):
                         retry = max_retry
                     raise e
             except RequestException:
@@ -315,7 +312,7 @@ class XYMEClient:
                     return self._fallible_raw_request_json(
                         method, path, args, add_prefix, files, api_version)
                 except HTTPError as e:
-                    if e.response.status_code in (404, 500):
+                    if e.response.status_code in (403, 404, 500):
                         retry = max_retry
                     raise e
             except RequestException:
@@ -324,11 +321,6 @@ class XYMEClient:
                 if not reset_files():
                     raise
                 time.sleep(get_retry_sleep())
-            except AccessDenied as adex:
-                if not reset_files():
-                    raise ValueError(
-                        "cannot reset file buffers for retry") from adex
-                raise adex
             retry += 1
 
     def _fallible_raw_request_bytes(
@@ -348,17 +340,20 @@ class XYMEClient:
         headers = {
             "authorization": self._token,
         }
-        if method == METHOD_GET:
-            req = requests.get(url, params=args, headers=headers)
+
+        def check_error(req: Response) -> None:
             if req.status_code == 403:
                 raise AccessDenied(req.text)
             req.raise_for_status()
+            # NOTE: no content type check -- will be handled by interpret_ctype
+
+        if method == METHOD_GET:
+            req = requests.get(url, params=args, headers=headers)
+            check_error(req)
             return BytesIO(req.content), req.headers["content-type"]
         if method == METHOD_POST:
             req = requests.post(url, json=args, headers=headers)
-            if req.status_code == 403:
-                raise AccessDenied(req.text)
-            req.raise_for_status()
+            check_error(req)
             return BytesIO(req.content), req.headers["content-type"]
         if method == METHOD_FILE:
             if files is None:
@@ -374,9 +369,7 @@ class XYMEClient:
                     ) for (key, value) in files.items()
                 },
                 headers=headers)
-            if req.status_code == 403:
-                raise AccessDenied(req.text)
-            req.raise_for_status()
+            check_error(req)
             return BytesIO(req.content), req.headers["content-type"]
         raise ValueError(f"unknown method {method}")
 
@@ -396,17 +389,21 @@ class XYMEClient:
         headers = {
             "authorization": self._token,
         }
-        if method == METHOD_GET:
-            req = requests.get(url, params=args, headers=headers)
+
+        def check_error(req: Response) -> None:
             if req.status_code == 403:
                 raise AccessDenied(req.text)
             req.raise_for_status()
+            if req.headers["content-type"] == "application/problem+json":
+                raise ServerSideError(json.loads(req.text)["errMessage"])
+
+        if method == METHOD_GET:
+            req = requests.get(url, params=args, headers=headers)
+            check_error(req)
             return StringIO(req.text)
         if method == METHOD_POST:
             req = requests.post(url, json=args, headers=headers)
-            if req.status_code == 403:
-                raise AccessDenied(req.text)
-            req.raise_for_status()
+            check_error(req)
             return StringIO(req.text)
         raise ValueError(f"unknown method {method}")
 
@@ -431,12 +428,18 @@ class XYMEClient:
             raise ValueError(
                 f"files are only allow for post (got {method}): {files}")
         req = None
+
+        def check_error(req: Response) -> None:
+            if req.status_code == 403:
+                raise AccessDenied(req.text)
+            req.raise_for_status()
+            if req.headers["content-type"] == "application/problem+json":
+                raise ServerSideError(json.loads(req.text)["errMessage"])
+
         try:
             if method == METHOD_GET:
                 req = requests.get(url, params=args, headers=headers)
-                if req.status_code == 403:
-                    raise AccessDenied(req.text)
-                req.raise_for_status()
+                check_error(req)
                 return json.loads(req.text)
             if method == METHOD_FILE:
                 if files is None:
@@ -452,32 +455,26 @@ class XYMEClient:
                         ) for (key, value) in files.items()
                     },
                     headers=headers)
-                if req.status_code == 403:
-                    raise AccessDenied(req.text)
-                req.raise_for_status()
+                check_error(req)
                 return json.loads(req.text)
             if method == METHOD_POST:
                 req = requests.post(url, json=args, headers=headers)
-                if req.status_code == 403:
-                    raise AccessDenied(req.text)
-                req.raise_for_status()
+                check_error(req)
                 return json.loads(req.text)
             if method == METHOD_PUT:
                 req = requests.put(url, json=args, headers=headers)
-                if req.status_code == 403:
-                    raise AccessDenied(req.text)
-                req.raise_for_status()
+                check_error(req)
                 return json.loads(req.text)
             if method == METHOD_DELETE:
                 req = requests.delete(url, json=args, headers=headers)
-                if req.status_code == 403:
-                    raise AccessDenied(req.text)
-                req.raise_for_status()
+                check_error(req)
                 return json.loads(req.text)
             if method == METHOD_LONGPOST:
                 args["token"] = self._token
                 try:
-                    return quick_server.worker_request(url, args)
+                    res = quick_server.worker_request(url, args)
+                    if "errMessage" in res:
+                        raise ServerSideError(res["errMessage"])
                 except quick_server.WorkerError as e:
                     if e.get_status_code() == 403:
                         raise AccessDenied(e.args) from e
@@ -504,16 +501,11 @@ class XYMEClient:
             method: str,
             path: str,
             args: Dict[str, Any],
-            capture_err: bool,
             add_prefix: bool = True,
             files: Optional[Dict[str, IO[bytes]]] = None,
-            api_version: Optional[int] = None,
-                ) -> Dict[str, Any]:
-        res = self._raw_request_json(
+            api_version: Optional[int] = None) -> Dict[str, Any]:
+        return self._raw_request_json(
             method, path, args, add_prefix, files, api_version)
-        if capture_err and "errMessage" in res and res["errMessage"]:
-            raise ValueError(res["errMessage"])
-        return res
 
     def get_server_version(self) -> VersionResponse:
         return cast(VersionResponse, self._raw_request_json(
@@ -533,15 +525,15 @@ class XYMEClient:
         return cast(MaintenanceResponse, self._request_json(
             METHOD_PUT, "/maintenance", {
                 "is_maintenance": is_maintenance,
-            }, capture_err=False))
+            }))
 
     def get_maintenance_mode(self) -> MaintenanceResponse:
         return cast(MaintenanceResponse, self._request_json(
-            METHOD_GET, "/maintenance", {}, capture_err=False))
+            METHOD_GET, "/maintenance", {}))
 
     def get_pipelines(self) -> List[str]:
         return cast(PipelineList, self._request_json(
-            METHOD_GET, "/pipelines", {}, capture_err=False))["pipelines"]
+            METHOD_GET, "/pipelines", {}))["pipelines"]
 
     def get_pipeline(self, pipe_id: str) -> 'PipelineHandle':
         res = self._pipeline_cache.get(pipe_id)
@@ -556,7 +548,7 @@ class XYMEClient:
         if self._node_defs is not None:
             return self._node_defs
         res = cast(NodeTypes, self._request_json(
-            METHOD_GET, "/node_types", {}, capture_err=False))["info"]
+            METHOD_GET, "/node_types", {}))["info"]
         self._node_defs = res
         return res
 
@@ -564,7 +556,7 @@ class XYMEClient:
         return cast(BlobInit, self._request_json(
             METHOD_POST, "/blob_init", {
                 "type": blob_type,
-            }, capture_err=False))["blob"]
+            }))["blob"]
 
     def create_new_pipeline(
             self,
@@ -576,7 +568,7 @@ class XYMEClient:
                 "user": username,
                 "name": pipename,
                 "index": index,
-            }, capture_err=False))["pipeline"]
+            }))["pipeline"]
 
     def duplicate_pipeline(
             self, pipe_id: str, dest_id: Optional[str] = None) -> str:
@@ -586,7 +578,7 @@ class XYMEClient:
         if dest_id is not None:
             args["dest"] = dest_id
         return cast(PipelineDupResponse, self._request_json(
-            METHOD_POST, "/pipeline_dup", args, capture_err=True))["pipeline"]
+            METHOD_POST, "/pipeline_dup", args))["pipeline"]
 
     def set_pipeline(
             self,
@@ -597,7 +589,7 @@ class XYMEClient:
             METHOD_POST, "/pipeline_create", {
                 "pipeline": pipe_id,
                 "defs": defs,
-            }, capture_err=True))
+            }))
         pipe_id = pipe_create["pipeline"]
         if warnings_io is not None:
             warnings = pipe_create["warnings"]
@@ -619,57 +611,56 @@ class XYMEClient:
             METHOD_POST, "/update_pipeline_settings", {
                 "pipeline": pipe_id,
                 "settings": settings,
-            }, capture_err=True))["pipeline"]
+            }))["pipeline"]
         return self.get_pipeline(pipe_id)
 
     def get_csvs(self) -> List[str]:
         return cast(CSVList, self._request_json(
             METHOD_GET, "/csvs", {
-            }, capture_err=False))["csvs"]
+            }))["csvs"]
 
     def add_csv(self, csv_blob_id: str) -> List[str]:
         return cast(CSVList, self._request_json(
             METHOD_PUT, "/csvs", {
                 "blob": csv_blob_id,
-            }, capture_err=False))["csvs"]
+            }))["csvs"]
 
     def remove_csv(self, csv_blob_id: str) -> List[str]:
         return cast(CSVList, self._request_json(
             METHOD_DELETE, "/csvs", {
                 "blob": csv_blob_id,
-            }, capture_err=False))["csvs"]
+            }))["csvs"]
 
     def get_jobs(self) -> List[str]:
         return cast(JobList, self._request_json(
             METHOD_GET, "/jobs", {
-            }, capture_err=False))["jobs"]
+            }))["jobs"]
 
     def remove_job(self, job_id: str) -> List[str]:
         return cast(JobList, self._request_json(
             METHOD_DELETE, "/job", {
                 "job": job_id,
-            }, capture_err=False))["jobs"]
+            }))["jobs"]
 
     def create_job(self) -> JobInfo:
         return cast(JobInfo, self._request_json(
-            METHOD_POST, "/job_init", {
-            }, capture_err=False))
+            METHOD_POST, "/job_init", {}))
 
     def get_job(self, job_id: str) -> JobInfo:
         return cast(JobInfo, self._request_json(
             METHOD_GET, "/job", {
                 "job": job_id,
-            }, capture_err=False))
+            }))
 
     def set_job(self, job: JobInfo) -> JobInfo:
         return cast(JobInfo, self._request_json(
             METHOD_PUT, "/job", {
                 "job": job,
-            }, capture_err=False))
+            }))
 
     def get_allowed_custom_imports(self) -> CustomImportsResponse:
         return cast(CustomImportsResponse, self._request_json(
-            METHOD_GET, "/allowed_custom_imports", {}, capture_err=False))
+            METHOD_GET, "/allowed_custom_imports", {}))
 
     @overload
     def check_queue_stats(  # pylint: disable=no-self-use
@@ -703,12 +694,12 @@ class XYMEClient:
                 METHOD_GET, "/queue_stats", {
                     "pipeline": pipeline,
                     "minimal": 1,
-                }, capture_err=False))
+                }))
         return cast(QueueStatsResponse, self._request_json(
             METHOD_GET, "/queue_stats", {
                 "pipeline": pipeline,
                 "minimal": 0,
-            }, capture_err=False))
+            }))
 
     def get_instance_status(
             self,
@@ -718,23 +709,23 @@ class XYMEClient:
             METHOD_GET, "/instance_status", {
                 "pipeline": pipe_id,
                 "node": node_id,
-            }, capture_err=False))
+            }))
 
     def get_queue_mode(self) -> str:
         return cast(QueueMode, self._request_json(
-            METHOD_GET, "/queue_mode", {}, capture_err=False))["mode"]
+            METHOD_GET, "/queue_mode", {}))["mode"]
 
     def set_queue_mode(self, mode: str) -> str:
         return cast(QueueMode, self._request_json(
             METHOD_PUT, "/queue_mode", {
                 "mode": mode,
-            }, capture_err=True))["mode"]
+            }))["mode"]
 
     def flush_all_queue_data(self) -> None:
 
         def do_flush() -> bool:
             res = cast(FlushAllQueuesResponse, self._request_json(
-                METHOD_POST, "/flush_all_queues", {}, capture_err=False))
+                METHOD_POST, "/flush_all_queues", {}))
             return bool(res["success"])
 
         while do_flush():  # we flush until there is nothing to flush anymore
@@ -744,23 +735,23 @@ class XYMEClient:
         return cast(CacheStats, self._request_json(
             METHOD_GET, "/cache_stats", {
                 "reset": int(reset),
-            }, capture_err=False))
+            }))
 
     def create_kafka_error_topic(self) -> KafkaTopics:
         return cast(KafkaTopics, self._request_json(
             METHOD_POST, "/kafka_topics", {
                 "num_partitions": 1,
-            }, capture_err=True))
+            }))
 
     def delete_kafka_error_topic(self) -> KafkaTopics:
         return cast(KafkaTopics, self._request_json(
             METHOD_POST, "/kafka_topics", {
                 "num_partitions": 0,
-            }, capture_err=True))
+            }))
 
     def read_kafka_errors(self) -> List[str]:
         return cast(List[str], self._request_json(
-            METHOD_GET, "/kafka_msg", {}, capture_err=False))
+            METHOD_GET, "/kafka_msg", {}))
 
 
 # *** XYMEClient ***
@@ -807,7 +798,7 @@ class PipelineHandle:
         return cast(PipelineInfo, self._client._request_json(
             METHOD_GET, "/pipeline_info", {
                 "pipeline": self._pipe_id,
-            }, capture_err=False))
+            }))
 
     def _fetch_info(self) -> None:
         info = self.get_info()
@@ -964,7 +955,7 @@ class PipelineHandle:
                 "inputs": inputs,
                 "no_cache": no_cache,
                 "pipeline": self._pipe_id,
-            }, capture_err=True))
+            }))
         return res["results"]
 
     def dynamic_list(
@@ -987,7 +978,7 @@ class PipelineHandle:
                     "no_cache": no_cache,
                     "output_key": output_key,
                     "pipeline": self._pipe_id,
-                }, capture_err=True))
+                }))
             return res["results"]
         # FIXME: write generic spliterator implementation
         split_num: int = split_th
@@ -1065,7 +1056,7 @@ class PipelineHandle:
         res: Dict[str, str] = self._client._request_json(
             METHOD_FILE, "/dynamic_async", {
                 "pipeline": self._pipe_id,
-            }, capture_err=True, files=dict(zip(names, input_data)))
+            }, files=dict(zip(names, input_data)))
         return [
             ComputationHandle(
                 self,
@@ -1112,7 +1103,7 @@ class PipelineHandle:
             METHOD_POST, "/dynamic_status", {
                 "data_ids": [data_id.get_id() for data_id in data_ids],
                 "pipeline": self._pipe_id,
-            }, capture_err=True))
+            }))
         status = res["status"]
         hnd_map = {data_id.get_id(): data_id for data_id in data_ids}
         return {
@@ -1295,13 +1286,13 @@ class PipelineHandle:
             METHOD_GET, "/pipeline_def", {
                 "pipeline": self.get_id(),
                 "full": 1 if full else 0,
-            }, capture_err=False))
+            }))
 
     def get_visible_blobs(self) -> List[str]:
         return cast(VisibleBlobs, self._client._request_json(
             METHOD_GET, "/visible_blobs", {
                 "pipeline": self.get_id(),
-            }, capture_err=False))["visible"]
+            }))["visible"]
 
     @overload
     def check_queue_stats(  # pylint: disable=no-self-use
@@ -1331,14 +1322,14 @@ class PipelineHandle:
                 "pipeline": self.get_id(),
                 "replicas": replicas,
                 "task": None,
-            }, capture_err=True))["success"]
+            }))["success"]
 
     def set_kafka_topic_partitions(self, num_partitions: int) -> KafkaTopics:
         return cast(KafkaTopics, self._client._request_json(
             METHOD_POST, "/kafka_topics", {
                 "pipeline": self.get_id(),
                 "num_partitions": num_partitions,
-            }, capture_err=True))
+            }))
 
     def post_kafka_objs(self, input_objs: List[Any]) -> List[str]:
         bios = [
@@ -1356,7 +1347,7 @@ class PipelineHandle:
         res = cast(KafkaMessage, self._client._request_json(
             METHOD_FILE, "/kafka_msg", {
                 "pipeline": self._pipe_id,
-            }, capture_err=True, files=dict(zip(names, input_data))))
+            }, files=dict(zip(names, input_data))))
         msgs = res["messages"]
         return [msgs[key] for key in names]
 
@@ -1491,7 +1482,7 @@ class NodeHandle:
             METHOD_GET, "/node_status", {
                 "pipeline": self.get_pipeline().get_id(),
                 "node": self.get_id(),
-            }, capture_err=False))["status"]
+            }))["status"]
 
     def has_config_error(self) -> bool:
         return self._config_error is not None
@@ -1515,21 +1506,21 @@ class NodeHandle:
                 "node": self.get_id(),
                 "blob_key": key,
                 "blob_uri": blob_uri,
-            }, capture_err=True))["new_uri"]
+            }))["new_uri"]
 
     def get_in_cursor_states(self) -> Dict[str, int]:
         return cast(InCursors, self._client._request_json(
             METHOD_GET, "/node_in_cursors", {
                 "pipeline": self.get_pipeline().get_id(),
                 "node": self.get_id(),
-            }, capture_err=False))["cursors"]
+            }))["cursors"]
 
     def get_highest_chunk(self) -> int:
         return cast(NodeChunk, self._client._request_json(
             METHOD_GET, "/node_chunk", {
                 "pipeline": self.get_pipeline().get_id(),
                 "node": self.get_id(),
-            }, capture_err=False))["chunk"]
+            }))["chunk"]
 
     def get_short_status(self, allow_unicode: bool = True) -> str:
         status_map: Dict[TaskStatus, str] = {
@@ -1559,7 +1550,7 @@ class NodeHandle:
             METHOD_GET, "/node_perf", {
                 "pipeline": self.get_pipeline().get_id(),
                 "node": self.get_id(),
-            }, capture_err=False))["times"]
+            }))["times"]
 
     def read_blob(
             self,
@@ -1574,7 +1565,7 @@ class NodeHandle:
                 "chunk": chunk,
                 "is_blocking": True,
                 "force_refresh": force_refresh,
-            }, capture_err=False))
+            }))
         uri = res["result_uri"]
         if uri is None:
             raise ValueError(f"uri is None: {res}")
@@ -1620,7 +1611,7 @@ class NodeHandle:
                 "pipeline": self.get_pipeline().get_id(),
                 "node": self.get_id(),
                 "action": "reset",
-            }, capture_err=False))
+            }))
 
     def requeue(self) -> NodeState:
         return cast(NodeState, self._client._request_json(
@@ -1628,7 +1619,7 @@ class NodeHandle:
                 "pipeline": self.get_pipeline().get_id(),
                 "node": self.get_id(),
                 "action": "requeue",
-            }, capture_err=False))
+            }))
 
     def fix_error(self) -> NodeState:
         return cast(NodeState, self._client._request_json(
@@ -1636,7 +1627,7 @@ class NodeHandle:
                 "pipeline": self.get_pipeline().get_id(),
                 "node": self.get_id(),
                 "action": "fix_error",
-            }, capture_err=False))
+            }))
 
     def get_csv_blob(self) -> 'CSVBlobHandle':
         if self.get_type() != "csv_reader":
@@ -1645,7 +1636,7 @@ class NodeHandle:
             METHOD_GET, "/csv_blob", {
                 "pipeline": self.get_pipeline().get_id(),
                 "node": self.get_id(),
-            }, capture_err=False))
+            }))
         return CSVBlobHandle(
             self._client,
             self.get_pipeline(),
@@ -1662,7 +1653,7 @@ class NodeHandle:
             METHOD_GET, "/json_blob", {
                 "pipeline": self.get_pipeline().get_id(),
                 "node": self.get_id(),
-            }, capture_err=False))
+            }))
         return JSONBlobHandle(
             self._client,
             self.get_pipeline(),
@@ -1681,7 +1672,7 @@ class NodeHandle:
                 "pipeline": self.get_pipeline().get_id(),
                 "node": self.get_id(),
                 "modules": modules,
-            }, capture_err=True))
+            }))
 
     def get_custom_imports(self) -> CustomImportsResponse:
         self.check_custom_code_node()
@@ -1689,30 +1680,30 @@ class NodeHandle:
             METHOD_GET, "/custom_imports", {
                 "pipeline": self.get_pipeline().get_id(),
                 "node": self.get_id(),
-            }, capture_err=False))
+            }))
 
     def set_custom_code(self, func: FUNC) -> CustomCodeResponse:
         from RestrictedPython import compile_restricted
 
         self.check_custom_code_node()
 
-        def as_str(fun: FUNC) -> str:
+        def fn_as_str(fun: FUNC) -> str:
             body = textwrap.dedent(inspect.getsource(fun))
             res = body + textwrap.dedent(f"""
-            result = {fun.__name__}(data)
+            result = {fun.__name__}(*data)
             if result is None:
                 raise ValueError("{fun.__name__} must return a value")
             """)
             compile_restricted(res, "inline", "exec")
             return res
 
-        raw_code = as_str(func)
+        raw_code = fn_as_str(func)
         return cast(CustomCodeResponse, self._client._request_json(
             METHOD_PUT, "/custom_code", {
                 "pipeline": self.get_pipeline().get_id(),
                 "node": self.get_id(),
                 "code": raw_code,
-            }, capture_err=True))
+            }))
 
     def get_custom_code(self) -> CustomCodeResponse:
         self.check_custom_code_node()
@@ -1720,7 +1711,7 @@ class NodeHandle:
             METHOD_GET, "/custom_code", {
                 "pipeline": self.get_pipeline().get_id(),
                 "node": self.get_id(),
-            }, capture_err=False))
+            }))
 
     def get_user_columns(self, key: str) -> UserColumnsResponse:
         return cast(UserColumnsResponse, self._client._request_json(
@@ -1728,7 +1719,7 @@ class NodeHandle:
                 "pipeline": self.get_pipeline().get_id(),
                 "node": self.get_id(),
                 "key": key,
-            }, capture_err=False))
+            }))
 
     def get_input_example(self) -> Dict[str, Optional[ByteResponse]]:
         if self.get_type() != "custom_data":
@@ -1759,21 +1750,21 @@ class NodeHandle:
                 "node": self.get_id(),
                 "config": obj,
                 "model_type": model_type,
-            }, capture_err=True))
+            }))
 
     def get_model_params(self) -> Any:
         return cast(ModelParamsResponse, self._client._request_json(
             METHOD_GET, "/model_params", {
                 "pipeline": self.get_pipeline().get_id(),
                 "node": self.get_id(),
-            }, capture_err=True))
+            }))
 
     def get_def(self) -> NodeDef:
         return cast(NodeDef, self._client._request_json(
             METHOD_GET, "/node_def", {
                 "pipeline": self.get_pipeline().get_id(),
                 "node": self.get_id(),
-            }, capture_err=False))
+            }))
 
     def __hash__(self) -> int:
         return hash(self._node_id)
@@ -1845,7 +1836,7 @@ class BlobHandle:
             METHOD_GET, "/blob_files", {
                 "blob": self._uri,
                 "pipeline": self.get_pipeline().get_id(),
-            }, capture_err=False)
+            })
         return [
             BlobHandle(
                 self._client,
@@ -1867,7 +1858,7 @@ class BlobHandle:
                 "pipeline": pipe.get_id(),
                 "blob": self._uri,
                 "owner": new_owner,
-            }, capture_err=False))
+            }))
         return res["owner"]
 
     def get_owner(self) -> str:
@@ -1878,7 +1869,7 @@ class BlobHandle:
             METHOD_GET, "/blob_owner", {
                 "pipeline": pipe.get_id(),
                 "blob": self._uri,
-            }, capture_err=False))
+            }))
         return res["owner"]
 
     def copy_to(
@@ -1894,7 +1885,7 @@ class BlobHandle:
                 "from_uri": self._uri,
                 "owner": new_owner,
                 "to_uri": to_uri,
-            }, capture_err=False))
+            }))
         return BlobHandle(
             self._client, res["new_uri"], is_full=False, pipeline=pipe)
 
@@ -1926,7 +1917,7 @@ class BlobHandle:
                 "pipeline": self.get_pipeline().get_id(),
             }, files={
                 "file": zip_stream,
-            }, capture_err=True)
+            })
         return [
             BlobHandle(
                 self._client,
@@ -2005,7 +1996,7 @@ class CSVBlobHandle(BlobHandle):
             method = METHOD_POST
             files = None
         res = cast(CSVOp, self._client._request_json(
-            method, "/csv_action", args, capture_err=False, files=files))
+            method, "/csv_action", args, files=files))
         self._count = res["count"]
         self._has_tmp = res["tmp"]
         self._pos = res["pos"]
@@ -2110,7 +2101,7 @@ class JSONBlobHandle(BlobHandle):
                 "pipeline": self.get_pipeline().get_id(),
                 "blob": self.get_uri(),
                 "jsons": jsons,
-            }, capture_err=True)
+            })
         self._count = res["count"]
         return self
 
