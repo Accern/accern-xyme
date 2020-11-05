@@ -219,7 +219,7 @@ WorkerScale = TypedDict('WorkerScale', {
     "success": bool,
 })
 KafkaTopics = TypedDict('KafkaTopics', {
-    "topics": Dict[str, str],
+    "topics": Dict[str, Optional[str]],
     "create": bool,
 })
 KafkaMessage = TypedDict('KafkaMessage', {

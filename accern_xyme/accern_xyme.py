@@ -1340,7 +1340,18 @@ class PipelineHandle:
                 "num_partitions": num_partitions,
             }, capture_err=True))
 
-    def post_kafka_msg(self, input_data: List[BytesIO]) -> List[str]:
+    def post_kafka_objs(self, input_objs: List[Any]) -> List[str]:
+        bios = [
+            BytesIO(json.dumps(
+                input_obj,
+                separators=(",", ":"),
+                indent=None,
+                sort_keys=True).encode("utf-8"))
+            for input_obj in input_objs
+        ]
+        return self.post_kafka_msgs(bios)
+
+    def post_kafka_msgs(self, input_data: List[BytesIO]) -> List[str]:
         names = [f"file{pos}" for pos in range(len(input_data))]
         res = cast(KafkaMessage, self._client._request_json(
             METHOD_FILE, "/kafka_msg", {
@@ -1349,12 +1360,34 @@ class PipelineHandle:
         msgs = res["messages"]
         return [msgs[key] for key in names]
 
-    def read_kafka_output(self) -> Optional[bytes]:
-        cur_res, ctype = self._client.request_bytes(
-            METHOD_GET, "/kafka_msg", {
-                "pipeline": self.get_id(),
-            })
-        return cast(Optional[bytes], interpret_ctype(cur_res, ctype))
+    def read_kafka_output(
+            self, single: bool = False) -> Optional[ByteResponse]:
+
+        def read_single() -> Tuple[ByteResponse, str]:
+            cur, read_ctype = self._client.request_bytes(
+                METHOD_GET, "/kafka_msg", {
+                    "pipeline": self.get_id(),
+                })
+            return interpret_ctype(cur, read_ctype), read_ctype
+
+        if single:
+            return read_single()[0]
+
+        res: List[ByteResponse] = []
+        ctype: Optional[str] = None
+        while True:
+            val, cur_ctype = read_single()
+            if val is None:
+                break
+            if ctype is None:
+                ctype = cur_ctype
+            elif ctype != cur_ctype:
+                raise ValueError(
+                    f"inconsistent return types {ctype} != {cur_ctype}")
+            res.append(val)
+        if not res or ctype is None:
+            return None
+        return merge_ctype(res, ctype)
 
     def __hash__(self) -> int:
         return hash(self._pipe_id)
@@ -2119,11 +2152,9 @@ class ComputationHandle:
         return self._data_id
 
     def __str__(self) -> str:
-        if self._value is None:
-            return f"data_id={self._data_id}"
         value = self._value
-        if isinstance(value, bytes):
-            return f"value({type(value)})={value.decode('utf-8')}"
+        if value is None:
+            return f"data_id={self._data_id}"
         return f"value({type(value)})={value}"
 
     def __repr__(self) -> str:
