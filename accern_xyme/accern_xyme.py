@@ -1318,7 +1318,7 @@ class PipelineHandle:
 
     def scale_worker(self, replicas: int) -> bool:
         return cast(WorkerScale, self._client._request_json(
-            METHOD_POST, "/worker", {
+            METHOD_PUT, "/worker", {
                 "pipeline": self.get_id(),
                 "replicas": replicas,
                 "task": None,
