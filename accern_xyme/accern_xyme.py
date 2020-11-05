@@ -34,7 +34,7 @@ from requests import Response
 from requests.exceptions import HTTPError, RequestException
 from typing_extensions import Literal
 
-from .util import (
+from accern_xyme.util import (
     async_compute,
     ByteResponse,
     df_to_csv,
@@ -47,7 +47,7 @@ from .util import (
     merge_ctype,
     ServerSideError,
 )
-from .types import (
+from accern_xyme.types import (
     BlobInit,
     BlobOwner,
     CacheStats,
@@ -65,6 +65,8 @@ from .types import (
     JobInfo,
     JobList,
     JSONBlobResponse,
+    KafkaMessage,
+    KafkaTopics,
     MaintenanceResponse,
     MinimalQueueStatsResponse,
     ModelParamsResponse,
@@ -95,6 +97,7 @@ from .types import (
     UserColumnsResponse,
     VersionResponse,
     VisibleBlobs,
+    WorkerScale,
 )
 
 if TYPE_CHECKING:
@@ -103,7 +106,7 @@ else:
     WVD = weakref.WeakValueDictionary
 
 
-__version__ = "0.1.8"
+__version__ = "0.1.9"
 # FIXME: async calls, documentation, auth, summary – time it took etc.
 
 
@@ -233,21 +236,22 @@ class XYMEClient:
             return True
 
         retry = 0
+        max_retry = get_max_retry()
         while True:
             try:
-                return self._fallible_raw_request_bytes(
-                    method, path, args, files, add_prefix, api_version)
+                try:
+                    return self._fallible_raw_request_bytes(
+                        method, path, args, files, add_prefix, api_version)
+                except HTTPError as e:
+                    if e.response.status_code in (403, 404, 500):
+                        retry = max_retry
+                    raise e
             except RequestException:
-                if retry >= get_max_retry():
+                if retry >= max_retry:
                     raise
                 if not reset_files():
                     raise
                 time.sleep(get_retry_sleep())
-            except AccessDenied as adex:
-                if not reset_files():
-                    raise ValueError(
-                        "cannot reset file buffers for retry") from adex
-                raise adex
             retry += 1
 
     def _raw_request_str(
@@ -258,12 +262,18 @@ class XYMEClient:
             add_prefix: bool = True,
             api_version: Optional[int] = None) -> TextIO:
         retry = 0
+        max_retry = get_max_retry()
         while True:
             try:
-                return self._fallible_raw_request_str(
-                    method, path, args, add_prefix, api_version)
+                try:
+                    return self._fallible_raw_request_str(
+                        method, path, args, add_prefix, api_version)
+                except HTTPError as e:
+                    if e.response.status_code in (403, 404, 500):
+                        retry = max_retry
+                    raise e
             except RequestException:
-                if retry >= get_max_retry():
+                if retry >= max_retry:
                     raise
                 time.sleep(get_retry_sleep())
             retry += 1
@@ -295,21 +305,22 @@ class XYMEClient:
             return True
 
         retry = 0
+        max_retry = get_max_retry()
         while True:
             try:
-                return self._fallible_raw_request_json(
-                    method, path, args, add_prefix, files, api_version)
+                try:
+                    return self._fallible_raw_request_json(
+                        method, path, args, add_prefix, files, api_version)
+                except HTTPError as e:
+                    if e.response.status_code in (403, 404, 500):
+                        retry = max_retry
+                    raise e
             except RequestException:
-                if retry >= get_max_retry():
+                if retry >= max_retry:
                     raise
                 if not reset_files():
                     raise
                 time.sleep(get_retry_sleep())
-            except AccessDenied as adex:
-                if not reset_files():
-                    raise ValueError(
-                        "cannot reset file buffers for retry") from adex
-                raise adex
             retry += 1
 
     def _fallible_raw_request_bytes(
@@ -329,17 +340,20 @@ class XYMEClient:
         headers = {
             "authorization": self._token,
         }
-        if method == METHOD_GET:
-            req = requests.get(url, params=args, headers=headers)
+
+        def check_error(req: Response) -> None:
             if req.status_code == 403:
                 raise AccessDenied(req.text)
             req.raise_for_status()
+            # NOTE: no content type check -- will be handled by interpret_ctype
+
+        if method == METHOD_GET:
+            req = requests.get(url, params=args, headers=headers)
+            check_error(req)
             return BytesIO(req.content), req.headers["content-type"]
         if method == METHOD_POST:
             req = requests.post(url, json=args, headers=headers)
-            if req.status_code == 403:
-                raise AccessDenied(req.text)
-            req.raise_for_status()
+            check_error(req)
             return BytesIO(req.content), req.headers["content-type"]
         if method == METHOD_FILE:
             if files is None:
@@ -355,9 +369,7 @@ class XYMEClient:
                     ) for (key, value) in files.items()
                 },
                 headers=headers)
-            if req.status_code == 403:
-                raise AccessDenied(req.text)
-            req.raise_for_status()
+            check_error(req)
             return BytesIO(req.content), req.headers["content-type"]
         raise ValueError(f"unknown method {method}")
 
@@ -379,21 +391,18 @@ class XYMEClient:
         }
 
         def check_error(req: Response) -> None:
+            if req.status_code == 403:
+                raise AccessDenied(req.text)
+            req.raise_for_status()
             if req.headers["content-type"] == "application/problem+json":
                 raise ServerSideError(json.loads(req.text)["errMessage"])
 
         if method == METHOD_GET:
             req = requests.get(url, params=args, headers=headers)
-            if req.status_code == 403:
-                raise AccessDenied(req.text)
-            req.raise_for_status()
             check_error(req)
             return StringIO(req.text)
         if method == METHOD_POST:
             req = requests.post(url, json=args, headers=headers)
-            if req.status_code == 403:
-                raise AccessDenied(req.text)
-            req.raise_for_status()
             check_error(req)
             return StringIO(req.text)
         raise ValueError(f"unknown method {method}")
@@ -421,15 +430,15 @@ class XYMEClient:
         req = None
 
         def check_error(req: Response) -> None:
+            if req.status_code == 403:
+                raise AccessDenied(req.text)
+            req.raise_for_status()
             if req.headers["content-type"] == "application/problem+json":
                 raise ServerSideError(json.loads(req.text)["errMessage"])
 
         try:
             if method == METHOD_GET:
                 req = requests.get(url, params=args, headers=headers)
-                if req.status_code == 403:
-                    raise AccessDenied(req.text)
-                req.raise_for_status()
                 check_error(req)
                 return json.loads(req.text)
             if method == METHOD_FILE:
@@ -446,30 +455,18 @@ class XYMEClient:
                         ) for (key, value) in files.items()
                     },
                     headers=headers)
-                if req.status_code == 403:
-                    raise AccessDenied(req.text)
-                req.raise_for_status()
                 check_error(req)
                 return json.loads(req.text)
             if method == METHOD_POST:
                 req = requests.post(url, json=args, headers=headers)
-                if req.status_code == 403:
-                    raise AccessDenied(req.text)
-                req.raise_for_status()
                 check_error(req)
                 return json.loads(req.text)
             if method == METHOD_PUT:
                 req = requests.put(url, json=args, headers=headers)
-                if req.status_code == 403:
-                    raise AccessDenied(req.text)
-                req.raise_for_status()
                 check_error(req)
                 return json.loads(req.text)
             if method == METHOD_DELETE:
                 req = requests.delete(url, json=args, headers=headers)
-                if req.status_code == 403:
-                    raise AccessDenied(req.text)
-                req.raise_for_status()
                 check_error(req)
                 return json.loads(req.text)
             if method == METHOD_LONGPOST:
@@ -507,11 +504,8 @@ class XYMEClient:
             add_prefix: bool = True,
             files: Optional[Dict[str, IO[bytes]]] = None,
             api_version: Optional[int] = None) -> Dict[str, Any]:
-        res = self._raw_request_json(
+        return self._raw_request_json(
             method, path, args, add_prefix, files, api_version)
-        if "errMessage" in res and res["errMessage"]:
-            raise ValueError(res["errMessage"])
-        return res
 
     def get_server_version(self) -> VersionResponse:
         return cast(VersionResponse, self._raw_request_json(
@@ -743,6 +737,22 @@ class XYMEClient:
                 "reset": int(reset),
             }))
 
+    def create_kafka_error_topic(self) -> KafkaTopics:
+        return cast(KafkaTopics, self._request_json(
+            METHOD_POST, "/kafka_topics", {
+                "num_partitions": 1,
+            }))
+
+    def delete_kafka_error_topic(self) -> KafkaTopics:
+        return cast(KafkaTopics, self._request_json(
+            METHOD_POST, "/kafka_topics", {
+                "num_partitions": 0,
+            }))
+
+    def read_kafka_errors(self) -> List[str]:
+        return cast(List[str], self._request_json(
+            METHOD_GET, "/kafka_msg", {}))
+
 
 # *** XYMEClient ***
 
@@ -758,7 +768,7 @@ class PipelineHandle:
         self._company: Optional[str] = None
         self._state: Optional[str] = None
         self._is_high_priority: Optional[bool] = None
-        self._is_parallel: Optional[bool] = None
+        self._queue_mng: Optional[str] = None
         self._nodes: Dict[str, NodeHandle] = {}
         self._node_lookup: Dict[str, str] = {}
         self._settings: Optional[Dict[str, Any]] = None
@@ -771,7 +781,7 @@ class PipelineHandle:
         self._company = None
         self._state = None
         self._is_high_priority = None
-        self._is_parallel = None
+        self._queue_mng = None
         self._ins = None
         self._outs = None
         # NOTE: we don't reset nodes
@@ -796,7 +806,7 @@ class PipelineHandle:
         self._company = info["company"]
         self._state = info["state"]
         self._is_high_priority = info["high_priority"]
-        self._is_parallel = info["is_parallel"]
+        self._queue_mng = info["queue_mng"]
         self._settings = info["settings"]
         self._ins = info["ins"]
         self._outs = [(el[0], el[1]) for el in info["outs"]]
@@ -899,11 +909,15 @@ class PipelineHandle:
         assert self._is_high_priority is not None
         return self._is_high_priority
 
-    def is_parallel(self) -> bool:
+    def is_queue(self) -> bool:
         self._maybe_refresh()
         self._maybe_fetch()
-        assert self._is_parallel is not None
-        return self._is_parallel
+        return self._queue_mng is not None
+
+    def get_queue_mng(self) -> Optional[str]:
+        self._maybe_refresh()
+        self._maybe_fetch()
+        return self._queue_mng
 
     def get_ins(self) -> List[str]:
         self._maybe_refresh()
@@ -1301,6 +1315,70 @@ class PipelineHandle:
             MinimalQueueStatsResponse, QueueStatsResponse]:
         pipe_id: Optional[str] = self.get_id()
         return self._client.check_queue_stats(pipe_id, minimal=minimal)
+
+    def scale_worker(self, replicas: int) -> bool:
+        return cast(WorkerScale, self._client._request_json(
+            METHOD_POST, "/worker", {
+                "pipeline": self.get_id(),
+                "replicas": replicas,
+                "task": None,
+            }))["success"]
+
+    def set_kafka_topic_partitions(self, num_partitions: int) -> KafkaTopics:
+        return cast(KafkaTopics, self._client._request_json(
+            METHOD_POST, "/kafka_topics", {
+                "pipeline": self.get_id(),
+                "num_partitions": num_partitions,
+            }))
+
+    def post_kafka_objs(self, input_objs: List[Any]) -> List[str]:
+        bios = [
+            BytesIO(json.dumps(
+                input_obj,
+                separators=(",", ":"),
+                indent=None,
+                sort_keys=True).encode("utf-8"))
+            for input_obj in input_objs
+        ]
+        return self.post_kafka_msgs(bios)
+
+    def post_kafka_msgs(self, input_data: List[BytesIO]) -> List[str]:
+        names = [f"file{pos}" for pos in range(len(input_data))]
+        res = cast(KafkaMessage, self._client._request_json(
+            METHOD_FILE, "/kafka_msg", {
+                "pipeline": self._pipe_id,
+            }, files=dict(zip(names, input_data))))
+        msgs = res["messages"]
+        return [msgs[key] for key in names]
+
+    def read_kafka_output(
+            self, single: bool = False) -> Optional[ByteResponse]:
+
+        def read_single() -> Tuple[ByteResponse, str]:
+            cur, read_ctype = self._client.request_bytes(
+                METHOD_GET, "/kafka_msg", {
+                    "pipeline": self.get_id(),
+                })
+            return interpret_ctype(cur, read_ctype), read_ctype
+
+        if single:
+            return read_single()[0]
+
+        res: List[ByteResponse] = []
+        ctype: Optional[str] = None
+        while True:
+            val, cur_ctype = read_single()
+            if val is None:
+                break
+            if ctype is None:
+                ctype = cur_ctype
+            elif ctype != cur_ctype:
+                raise ValueError(
+                    f"inconsistent return types {ctype} != {cur_ctype}")
+            res.append(val)
+        if not res or ctype is None:
+            return None
+        return merge_ctype(res, ctype)
 
     def __hash__(self) -> int:
         return hash(self._pipe_id)
@@ -2065,9 +2143,10 @@ class ComputationHandle:
         return self._data_id
 
     def __str__(self) -> str:
-        if self._value is None:
+        value = self._value
+        if value is None:
             return f"data_id={self._data_id}"
-        return f"value={self._value}"
+        return f"value({type(value)})={value}"
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}[{self.__str__()}]"

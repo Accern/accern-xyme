@@ -26,7 +26,7 @@ import pandas as pd
 from typing_extensions import TypedDict, Literal, overload
 import quick_server
 
-from .util import (
+from accern_xyme.util import (
     get_file_upload_chunk_size,
     get_max_retry,
     get_retry_sleep,
@@ -1043,13 +1043,13 @@ class XYMELegacyClient:
                     return quick_server.worker_request(url, args)
                 except quick_server.WorkerError as e:
                     if e.get_status_code() == 403:
-                        raise AccessDenied(e.args)
+                        raise AccessDenied(e.args) from e
                     raise e
             raise ValueError(f"unknown method {method}")
-        except json.decoder.JSONDecodeError:
+        except json.decoder.JSONDecodeError as json_e:
             if req is None:
                 raise
-            raise ValueError(req.text)
+            raise ValueError(req.text) from json_e
 
     def _login(self) -> None:
         if self._user is None or self._password is None:

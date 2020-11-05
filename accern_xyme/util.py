@@ -19,7 +19,7 @@ from io import BytesIO, TextIOWrapper
 import pandas as pd
 from scipy import sparse
 import torch
-from .types import MinimalQueueStatsResponse, QueueStatus
+from accern_xyme.types import MinimalQueueStatsResponse, QueueStatus
 
 VERBOSE = False
 FILE_UPLOAD_CHUNK_SIZE = 100 * 1024  # 100kb
@@ -214,8 +214,10 @@ def interpret_ctype(data: IO[bytes], ctype: str) -> ByteResponse:
             json.load(BytesIO(line))
             for line in data
         ]
-    # NOTE: try best guess...
     content = BytesIO(data.read())
+    if ctype == "application/octet-stream":
+        return content
+    # NOTE: try best guess...
     try:
         return pd.read_parquet(content)
     except OSError:
