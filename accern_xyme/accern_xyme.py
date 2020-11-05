@@ -33,7 +33,7 @@ import requests
 from requests.exceptions import HTTPError, RequestException
 from typing_extensions import Literal
 
-from .util import (
+from accern_xyme.util import (
     async_compute,
     ByteResponse,
     df_to_csv,
@@ -46,7 +46,7 @@ from .util import (
     merge_ctype,
     ServerSideError,
 )
-from .types import (
+from accern_xyme.types import (
     BlobInit,
     BlobOwner,
     CacheStats,
@@ -64,6 +64,8 @@ from .types import (
     JobInfo,
     JobList,
     JSONBlobResponse,
+    KafkaMessage,
+    KafkaTopics,
     MaintenanceResponse,
     MinimalQueueStatsResponse,
     ModelParamsResponse,
@@ -94,6 +96,7 @@ from .types import (
     UserColumnsResponse,
     VersionResponse,
     VisibleBlobs,
+    WorkerScale,
 )
 
 if TYPE_CHECKING:
@@ -743,6 +746,22 @@ class XYMEClient:
                 "reset": int(reset),
             }, capture_err=False))
 
+    def create_kafka_error_topic(self) -> KafkaTopics:
+        return cast(KafkaTopics, self._request_json(
+            METHOD_POST, "/kafka_topics", {
+                "num_partitions": 1,
+            }, capture_err=True))
+
+    def delete_kafka_error_topic(self) -> KafkaTopics:
+        return cast(KafkaTopics, self._request_json(
+            METHOD_POST, "/kafka_topics", {
+                "num_partitions": 0,
+            }, capture_err=True))
+
+    def read_kafka_errors(self) -> List[str]:
+        return cast(List[str], self._request_json(
+            METHOD_GET, "/kafka_msg", {}, capture_err=False))
+
 
 # *** XYMEClient ***
 
@@ -1305,6 +1324,37 @@ class PipelineHandle:
             MinimalQueueStatsResponse, QueueStatsResponse]:
         pipe_id: Optional[str] = self.get_id()
         return self._client.check_queue_stats(pipe_id, minimal=minimal)
+
+    def scale_worker(self, replicas: int) -> bool:
+        return cast(WorkerScale, self._client._request_json(
+            METHOD_POST, "/worker", {
+                "pipeline": self.get_id(),
+                "replicas": replicas,
+                "task": None,
+            }, capture_err=True))["success"]
+
+    def set_kafka_topic_partitions(self, num_partitions: int) -> KafkaTopics:
+        return cast(KafkaTopics, self._client._request_json(
+            METHOD_POST, "/kafka_topics", {
+                "pipeline": self.get_id(),
+                "num_partitions": num_partitions,
+            }, capture_err=True))
+
+    def post_kafka_msg(self, input_data: List[BytesIO]) -> List[str]:
+        names = [f"file{pos}" for pos in range(len(input_data))]
+        res = cast(KafkaMessage, self._client._request_json(
+            METHOD_FILE, "/kafka_msg", {
+                "pipeline": self._pipe_id,
+            }, capture_err=True, files=dict(zip(names, input_data))))
+        msgs = res["messages"]
+        return [msgs[key] for key in names]
+
+    def read_kafka_output(self) -> Optional[bytes]:
+        cur_res, ctype = self._client.request_bytes(
+            METHOD_GET, "/kafka_msg", {
+                "pipeline": self.get_id(),
+            })
+        return cast(Optional[bytes], interpret_ctype(cur_res, ctype))
 
     def __hash__(self) -> int:
         return hash(self._pipe_id)
@@ -2071,7 +2121,10 @@ class ComputationHandle:
     def __str__(self) -> str:
         if self._value is None:
             return f"data_id={self._data_id}"
-        return f"value={self._value}"
+        value = self._value
+        if isinstance(value, bytes):
+            return f"value({type(value)})={value.decode('utf-8')}"
+        return f"value({type(value)})={value}"
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}[{self.__str__()}]"

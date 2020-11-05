@@ -26,7 +26,7 @@ import pandas as pd
 from typing_extensions import TypedDict, Literal, overload
 import quick_server
 
-from .util import (
+from accern_xyme.util import (
     get_file_upload_chunk_size,
     get_max_retry,
     get_retry_sleep,

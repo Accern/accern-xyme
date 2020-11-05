@@ -215,6 +215,16 @@ ModelParamsResponse = TypedDict('ModelParamsResponse', {
 FlushAllQueuesResponse = TypedDict('FlushAllQueuesResponse', {
     "success": bool,
 })
+WorkerScale = TypedDict('WorkerScale', {
+    "success": bool,
+})
+KafkaTopics = TypedDict('KafkaTopics', {
+    "topics": Dict[str, str],
+    "create": bool,
+})
+KafkaMessage = TypedDict('KafkaMessage', {
+    "messages": Dict[str, str],
+})
 PutNodeBlob = TypedDict('PutNodeBlob', {
     "key": str,
     "new_uri": str,

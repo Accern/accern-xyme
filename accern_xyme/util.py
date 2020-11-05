@@ -19,7 +19,7 @@ from io import BytesIO, TextIOWrapper
 import pandas as pd
 from scipy import sparse
 import torch
-from .types import MinimalQueueStatsResponse, QueueStatus
+from accern_xyme.types import MinimalQueueStatsResponse, QueueStatus
 
 VERBOSE = False
 FILE_UPLOAD_CHUNK_SIZE = 100 * 1024  # 100kb
@@ -31,7 +31,7 @@ RETRY_SLEEP = 5.0
 RT = TypeVar('RT')
 
 
-ByteResponse = Union[pd.DataFrame, dict, IO[bytes], List[dict]]
+ByteResponse = Union[pd.DataFrame, dict, IO[bytes], List[dict], bytes]
 
 
 def set_verbose() -> None:
@@ -198,6 +198,8 @@ def get_file_hash(buff: IO[bytes]) -> str:
 
 
 def interpret_ctype(data: IO[bytes], ctype: str) -> ByteResponse:
+    if ctype == "application/octet-stream":
+        return data.read()
     if ctype == "application/json":
         return json.load(data)
     if ctype == "application/problem+json":

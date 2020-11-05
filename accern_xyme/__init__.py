@@ -8,8 +8,3 @@ from .legacy import (
     create_legacy_session,
     XYMELegacyClient,
 )
-
-try:
-    import accern_xyme.kafka
-except (ImportError, ModuleNotFoundError):
-    pass
