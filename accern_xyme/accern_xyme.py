@@ -1352,7 +1352,7 @@ class PipelineHandle:
         return [msgs[key] for key in names]
 
     def read_kafka_output(
-            self, single: bool = False) -> Optional[ByteResponse]:
+            self, max_rows: int = 100) -> Optional[ByteResponse]:
 
         def read_single() -> Tuple[ByteResponse, str]:
             cur, read_ctype = self._client.request_bytes(
@@ -1361,7 +1361,7 @@ class PipelineHandle:
                 })
             return interpret_ctype(cur, read_ctype), read_ctype
 
-        if single:
+        if max_rows <= 1:
             return read_single()[0]
 
         res: List[ByteResponse] = []
@@ -1376,6 +1376,8 @@ class PipelineHandle:
                 raise ValueError(
                     f"inconsistent return types {ctype} != {cur_ctype}")
             res.append(val)
+            if len(res) >= max_rows:
+                break
         if not res or ctype is None:
             return None
         return merge_ctype(res, ctype)
