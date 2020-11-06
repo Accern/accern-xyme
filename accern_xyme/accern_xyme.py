@@ -475,6 +475,7 @@ class XYMEClient:
                     res = quick_server.worker_request(url, args)
                     if "errMessage" in res:
                         raise ServerSideError(res["errMessage"])
+                    return res
                 except quick_server.WorkerError as e:
                     if e.get_status_code() == 403:
                         raise AccessDenied(e.args) from e
