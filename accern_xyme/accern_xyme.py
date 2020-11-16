@@ -740,6 +740,10 @@ class XYMEClient:
                 "reset": int(reset),
             }))
 
+    def reset_cache(self) -> CacheStats:
+        return cast(CacheStats, self._request_json(
+            METHOD_POST, "/cache_reset", {}))
+
     def create_kafka_error_topic(self) -> KafkaTopics:
         return cast(KafkaTopics, self._request_json(
             METHOD_POST, "/kafka_topics", {
