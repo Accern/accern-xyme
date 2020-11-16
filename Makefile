@@ -25,7 +25,7 @@ lint-emptyinit:
 	[ ! -s monitor/__init__.py ] && [ ! -s worker/__init__.py ]
 
 lint-flake8:
-	flake8 --verbose --select C812 --exclude venv --show-source ./
+	flake8 --verbose --select C815 --exclude venv --show-source ./
 
 lint-forgottenformat:
 	! ./forgottenformat.sh
