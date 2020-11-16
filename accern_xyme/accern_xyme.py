@@ -70,6 +70,7 @@ from accern_xyme.types import (
     KafkaOffsets,
     KafkaThroughput,
     KafkaTopics,
+    ListNamedSecretKeys,
     MaintenanceResponse,
     MinimalQueueStatsResponse,
     ModelParamsResponse,
@@ -93,6 +94,7 @@ from accern_xyme.types import (
     QueueStatsResponse,
     QueueStatus,
     ReadNode,
+    SetNamedSecret,
     TaskStatus,
     Timing,
     TimingResult,
@@ -760,6 +762,17 @@ class XYMEClient:
     def read_kafka_errors(self) -> List[str]:
         return cast(List[str], self._request_json(
             METHOD_GET, "/kafka_msg", {}))
+
+    def get_named_secret_keys(self) -> List[str]:
+        return cast(ListNamedSecretKeys, self._request_json(
+            METHOD_GET, "/named_secrets", {}))["keys"]
+
+    def set_named_secret(self, key: str, value: str) -> bool:
+        return cast(SetNamedSecret, self._request_json(
+            METHOD_PUT, "/named_secrets", {
+                "key": key,
+                "value": value,
+            }))["replaced"]
 
 
 # *** XYMEClient ***

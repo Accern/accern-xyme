@@ -218,6 +218,12 @@ FlushAllQueuesResponse = TypedDict('FlushAllQueuesResponse', {
 WorkerScale = TypedDict('WorkerScale', {
     "success": bool,
 })
+SetNamedSecret = TypedDict('SetNamedSecret', {
+    "replaced": bool,
+})
+ListNamedSecretKeys = TypedDict('ListNamedSecretKeys', {
+    "keys": List[str],
+})
 KafkaTopics = TypedDict('KafkaTopics', {
     "topics": Dict[str, Optional[str]],
     "create": bool,
