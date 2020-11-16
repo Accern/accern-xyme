@@ -1468,7 +1468,8 @@ class PipelineHandle:
     def set_kafka_group(
             self,
             group_id: Optional[str] = None,
-            reset: Optional[str] = None, **kwargs: Any) -> KafkaGroup:
+            reset: Optional[str] = None,
+            **kwargs: Any) -> KafkaGroup:
         return cast(KafkaGroup, self._client._request_json(
             METHOD_PUT, "/kafka_group", {
                 "pipeline": self._pipe_id,
