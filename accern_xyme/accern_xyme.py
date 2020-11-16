@@ -1451,7 +1451,7 @@ class PipelineHandle:
             },
             "faster": "both" if total_input == total_output else (
                 "input" if total_input > total_output else "output"),
-            "errors": errors
+            "errors": errors,
         }
 
     def get_kafka_group(self) -> KafkaGroup:
