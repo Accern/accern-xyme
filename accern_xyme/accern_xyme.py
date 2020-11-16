@@ -1398,22 +1398,30 @@ class PipelineHandle:
 
     def get_kafka_throughput(
             self,
-            segment_interval: float = 60.0,
-            segments: int = 10) -> KafkaThroughput:
+            segment_interval: float = 120.0,
+            segments: int = 5) -> KafkaThroughput:
         assert segments > 0
         assert segment_interval > 0.0
-        measurements: List[Tuple[int, int, int, float]] = []
-        for _ in range(segments + 1):
-            prev = time.monotonic()
+        offsets = self.get_kafka_offsets()
+        now = time.monotonic()
+        measurements: List[Tuple[int, int, int, float]] = [(
+            offsets["input"],
+            offsets["output"],
+            offsets["error"],
+            now,
+        )]
+        for _ in range(segments):
+            prev = now
+            while now - prev < segment_interval:
+                time.sleep(max(0.0, segment_interval - (now - prev)))
+                now = time.monotonic()
             offsets = self.get_kafka_offsets()
-            now = time.monotonic()
             measurements.append((
                 offsets["input"],
                 offsets["output"],
                 offsets["error"],
                 now,
             ))
-            time.sleep(max(0.0, segment_interval - (now - prev)))
         first = measurements[0]
         last = measurements[-1]
         total_input = last[0] - first[0]
