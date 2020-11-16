@@ -225,6 +225,16 @@ KafkaTopics = TypedDict('KafkaTopics', {
 KafkaMessage = TypedDict('KafkaMessage', {
     "messages": Dict[str, str],
 })
+KafkaOffsets = TypedDict('KafkaOffsets', {
+    "error": int,
+    "input": int,
+    "output": int,
+})
+KafkaGroup = TypedDict('KafkaGroup', {
+    "group": str,
+    "pipeline": str,
+    "reset": Optional[str],
+})
 PutNodeBlob = TypedDict('PutNodeBlob', {
     "key": str,
     "new_uri": str,

@@ -65,7 +65,9 @@ from accern_xyme.types import (
     JobInfo,
     JobList,
     JSONBlobResponse,
+    KafkaGroup,
     KafkaMessage,
+    KafkaOffsets,
     KafkaTopics,
     MaintenanceResponse,
     MinimalQueueStatsResponse,
@@ -1381,6 +1383,30 @@ class PipelineHandle:
         if not res or ctype is None:
             return None
         return merge_ctype(res, ctype)
+
+    def get_kafka_offsets(self) -> KafkaOffsets:
+        return cast(KafkaOffsets, self._client._request_json(
+            METHOD_GET, "/kafka_offsets", {
+                "pipeline": self._pipe_id,
+            }))
+
+    def get_kafka_group(self) -> KafkaGroup:
+        return cast(KafkaGroup, self._client._request_json(
+            METHOD_GET, "/kafka_group", {
+                "pipeline": self._pipe_id,
+            }))
+
+    def set_kafka_group(
+            self,
+            group_id: Optional[str] = None,
+            reset: Optional[str] = None, **kwargs: Any) -> KafkaGroup:
+        return cast(KafkaGroup, self._client._request_json(
+            METHOD_PUT, "/kafka_group", {
+                "pipeline": self._pipe_id,
+                "group_id": group_id,
+                "reset": reset,
+                **kwargs
+            }))
 
     def __hash__(self) -> int:
         return hash(self._pipe_id)
