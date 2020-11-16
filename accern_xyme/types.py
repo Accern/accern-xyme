@@ -235,6 +235,22 @@ KafkaGroup = TypedDict('KafkaGroup', {
     "pipeline": str,
     "reset": Optional[str],
 })
+ThroughputDict = TypedDict('ThroughputDict', {
+    "throughput": float,
+    "max": float,
+    "min": float,
+    "stddev": float,
+    "segments": int,
+    "count": int,
+    "total": float,
+})
+KafkaThroughput = TypedDict('KafkaThroughput', {
+    "pipeline": str,
+    "input": ThroughputDict,
+    "output": ThroughputDict,
+    "faster": Literal["input", "output", "both"],
+    "errors": int,
+})
 PutNodeBlob = TypedDict('PutNodeBlob', {
     "key": str,
     "new_uri": str,

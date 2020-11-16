@@ -68,6 +68,7 @@ from accern_xyme.types import (
     KafkaGroup,
     KafkaMessage,
     KafkaOffsets,
+    KafkaThroughput,
     KafkaTopics,
     MaintenanceResponse,
     MinimalQueueStatsResponse,
@@ -1389,6 +1390,69 @@ class PipelineHandle:
             METHOD_GET, "/kafka_offsets", {
                 "pipeline": self._pipe_id,
             }))
+
+    def get_kafka_throughput(
+            self,
+            segment_interval: float = 60.0,
+            segments: int = 10) -> KafkaThroughput:
+        assert segments > 0
+        assert segment_interval > 0.0
+        measurements: List[Tuple[int, int, int, float]] = []
+        for _ in range(segments + 1):
+            prev = time.monotonic()
+            offsets = self.get_kafka_offsets()
+            now = time.monotonic()
+            measurements.append((
+                offsets["input"],
+                offsets["output"],
+                offsets["error"],
+                now,
+            ))
+            time.sleep(max(0.0, segment_interval - (now - prev)))
+        first = measurements[0]
+        last = measurements[-1]
+        total_input = last[0] - first[0]
+        total_output = last[1] - first[1]
+        errors = last[2] - first[2]
+        total = last[3] - first[3]
+        input_segments: List[float] = []
+        output_segments: List[float] = []
+        cur_input = first[0]
+        cur_output = first[1]
+        cur_time = first[3]
+        for (next_input, next_output, _, next_time) in measurements[1:]:
+            seg_time = next_time - cur_time
+            input_segments.append((next_input - cur_input) / seg_time)
+            output_segments.append((next_output - cur_output) / seg_time)
+            cur_input = next_input
+            cur_output = next_output
+            cur_time = next_time
+        inputs = pd.Series(input_segments)
+        outputs = pd.Series(output_segments)
+        return {
+            "pipeline": self._pipe_id,
+            "input": {
+                "throughput": total_input / total,
+                "max": inputs.max(),
+                "min": inputs.min(),
+                "stddev": inputs.std(),
+                "segments": segments,
+                "count": total_input,
+                "total": total,
+            },
+            "output": {
+                "throughput": total_output / total,
+                "max": outputs.max(),
+                "min": outputs.min(),
+                "stddev": outputs.std(),
+                "segments": segments,
+                "count": total_output,
+                "total": total,
+            },
+            "faster": "both" if total_input == total_output else (
+                "input" if total_input > total_output else "output"),
+            "errors": errors
+        }
 
     def get_kafka_group(self) -> KafkaGroup:
         return cast(KafkaGroup, self._client._request_json(
