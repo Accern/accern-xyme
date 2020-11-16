@@ -1475,7 +1475,7 @@ class PipelineHandle:
                 "pipeline": self._pipe_id,
                 "group_id": group_id,
                 "reset": reset,
-                **kwargs
+                **kwargs,
             }))
 
     def __hash__(self) -> int:
