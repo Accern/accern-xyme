@@ -1429,7 +1429,7 @@ class PipelineHandle:
             while now - prev < segment_interval:
                 time.sleep(max(0.0, segment_interval - (now - prev)))
                 now = time.monotonic()
-            offsets = self.get_kafka_offsets()
+            offsets = self.get_kafka_offsets(alive=False)
             measurements.append((
                 offsets["input"],
                 offsets["output"],
