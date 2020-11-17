@@ -1403,10 +1403,11 @@ class PipelineHandle:
             return None
         return merge_ctype(res, ctype)
 
-    def get_kafka_offsets(self) -> KafkaOffsets:
+    def get_kafka_offsets(self, alive: bool) -> KafkaOffsets:
         return cast(KafkaOffsets, self._client._request_json(
             METHOD_GET, "/kafka_offsets", {
                 "pipeline": self._pipe_id,
+                "alive": int(alive),
             }))
 
     def get_kafka_throughput(
@@ -1415,7 +1416,7 @@ class PipelineHandle:
             segments: int = 5) -> KafkaThroughput:
         assert segments > 0
         assert segment_interval > 0.0
-        offsets = self.get_kafka_offsets()
+        offsets = self.get_kafka_offsets(alive=False)
         now = time.monotonic()
         measurements: List[Tuple[int, int, int, float]] = [(
             offsets["input"],
