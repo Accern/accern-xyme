@@ -65,8 +65,12 @@ from accern_xyme.types import (
     JobInfo,
     JobList,
     JSONBlobResponse,
+    KafkaGroup,
     KafkaMessage,
+    KafkaOffsets,
+    KafkaThroughput,
     KafkaTopics,
+    ListNamedSecretKeys,
     MaintenanceResponse,
     MinimalQueueStatsResponse,
     ModelParamsResponse,
@@ -90,6 +94,7 @@ from accern_xyme.types import (
     QueueStatsResponse,
     QueueStatus,
     ReadNode,
+    SetNamedSecret,
     TaskStatus,
     Timing,
     TimingResult,
@@ -738,6 +743,10 @@ class XYMEClient:
                 "reset": int(reset),
             }))
 
+    def reset_cache(self) -> CacheStats:
+        return cast(CacheStats, self._request_json(
+            METHOD_POST, "/cache_reset", {}))
+
     def create_kafka_error_topic(self) -> KafkaTopics:
         return cast(KafkaTopics, self._request_json(
             METHOD_POST, "/kafka_topics", {
@@ -753,6 +762,17 @@ class XYMEClient:
     def read_kafka_errors(self) -> List[str]:
         return cast(List[str], self._request_json(
             METHOD_GET, "/kafka_msg", {}))
+
+    def get_named_secret_keys(self) -> List[str]:
+        return cast(ListNamedSecretKeys, self._request_json(
+            METHOD_GET, "/named_secrets", {}))["keys"]
+
+    def set_named_secret(self, key: str, value: str) -> bool:
+        return cast(SetNamedSecret, self._request_json(
+            METHOD_PUT, "/named_secrets", {
+                "key": key,
+                "value": value,
+            }))["replaced"]
 
 
 # *** XYMEClient ***
@@ -1382,6 +1402,103 @@ class PipelineHandle:
         if not res or ctype is None:
             return None
         return merge_ctype(res, ctype)
+
+    def get_kafka_offsets(self, alive: bool) -> KafkaOffsets:
+        return cast(KafkaOffsets, self._client._request_json(
+            METHOD_GET, "/kafka_offsets", {
+                "pipeline": self._pipe_id,
+                "alive": int(alive),
+            }))
+
+    def get_kafka_throughput(
+            self,
+            segment_interval: float = 120.0,
+            segments: int = 5) -> KafkaThroughput:
+        assert segments > 0
+        assert segment_interval > 0.0
+        offsets = self.get_kafka_offsets(alive=False)
+        now = time.monotonic()
+        measurements: List[Tuple[int, int, int, float]] = [(
+            offsets["input"],
+            offsets["output"],
+            offsets["error"],
+            now,
+        )]
+        for _ in range(segments):
+            prev = now
+            while now - prev < segment_interval:
+                time.sleep(max(0.0, segment_interval - (now - prev)))
+                now = time.monotonic()
+            offsets = self.get_kafka_offsets(alive=False)
+            measurements.append((
+                offsets["input"],
+                offsets["output"],
+                offsets["error"],
+                now,
+            ))
+        first = measurements[0]
+        last = measurements[-1]
+        total_input = last[0] - first[0]
+        total_output = last[1] - first[1]
+        errors = last[2] - first[2]
+        total = last[3] - first[3]
+        input_segments: List[float] = []
+        output_segments: List[float] = []
+        cur_input = first[0]
+        cur_output = first[1]
+        cur_time = first[3]
+        for (next_input, next_output, _, next_time) in measurements[1:]:
+            seg_time = next_time - cur_time
+            input_segments.append((next_input - cur_input) / seg_time)
+            output_segments.append((next_output - cur_output) / seg_time)
+            cur_input = next_input
+            cur_output = next_output
+            cur_time = next_time
+        inputs = pd.Series(input_segments)
+        outputs = pd.Series(output_segments)
+        return {
+            "pipeline": self._pipe_id,
+            "input": {
+                "throughput": total_input / total,
+                "max": inputs.max(),
+                "min": inputs.min(),
+                "stddev": inputs.std(),
+                "segments": segments,
+                "count": total_input,
+                "total": total,
+            },
+            "output": {
+                "throughput": total_output / total,
+                "max": outputs.max(),
+                "min": outputs.min(),
+                "stddev": outputs.std(),
+                "segments": segments,
+                "count": total_output,
+                "total": total,
+            },
+            "faster": "both" if total_input == total_output else (
+                "input" if total_input > total_output else "output"),
+            "errors": errors,
+        }
+
+    def get_kafka_group(self) -> KafkaGroup:
+        return cast(KafkaGroup, self._client._request_json(
+            METHOD_GET, "/kafka_group", {
+                "pipeline": self._pipe_id,
+            }))
+
+    def set_kafka_group(
+            self,
+            group_id: Optional[str] = None,
+            reset: Optional[str] = None,
+            **kwargs: Any) -> KafkaGroup:
+        return cast(KafkaGroup, self._client._request_json(
+            METHOD_PUT, "/kafka_group", {
+                "pipeline": self._pipe_id,
+                "group_id": group_id,
+                "reset": reset,
+                **kwargs,
+            }))
 
     def __hash__(self) -> int:
         return hash(self._pipe_id)

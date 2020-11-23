@@ -218,12 +218,44 @@ FlushAllQueuesResponse = TypedDict('FlushAllQueuesResponse', {
 WorkerScale = TypedDict('WorkerScale', {
     "success": bool,
 })
+SetNamedSecret = TypedDict('SetNamedSecret', {
+    "replaced": bool,
+})
+ListNamedSecretKeys = TypedDict('ListNamedSecretKeys', {
+    "keys": List[str],
+})
 KafkaTopics = TypedDict('KafkaTopics', {
     "topics": Dict[str, Optional[str]],
     "create": bool,
 })
 KafkaMessage = TypedDict('KafkaMessage', {
     "messages": Dict[str, str],
+})
+KafkaOffsets = TypedDict('KafkaOffsets', {
+    "error": int,
+    "input": int,
+    "output": int,
+})
+KafkaGroup = TypedDict('KafkaGroup', {
+    "group": str,
+    "pipeline": str,
+    "reset": Optional[str],
+})
+ThroughputDict = TypedDict('ThroughputDict', {
+    "throughput": float,
+    "max": float,
+    "min": float,
+    "stddev": float,
+    "segments": int,
+    "count": int,
+    "total": float,
+})
+KafkaThroughput = TypedDict('KafkaThroughput', {
+    "pipeline": str,
+    "input": ThroughputDict,
+    "output": ThroughputDict,
+    "faster": Literal["input", "output", "both"],
+    "errors": int,
 })
 PutNodeBlob = TypedDict('PutNodeBlob', {
     "key": str,
