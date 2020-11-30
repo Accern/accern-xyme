@@ -38,6 +38,7 @@ from accern_xyme.util import (
     async_compute,
     ByteResponse,
     df_to_csv,
+    get_age,
     get_file_hash,
     get_file_upload_chunk_size,
     get_max_retry,
@@ -538,8 +539,20 @@ class XYMEClient:
             METHOD_GET, "/maintenance", {}))
 
     def get_pipelines(self) -> List[str]:
-        return cast(PipelineList, self._request_json(
-            METHOD_GET, "/pipelines", {}))["pipelines"]
+        return [res[0] for res in self.get_pipeline_times()[1]]
+
+    def get_pipeline_ages(self) -> List[Tuple[str, str, str]]:
+        cur_time, pipelines = self.get_pipeline_times()
+        return [
+            (pipe_id, get_age(cur_time, oldest), get_age(cur_time, latest))
+            for (pipe_id, oldest, latest) in pipelines
+        ]
+
+    def get_pipeline_times(
+            self) -> Tuple[float, List[Tuple[str, float, float]]]:
+        res = cast(PipelineList, self._request_json(
+            METHOD_GET, "/pipelines", {}))
+        return res["cur_time"], res["pipelines"]
 
     def get_pipeline(self, pipe_id: str) -> 'PipelineHandle':
         res = self._pipeline_cache.get(pipe_id)
@@ -1310,10 +1323,21 @@ class PipelineHandle:
             }))
 
     def get_visible_blobs(self) -> List[str]:
-        return cast(VisibleBlobs, self._client._request_json(
+        return [res[0] for res in self.get_visible_blob_times()[1]]
+
+    def get_visible_blob_ages(self) -> List[Tuple[str, str]]:
+        cur_time, visible = self.get_visible_blob_times()
+        return [
+            (blob_id, get_age(cur_time, blob_time))
+            for (blob_id, blob_time) in visible
+        ]
+
+    def get_visible_blob_times(self) -> Tuple[float, List[Tuple[str, float]]]:
+        res = cast(VisibleBlobs, self._client._request_json(
             METHOD_GET, "/visible_blobs", {
                 "pipeline": self.get_id(),
-            }))["visible"]
+            }))
+        return res["cur_time"], res["visible"]
 
     @overload
     def check_queue_stats(  # pylint: disable=no-self-use

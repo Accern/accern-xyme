@@ -94,10 +94,12 @@ NodeInfo = TypedDict('NodeInfo', {
     "config_error": Optional[str],
 })
 PipelineList = TypedDict('PipelineList', {
-    "pipelines": List[str],
+    "cur_time": float,
+    "pipelines": List[Tuple[str, float, float]],
 })
 VisibleBlobs = TypedDict('VisibleBlobs', {
-    "visible": List[str],
+    "cur_time": float,
+    "visible": List[Tuple[str, float]],
 })
 PipelineInfo = TypedDict('PipelineInfo', {
     "company": str,

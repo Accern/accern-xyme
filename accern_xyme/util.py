@@ -53,6 +53,32 @@ def is_verbose() -> bool:
     return VERBOSE
 
 
+MINUTE = 60.0
+HOUR = 60.0 * MINUTE
+DAY = 24.0 * HOUR
+WEEK = 7.0 * DAY
+YEAR = 365.0 * DAY
+
+
+def get_age(cur_time: float, other_time: float) -> str:
+    diff = cur_time - other_time
+    if diff < 0.0:
+        return "soon"
+    if diff < 1.0:
+        return "<1s"
+    if diff < MINUTE:
+        return "<1m"
+    if diff < HOUR:
+        return "<1h"
+    if diff < DAY:
+        return "<1d"
+    if diff < WEEK:
+        return f"{diff // DAY:.0f}d"
+    if diff < YEAR:
+        return f"{diff // WEEK:.0f}w"
+    return f"{diff // YEAR:.0f}y"
+
+
 def set_file_upload_chunk_size(size: int) -> None:
     global FILE_UPLOAD_CHUNK_SIZE
 
