@@ -539,19 +539,26 @@ class XYMEClient:
             METHOD_GET, "/maintenance", {}))
 
     def get_pipelines(self) -> List[str]:
-        return [res[0] for res in self.get_pipeline_times()[1]]
+        return [
+            res[0]
+            for res in self.get_pipeline_times(retrieve_times=False)[1]
+        ]
 
     def get_pipeline_ages(self) -> List[Tuple[str, str, str]]:
-        cur_time, pipelines = self.get_pipeline_times()
+        cur_time, pipelines = self.get_pipeline_times(retrieve_times=True)
         return [
             (pipe_id, get_age(cur_time, oldest), get_age(cur_time, latest))
             for (pipe_id, oldest, latest) in pipelines
         ]
 
     def get_pipeline_times(
-            self) -> Tuple[float, List[Tuple[str, float, float]]]:
+            self,
+            retrieve_times: bool) -> Tuple[
+                float, List[Tuple[str, float, float]]]:
         res = cast(PipelineList, self._request_json(
-            METHOD_GET, "/pipelines", {}))
+            METHOD_GET, "/pipelines", {
+                "retrieve_times": int(retrieve_times),
+            }))
         return res["cur_time"], res["pipelines"]
 
     def get_pipeline(self, pipe_id: str) -> 'PipelineHandle':
@@ -1323,19 +1330,25 @@ class PipelineHandle:
             }))
 
     def get_visible_blobs(self) -> List[str]:
-        return [res[0] for res in self.get_visible_blob_times()[1]]
+        return [
+            res[0]
+            for res in self.get_visible_blob_times(retrieve_times=False)[1]
+        ]
 
     def get_visible_blob_ages(self) -> List[Tuple[str, str]]:
-        cur_time, visible = self.get_visible_blob_times()
+        cur_time, visible = self.get_visible_blob_times(retrieve_times=True)
         return [
             (blob_id, get_age(cur_time, blob_time))
             for (blob_id, blob_time) in visible
         ]
 
-    def get_visible_blob_times(self) -> Tuple[float, List[Tuple[str, float]]]:
+    def get_visible_blob_times(
+            self,
+            retrieve_times: bool) -> Tuple[float, List[Tuple[str, float]]]:
         res = cast(VisibleBlobs, self._client._request_json(
             METHOD_GET, "/visible_blobs", {
                 "pipeline": self.get_id(),
+                "retrieve_times": int(retrieve_times),
             }))
         return res["cur_time"], res["visible"]
 
