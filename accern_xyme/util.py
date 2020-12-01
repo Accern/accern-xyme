@@ -64,14 +64,16 @@ def get_age(cur_time: float, other_time: float) -> str:
     diff = cur_time - other_time
     if diff < 0.0:
         return "soon"
+    if diff < 0.1:
+        return "now"
     if diff < 1.0:
         return "<1s"
     if diff < MINUTE:
         return "<1m"
     if diff < HOUR:
-        return "<1h"
+        return f"{diff // MINUTE:.0f}m"
     if diff < DAY:
-        return "<1d"
+        return f"{diff // HOUR:.0f}h"
     if diff < WEEK:
         return f"{diff // DAY:.0f}d"
     if diff < YEAR:
