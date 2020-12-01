@@ -779,9 +779,11 @@ class XYMEClient:
                 "num_partitions": 0,
             }))
 
-    def read_kafka_errors(self) -> List[str]:
+    def read_kafka_errors(self, offset: str = "current") -> List[str]:
         return cast(List[str], self._request_json(
-            METHOD_GET, "/kafka_msg", {}))
+            METHOD_GET, "/kafka_msg", {
+                "offset": offset,
+            }))
 
     def get_named_secret_keys(self) -> List[str]:
         return cast(ListNamedSecretKeys, self._request_json(
@@ -1410,13 +1412,18 @@ class PipelineHandle:
         return [msgs[key] for key in names]
 
     def read_kafka_output(
-            self, max_rows: int = 100) -> Optional[ByteResponse]:
+            self,
+            offset: str = "current",
+            max_rows: int = 100) -> Optional[ByteResponse]:
+        offset_str = [offset]
 
         def read_single() -> Tuple[ByteResponse, str]:
             cur, read_ctype = self._client.request_bytes(
                 METHOD_GET, "/kafka_msg", {
                     "pipeline": self.get_id(),
+                    "offset": offset_str[0],
                 })
+            offset_str[0] = "current"
             return interpret_ctype(cur, read_ctype), read_ctype
 
         if max_rows <= 1:
