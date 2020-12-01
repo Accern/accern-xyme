@@ -7,6 +7,7 @@ from typing import (
     Iterable,
     List,
     Optional,
+    Tuple,
     TypeVar,
     Union,
 )
@@ -60,7 +61,9 @@ WEEK = 7.0 * DAY
 YEAR = 365.0 * DAY
 
 
-def get_age(cur_time: float, other_time: float) -> str:
+def get_age(cur_time: float, other_time: Optional[float]) -> str:
+    if other_time is None:
+        return "never"
     diff = cur_time - other_time
     if diff < 0.0:
         return "soon"
@@ -79,6 +82,12 @@ def get_age(cur_time: float, other_time: float) -> str:
     if diff < YEAR:
         return f"{diff // WEEK:.0f}w"
     return f"{diff // YEAR:.0f}y"
+
+
+def safe_opt_num(num: Optional[float]) -> Tuple[bool, float]:
+    if num is None:
+        return (False, 0.0)
+    return (True, num)
 
 
 def set_file_upload_chunk_size(size: int) -> None:

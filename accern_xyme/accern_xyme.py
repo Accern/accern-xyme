@@ -46,6 +46,7 @@ from accern_xyme.util import (
     get_retry_sleep,
     interpret_ctype,
     merge_ctype,
+    safe_opt_num,
     ServerSideError,
 )
 from accern_xyme.types import (
@@ -548,13 +549,14 @@ class XYMEClient:
         cur_time, pipelines = self.get_pipeline_times(retrieve_times=True)
         return [
             (pipe_id, get_age(cur_time, oldest), get_age(cur_time, latest))
-            for (pipe_id, oldest, latest) in pipelines
+            for (pipe_id, oldest, latest) in sorted(pipelines, key=lambda el: (
+                safe_opt_num(el[1]), safe_opt_num(el[2]), el[0]))
         ]
 
     def get_pipeline_times(
             self,
             retrieve_times: bool) -> Tuple[
-                float, List[Tuple[str, float, float]]]:
+                float, List[Tuple[str, Optional[float], Optional[float]]]]:
         res = cast(PipelineList, self._request_json(
             METHOD_GET, "/pipelines", {
                 "retrieve_times": int(retrieve_times),
@@ -1341,12 +1343,12 @@ class PipelineHandle:
         cur_time, visible = self.get_visible_blob_times(retrieve_times=True)
         return [
             (blob_id, get_age(cur_time, blob_time))
-            for (blob_id, blob_time) in visible
+            for (blob_id, blob_time) in sorted(visible, key=lambda el: (
+                safe_opt_num(el[1]), el[0]))
         ]
 
-    def get_visible_blob_times(
-            self,
-            retrieve_times: bool) -> Tuple[float, List[Tuple[str, float]]]:
+    def get_visible_blob_times(self, retrieve_times: bool) -> Tuple[
+            float, List[Tuple[str, Optional[float]]]]:
         res = cast(VisibleBlobs, self._client._request_json(
             METHOD_GET, "/visible_blobs", {
                 "pipeline": self.get_id(),

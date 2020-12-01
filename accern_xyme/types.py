@@ -95,11 +95,11 @@ NodeInfo = TypedDict('NodeInfo', {
 })
 PipelineList = TypedDict('PipelineList', {
     "cur_time": float,
-    "pipelines": List[Tuple[str, float, float]],
+    "pipelines": List[Tuple[str, Optional[float], Optional[float]]],
 })
 VisibleBlobs = TypedDict('VisibleBlobs', {
     "cur_time": float,
-    "visible": List[Tuple[str, float]],
+    "visible": List[Tuple[str, Optional[float]]],
 })
 PipelineInfo = TypedDict('PipelineInfo', {
     "company": str,
