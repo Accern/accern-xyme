@@ -630,7 +630,8 @@ class XYMEClient:
                     f"Warning while setting pipeline {pipe_id}:\n")
             for warn in warnings:
                 warnings_io.write(f"{warn}\n")
-            warnings_io.flush()
+            if warnings:
+                warnings_io.flush()
         return self.get_pipeline(pipe_id)
 
     def update_settings(
@@ -1326,12 +1327,45 @@ class PipelineHandle:
 
         return "\n".join(draw())
 
-    def get_def(self, full: bool = True) -> PipelineDef:
-        return cast(PipelineDef, self._client._request_json(
+    def get_def(
+            self,
+            full: bool = True,
+            warnings_io: Optional[IO[Any]] = sys.stderr) -> PipelineDef:
+        res = cast(PipelineDef, self._client._request_json(
             METHOD_GET, "/pipeline_def", {
                 "pipeline": self.get_id(),
                 "full": 1 if full else 0,
             }))
+        # look for warnings
+
+        def s3_warnings(
+                kind: str,
+                settings: Dict[str, Dict[str, Any]],
+                warnings: List[str]) -> None:
+            s3_settings = settings.get(kind, {})
+            for (key, s3_setting) in s3_settings.items():
+                warnings.extend((
+                    f"{kind}:{key}: {warn}"
+                    for warn in s3_setting.get("warnings", [])
+                ))
+
+        if warnings_io is not None:
+            settings = res.get("settings", {})
+            warnings: List[str] = []
+            s3_warnings("s3", settings, warnings)
+            s3_warnings("triton", settings, warnings)
+            if len(warnings) > 1:
+                warnings_io.write(
+                    f"{len(warnings)} warnings while "
+                    f"reconstructing settings:\n")
+            elif len(warnings) == 1:
+                warnings_io.write(
+                    "Warning while reconstructing settings:\n")
+            for warn in warnings:
+                warnings_io.write(f"{warn}\n")
+            if warnings:
+                warnings_io.flush()
+        return res
 
     def get_visible_blobs(self) -> List[str]:
         return [

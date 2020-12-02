@@ -1,5 +1,5 @@
 # pylint: disable=invalid-name
-from typing import Any, Optional, List, Dict, Tuple
+from typing import Any, Optional, List, Dict, Tuple, Union
 from typing_extensions import TypedDict, Literal
 
 
@@ -134,12 +134,16 @@ NodeDef = TypedDict('NodeDef', {
     "params": Dict[str, Any],
 }, total=False)
 PipelineDef = TypedDict('PipelineDef', {
+    "id": str,
     "name": str,
     "company": str,
-    "nodes": List[NodeDef],
+    "nodes": List[Union[NodeDef, str]],
     "state": str,
+    "settings": Dict[str, Dict[str, Any]],
     "high_priority": bool,
     "queue_mng": Optional[str],
+    "default_input_key": Optional[str],
+    "default_output_key": Optional[str],
 }, total=False)
 Timing = TypedDict('Timing', {
     "name": str,
