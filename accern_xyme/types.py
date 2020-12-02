@@ -1,5 +1,5 @@
 # pylint: disable=invalid-name
-from typing import Any, Optional, List, Dict, Tuple, Union
+from typing import Any, Optional, List, Dict, Tuple
 from typing_extensions import TypedDict, Literal
 
 
@@ -137,7 +137,7 @@ PipelineDef = TypedDict('PipelineDef', {
     "id": str,
     "name": str,
     "company": str,
-    "nodes": List[Union[NodeDef, str]],
+    "nodes": List[NodeDef],
     "state": str,
     "settings": Dict[str, Dict[str, Any]],
     "high_priority": bool,
