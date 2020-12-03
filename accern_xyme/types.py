@@ -94,10 +94,12 @@ NodeInfo = TypedDict('NodeInfo', {
     "config_error": Optional[str],
 })
 PipelineList = TypedDict('PipelineList', {
-    "pipelines": List[str],
+    "cur_time": float,
+    "pipelines": List[Tuple[str, Optional[float], Optional[float]]],
 })
 VisibleBlobs = TypedDict('VisibleBlobs', {
-    "visible": List[str],
+    "cur_time": float,
+    "visible": List[Tuple[str, Optional[float]]],
 })
 PipelineInfo = TypedDict('PipelineInfo', {
     "company": str,
@@ -132,12 +134,16 @@ NodeDef = TypedDict('NodeDef', {
     "params": Dict[str, Any],
 }, total=False)
 PipelineDef = TypedDict('PipelineDef', {
+    "id": str,
     "name": str,
     "company": str,
     "nodes": List[NodeDef],
     "state": str,
+    "settings": Dict[str, Dict[str, Any]],
     "high_priority": bool,
     "queue_mng": Optional[str],
+    "default_input_key": Optional[str],
+    "default_output_key": Optional[str],
 }, total=False)
 Timing = TypedDict('Timing', {
     "name": str,

@@ -38,6 +38,7 @@ from accern_xyme.util import (
     async_compute,
     ByteResponse,
     df_to_csv,
+    get_age,
     get_file_hash,
     get_file_upload_chunk_size,
     get_max_retry,
@@ -45,6 +46,7 @@ from accern_xyme.util import (
     get_retry_sleep,
     interpret_ctype,
     merge_ctype,
+    safe_opt_num,
     ServerSideError,
 )
 from accern_xyme.types import (
@@ -538,8 +540,28 @@ class XYMEClient:
             METHOD_GET, "/maintenance", {}))
 
     def get_pipelines(self) -> List[str]:
-        return cast(PipelineList, self._request_json(
-            METHOD_GET, "/pipelines", {}))["pipelines"]
+        return [
+            res[0]
+            for res in self.get_pipeline_times(retrieve_times=False)[1]
+        ]
+
+    def get_pipeline_ages(self) -> List[Tuple[str, str, str]]:
+        cur_time, pipelines = self.get_pipeline_times(retrieve_times=True)
+        return [
+            (pipe_id, get_age(cur_time, oldest), get_age(cur_time, latest))
+            for (pipe_id, oldest, latest) in sorted(pipelines, key=lambda el: (
+                safe_opt_num(el[1]), safe_opt_num(el[2]), el[0]))
+        ]
+
+    def get_pipeline_times(
+            self,
+            retrieve_times: bool) -> Tuple[
+                float, List[Tuple[str, Optional[float], Optional[float]]]]:
+        res = cast(PipelineList, self._request_json(
+            METHOD_GET, "/pipelines", {
+                "retrieve_times": int(retrieve_times),
+            }))
+        return res["cur_time"], res["pipelines"]
 
     def get_pipeline(self, pipe_id: str) -> 'PipelineHandle':
         res = self._pipeline_cache.get(pipe_id)
@@ -608,7 +630,8 @@ class XYMEClient:
                     f"Warning while setting pipeline {pipe_id}:\n")
             for warn in warnings:
                 warnings_io.write(f"{warn}\n")
-            warnings_io.flush()
+            if warnings:
+                warnings_io.flush()
         return self.get_pipeline(pipe_id)
 
     def update_settings(
@@ -759,9 +782,11 @@ class XYMEClient:
                 "num_partitions": 0,
             }))
 
-    def read_kafka_errors(self) -> List[str]:
+    def read_kafka_errors(self, offset: str = "current") -> List[str]:
         return cast(List[str], self._request_json(
-            METHOD_GET, "/kafka_msg", {}))
+            METHOD_GET, "/kafka_msg", {
+                "offset": offset,
+            }))
 
     def get_named_secret_keys(self) -> List[str]:
         return cast(ListNamedSecretKeys, self._request_json(
@@ -1302,18 +1327,68 @@ class PipelineHandle:
 
         return "\n".join(draw())
 
-    def get_def(self, full: bool = True) -> PipelineDef:
-        return cast(PipelineDef, self._client._request_json(
+    def get_def(
+            self,
+            full: bool = True,
+            warnings_io: Optional[IO[Any]] = sys.stderr) -> PipelineDef:
+        res = cast(PipelineDef, self._client._request_json(
             METHOD_GET, "/pipeline_def", {
                 "pipeline": self.get_id(),
                 "full": 1 if full else 0,
             }))
+        # look for warnings
+
+        def s3_warnings(
+                kind: str,
+                settings: Dict[str, Dict[str, Any]],
+                warnings: List[str]) -> None:
+            s3_settings = settings.get(kind, {})
+            for (key, s3_setting) in s3_settings.items():
+                warnings.extend((
+                    f"{kind}:{key}: {warn}"
+                    for warn in s3_setting.get("warnings", [])
+                ))
+
+        if warnings_io is not None:
+            settings = res.get("settings", {})
+            warnings: List[str] = []
+            s3_warnings("s3", settings, warnings)
+            s3_warnings("triton", settings, warnings)
+            if len(warnings) > 1:
+                warnings_io.write(
+                    f"{len(warnings)} warnings while "
+                    f"reconstructing settings:\n")
+            elif len(warnings) == 1:
+                warnings_io.write(
+                    "Warning while reconstructing settings:\n")
+            for warn in warnings:
+                warnings_io.write(f"{warn}\n")
+            if warnings:
+                warnings_io.flush()
+        return res
 
     def get_visible_blobs(self) -> List[str]:
-        return cast(VisibleBlobs, self._client._request_json(
+        return [
+            res[0]
+            for res in self.get_visible_blob_times(retrieve_times=False)[1]
+        ]
+
+    def get_visible_blob_ages(self) -> List[Tuple[str, str]]:
+        cur_time, visible = self.get_visible_blob_times(retrieve_times=True)
+        return [
+            (blob_id, get_age(cur_time, blob_time))
+            for (blob_id, blob_time) in sorted(visible, key=lambda el: (
+                safe_opt_num(el[1]), el[0]))
+        ]
+
+    def get_visible_blob_times(self, retrieve_times: bool) -> Tuple[
+            float, List[Tuple[str, Optional[float]]]]:
+        res = cast(VisibleBlobs, self._client._request_json(
             METHOD_GET, "/visible_blobs", {
                 "pipeline": self.get_id(),
-            }))["visible"]
+                "retrieve_times": int(retrieve_times),
+            }))
+        return res["cur_time"], res["visible"]
 
     @overload
     def check_queue_stats(  # pylint: disable=no-self-use
@@ -1373,13 +1448,18 @@ class PipelineHandle:
         return [msgs[key] for key in names]
 
     def read_kafka_output(
-            self, max_rows: int = 100) -> Optional[ByteResponse]:
+            self,
+            offset: str = "current",
+            max_rows: int = 100) -> Optional[ByteResponse]:
+        offset_str = [offset]
 
         def read_single() -> Tuple[ByteResponse, str]:
             cur, read_ctype = self._client.request_bytes(
                 METHOD_GET, "/kafka_msg", {
                     "pipeline": self.get_id(),
+                    "offset": offset_str[0],
                 })
+            offset_str[0] = "current"
             return interpret_ctype(cur, read_ctype), read_ctype
 
         if max_rows <= 1:
