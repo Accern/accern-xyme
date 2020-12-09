@@ -1367,6 +1367,14 @@ class PipelineHandle:
                 warnings_io.flush()
         return res
 
+    def set_atr(self, atr, value):
+        try:
+            pipe_def = self.get_def()
+            pipe_def[atr] = value
+            self = xyme.set_pipeline(self.get_id(), pipe_def)
+        except:
+            print("Error: '" + atr + "' is not present in pipeline")
+
     def get_visible_blobs(self) -> List[str]:
         return [
             res[0]
