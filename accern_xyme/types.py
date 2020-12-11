@@ -312,3 +312,6 @@ CacheStats = TypedDict('CacheStats', {
 QueueMode = TypedDict('QueueMode', {
     "mode": str,
 })
+ModelVersionResponse = TypedDict('ModelVersionResponse', {
+    "version": str,
+})
