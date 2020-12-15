@@ -76,6 +76,7 @@ from accern_xyme.types import (
     MaintenanceResponse,
     MinimalQueueStatsResponse,
     ModelParamsResponse,
+    ModelReleaseResponse,
     ModelSetupResponse,
     NodeChunk,
     NodeDef,
@@ -2126,6 +2127,14 @@ class BlobHandle:
                 pipeline=self._pipeline)
             for blob_uri in resp["files"]
         ]
+
+    def convert_model(self) -> ModelReleaseResponse:
+        return cast(ModelReleaseResponse, self._client._request_json(
+            METHOD_POST, "/convert_model", {
+                "blob": self._uri,
+                "pipeline": self.get_pipeline().get_id(),
+            }
+        ))
 
     def __hash__(self) -> int:
         return hash(self.as_str())
