@@ -1221,6 +1221,16 @@ class PipelineHandle:
             NodeHandle,
             List[Tuple[NodeHandle, str, str]],
         ] = collections.defaultdict(list)
+        start_pipe = "┰" if allow_unicode else "|"
+        end_pipe = "╂" if allow_unicode else "|"
+        pipe = "┃"
+        corner_right = "┓" if allow_unicode else "\\"
+        corner_left = "┛" if allow_unicode else "/"
+        begin = "┝" if allow_unicode else "-"
+        end = "┿" if allow_unicode else "-"
+        bar = "━" if allow_unicode else "-"
+        space = " "
+        indent = space * 2
 
         def topo(cur: NodeHandle) -> None:
             if cur in already:
@@ -1257,10 +1267,11 @@ class PipelineHandle:
                 in_node, in_key, cur_gap = edge
                 before_gap = cur_gap
                 if in_node == node:
-                    cur_str = f"| {in_key} ({get_in_state(in_node, in_key)}) "
+                    in_state = get_in_state(in_node, in_key)
+                    cur_str = f"{end_pipe} {in_key} ({in_state}) "
                     new_edges.append((None, in_key, cur_gap))
                 else:
-                    cur_str = "|" if in_node is not None else ""
+                    cur_str = pipe if in_node is not None else ""
                     cur_gap += gap
                     gap = 0
                     new_edges.append((in_node, in_key, cur_gap))
@@ -1282,16 +1293,17 @@ class PipelineHandle:
             prev_gap = 0
             for edge in cur_edges:
                 cur_node, _, cur_gap = edge
-                cur_str = "|" if cur_node is not None else ""
-                segs.append(f"{' ' * prev_gap}{cur_str}")
+                cur_str = pipe if cur_node is not None else ""
+                segs.append(f"{space * prev_gap}{cur_str}")
                 new_edges.append(edge)
                 prev_gap = max(0, cur_gap - len(cur_str))
             sout = sorted(
                 outs[node], key=lambda e: order_lookup[e[0]], reverse=True)
             for (in_node, in_key, out_key) in sout:
-                cur_str = f"| {out_key} "
-                end_str = f"| {in_key} ({get_in_state(in_node, in_key)}) "
-                segs.append(f"{' ' * prev_gap}{cur_str}")
+                cur_str = f"{start_pipe} {out_key} "
+                in_state = get_in_state(in_node, in_key)
+                end_str = f"{end_pipe} {in_key} ({in_state}) "
+                segs.append(f"{space * prev_gap}{cur_str}")
                 cur_gap = max(len(cur_str), len(end_str))
                 new_edges.append((in_node, in_key, cur_gap))
                 prev_gap = max(0, cur_gap - len(cur_str))
@@ -1310,20 +1322,26 @@ class PipelineHandle:
                 edges, in_line = draw_in_edges(node, edges)
                 in_line = in_line.rstrip()
                 if in_line:
-                    lines.append(f"  {in_line}")
+                    lines.append(f"{indent}{in_line}")
                 edges, out_line = draw_out_edges(node, edges)
                 total_gap_bottom = max(
                     0, sum((edge[2] for edge in edges[:-1])) - len(node_line))
-                connector = "\\" if total_gap_bottom > total_gap_top else "/"
+                if total_gap_bottom > total_gap_top:
+                    connector = corner_right
+                    init = begin
+                else:
+                    connector = corner_left
+                    init = end
                 if total_gap_bottom == total_gap_top:
-                    connector = "|"
+                    connector = pipe
                 total_gap = max(total_gap_bottom, total_gap_top)
                 if total_gap > 0:
-                    node_line = f"{node_line}{'-' * total_gap}--{connector}"
+                    bar_len = total_gap + 1
+                    node_line = f"{node_line}{init}{bar * bar_len}{connector}"
                 lines.append(node_line.rstrip())
                 out_line = out_line.rstrip()
                 if out_line:
-                    lines.append(f"  {out_line}")
+                    lines.append(f"{indent}{out_line}")
             return lines
 
         return "\n".join(draw())
