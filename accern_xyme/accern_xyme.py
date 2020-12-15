@@ -1302,7 +1302,7 @@ class PipelineHandle:
             for node in order:
                 node_line = \
                     f"{node.get_short_status(allow_unicode)} " \
-                    f"{node.get_type()}[{node.get_id()}] " \
+                    f"{node.get_type()}[{node.get_name()}] " \
                     f"{node.get_highest_chunk()} "
                 total_gap_top = max(
                     0, sum((edge[2] for edge in edges[:-1])) - len(node_line))
