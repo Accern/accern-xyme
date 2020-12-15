@@ -1367,10 +1367,14 @@ class PipelineHandle:
                 warnings_io.flush()
         return res
 
-    def set_attr(self, atr, value):
+    def set_attr(
+            self, 
+            attr: str = True,
+            value: Any):
         pipe_def = self.get_def()
-        pipe_def[atr] = value
-        self = xyme.set_pipeline(self.get_id(), pipe_def)
+        pipe_def[attr] = value
+        self = self._client.set_pipeline(self.get_id(), pipe_def)
+        return None
 
     def get_visible_blobs(self) -> List[str]:
         return [
