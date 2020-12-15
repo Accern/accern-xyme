@@ -1221,13 +1221,15 @@ class PipelineHandle:
             NodeHandle,
             List[Tuple[NodeHandle, str, str]],
         ] = collections.defaultdict(list)
-        start_pipe = "┰" if allow_unicode else "|"
-        end_pipe = "╂" if allow_unicode else "|"
-        pipe = "┃"
+        start_pipe = "┠" if allow_unicode else "|"
+        end_pipe = "┠" if allow_unicode else "|"
+        before_pipe = "╿" if allow_unicode else "|"
+        after_pipe = "╽" if allow_unicode else "|"
+        pipe = "┃" if allow_unicode else "|"
         corner_right = "┓" if allow_unicode else "\\"
         corner_left = "┛" if allow_unicode else "/"
         begin = "┝" if allow_unicode else "-"
-        end = "┿" if allow_unicode else "-"
+        end = "╺" if allow_unicode else "-"
         bar = "━" if allow_unicode else "-"
         space = " "
         indent = space * 2
@@ -1271,7 +1273,7 @@ class PipelineHandle:
                     cur_str = f"{end_pipe} {in_key} ({in_state}) "
                     new_edges.append((None, in_key, cur_gap))
                 else:
-                    cur_str = pipe if in_node is not None else ""
+                    cur_str = before_pipe if in_node is not None else ""
                     cur_gap += gap
                     gap = 0
                     new_edges.append((in_node, in_key, cur_gap))
@@ -1293,7 +1295,7 @@ class PipelineHandle:
             prev_gap = 0
             for edge in cur_edges:
                 cur_node, _, cur_gap = edge
-                cur_str = pipe if cur_node is not None else ""
+                cur_str = after_pipe if cur_node is not None else ""
                 segs.append(f"{space * prev_gap}{cur_str}")
                 new_edges.append(edge)
                 prev_gap = max(0, cur_gap - len(cur_str))
