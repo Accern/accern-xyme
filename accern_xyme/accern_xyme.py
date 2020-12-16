@@ -1221,15 +1221,17 @@ class PipelineHandle:
             NodeHandle,
             List[Tuple[NodeHandle, str, str]],
         ] = collections.defaultdict(list)
-        start_pipe = "┠" if allow_unicode else "|"
-        end_pipe = "┠" if allow_unicode else "|"
-        before_pipe = "╿" if allow_unicode else "|"
-        after_pipe = "╽" if allow_unicode else "|"
-        pipe = "┃" if allow_unicode else "|"
+        start_pipe = "┞" if allow_unicode else "|"
+        end_pipe = "┟" if allow_unicode else "|"
+        before_pipe = "│" if allow_unicode else "|"
+        after_pipe = "│" if allow_unicode else "|"
+        pipe = "┫" if allow_unicode else "|"
         corner_right = "┓" if allow_unicode else "\\"
         corner_left = "┛" if allow_unicode else "/"
-        begin = "┝" if allow_unicode else "-"
-        end = "╺" if allow_unicode else "-"
+        cont_right = "┳" if allow_unicode else "\\"
+        cont_left = "┻" if allow_unicode else "/"
+        cont_skip = "━" if allow_unicode else "-"
+        cont = "╋" if allow_unicode else "-"
         bar = "━" if allow_unicode else "-"
         space = " "
         indent = space * 2
@@ -1319,27 +1321,49 @@ class PipelineHandle:
                     f"{node.get_short_status(allow_unicode)} " \
                     f"{node.get_type()}[{node.get_name()}] " \
                     f"{node.get_highest_chunk()} "
-                total_gap_top = max(
-                    0, sum((edge[2] for edge in edges[:-1])) - len(node_line))
+                top_gaps = [edge[2] for edge in edges[:-1]]
+                total_gap_top = sum(top_gaps) - len(node_line)
+                same_ids = [edge[0] == node for edge in edges]
                 edges, in_line = draw_in_edges(node, edges)
                 in_line = in_line.rstrip()
                 if in_line:
                     lines.append(f"{indent}{in_line}")
                 edges, out_line = draw_out_edges(node, edges)
-                total_gap_bottom = max(
-                    0, sum((edge[2] for edge in edges[:-1])) - len(node_line))
+                bottom_gaps = [edge[2] for edge in edges[:-1]]
+                total_gap_bottom = sum(bottom_gaps) - len(node_line)
                 if total_gap_bottom > total_gap_top:
                     connector = corner_right
-                    init = begin
+                    more_gaps = bottom_gaps
                 else:
                     connector = corner_left
-                    init = end
+                    more_gaps = top_gaps
                 if total_gap_bottom == total_gap_top:
                     connector = pipe
+                    more_gaps = bottom_gaps
                 total_gap = max(total_gap_bottom, total_gap_top)
-                if total_gap > 0:
-                    bar_len = total_gap + 1
-                    node_line = f"{node_line}{init}{bar * bar_len}{connector}"
+                prefix_len = 2
+                if total_gap >= -prefix_len:
+                    bar_len = total_gap + prefix_len
+                    full_bar = list(bar * bar_len)
+                    bar_ix = prefix_len - len(node_line)
+                    for (before_gap_ix, bar_gap) in enumerate(more_gaps):
+                        bar_ix += bar_gap
+                        if bar_ix < 0:
+                            continue
+                        if bar_ix >= len(full_bar):
+                            break
+                        gap_ix = before_gap_ix + 1
+                        if gap_ix < len(same_ids) and not same_ids[gap_ix]:
+                            mid_connector = cont_skip
+                        else:
+                            mid_connector = cont
+                        adj_ix = bar_ix - prefix_len
+                        if total_gap_bottom >= adj_ix > total_gap_top:
+                            mid_connector = cont_right
+                        elif total_gap_bottom < adj_ix <= total_gap_top:
+                            mid_connector = cont_left
+                        full_bar[bar_ix] = mid_connector
+                    node_line = f"{node_line}{''.join(full_bar)}{connector}"
                 lines.append(node_line.rstrip())
                 out_line = out_line.rstrip()
                 if out_line:
