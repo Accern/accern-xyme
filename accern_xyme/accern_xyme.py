@@ -1221,18 +1221,18 @@ class PipelineHandle:
             NodeHandle,
             List[Tuple[NodeHandle, str, str]],
         ] = collections.defaultdict(list)
-        start_pipe = "┞" if allow_unicode else "|"
-        end_pipe = "┟" if allow_unicode else "|"
+        start_pipe = "├" if allow_unicode else "|"
+        end_pipe = "├" if allow_unicode else "|"
         before_pipe = "│" if allow_unicode else "|"
         after_pipe = "│" if allow_unicode else "|"
-        pipe = "┫" if allow_unicode else "|"
-        corner_right = "┓" if allow_unicode else "\\"
-        corner_left = "┛" if allow_unicode else "/"
-        cont_right = "┳" if allow_unicode else "\\"
-        cont_left = "┻" if allow_unicode else "/"
-        cont_skip = "━" if allow_unicode else "-"
-        cont = "╋" if allow_unicode else "-"
-        bar = "━" if allow_unicode else "-"
+        pipe = "┤" if allow_unicode else "|"
+        corner_right = "┐" if allow_unicode else "\\"
+        corner_left = "┘" if allow_unicode else "/"
+        cont_right = "┬" if allow_unicode else "\\"
+        cont_left = "┴" if allow_unicode else "/"
+        cont_skip = "─" if allow_unicode else "-"
+        cont = "┼" if allow_unicode else "-"
+        bar = "─" if allow_unicode else "-"
         space = " "
         indent = space * 2
 
