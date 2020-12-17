@@ -126,6 +126,10 @@ PipelineCreate = TypedDict('PipelineCreate', {
     "nodes": List[str],
     "warnings": List[str],
 })
+PipelineReload = TypedDict('PipelineReload', {
+    "pipeline": str,
+    "when": float,
+})
 NodeDef = TypedDict('NodeDef', {
     "id": str,
     "kind": str,

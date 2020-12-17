@@ -92,6 +92,7 @@ from accern_xyme.types import (
     PipelineInfo,
     PipelineInit,
     PipelineList,
+    PipelineReload,
     PutNodeBlob,
     QueueMode,
     QueueStatsResponse,
@@ -1464,6 +1465,13 @@ class PipelineHandle:
                 "replicas": replicas,
                 "task": None,
             }))["success"]
+
+    def reload(self, timestamp: Optional[float] = None) -> float:
+        return cast(PipelineReload, self._client._request_json(
+            METHOD_PUT, "/pipeline_reload", {
+                "pipeline": self.get_id(),
+                "timestamp": timestamp,
+            }))["when"]
 
     def set_kafka_topic_partitions(self, num_partitions: int) -> KafkaTopics:
         return cast(KafkaTopics, self._client._request_json(
