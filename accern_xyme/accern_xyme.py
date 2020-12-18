@@ -1413,6 +1413,29 @@ class PipelineHandle:
                 warnings_io.flush()
         return res
 
+    def set_attr(
+            self,
+            attr: str,
+            value: Any) -> None:
+        pipe_def = self.get_def()
+        pipe_def[attr] = value  # type: ignore
+        self._client.set_pipeline(self.get_id(), pipe_def)
+
+    def set_name(self, value: str) -> None:
+        self.set_attr("name", value)
+
+    def set_company(self, value: str) -> None:
+        self.set_attr("company", value)
+
+    def set_state(self, value: str) -> None:
+        self.set_attr("state", value)
+
+    def set_high_priority(self, value: bool) -> None:
+        self.set_attr("high_priority", value)
+
+    def set_queue_mng(self, value: Optional[str]) -> None:
+        self.set_attr("queue_mng", value)
+
     def get_visible_blobs(self) -> List[str]:
         return [
             res[0]
