@@ -1374,7 +1374,7 @@ class PipelineHandle:
         # unless we do a type ignore, mypy will complain about
         # accessing `pipe_def` with the variable `attr`
         pipe_def = self.get_def()
-        pipe_def[attr] = value # type: ignore
+        pipe_def[attr] = value       # type: ignore
         self = self._client.set_pipeline(self.get_id(), pipe_def)
 
     def set_name(
