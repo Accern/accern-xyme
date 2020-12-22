@@ -1294,7 +1294,7 @@ class PipelineHandle:
                     cur_gap += gap
                     gap = 0
                     new_edges.append((in_node, in_key, cur_gap))
-                segs.append(f"{' ' * prev_gap}{cur_str}")
+                segs.append(f"{space * prev_gap}{cur_str}")
                 prev_gap = max(0, before_gap - len(cur_str))
             while new_edges:
                 if new_edges[-1][0] is None:
@@ -1388,7 +1388,7 @@ class PipelineHandle:
                         f"{node.get_name()}({node.get_type()}) " \
                         f"{node.get_highest_chunk()}"
                 if len(mid) < prefix_len:
-                    mid = f"{mid}{' ' * (prefix_len - len(mid))}"
+                    mid = f"{mid}{space * (prefix_len - len(mid))}"
                 content = f"{vend if started else vsec}{mid}{vsec}"
                 node_line = f"{''.join(line_indents)}{content}"
                 top_indents: List[str] = []
