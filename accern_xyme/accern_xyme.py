@@ -1211,7 +1211,8 @@ class PipelineHandle:
             if success:
                 self.set_dynamic_error_message(None)
 
-    def pretty(self, allow_unicode: bool = True) -> str:
+    def pretty(
+            self, nodes_only: bool = False, allow_unicode: bool = True) -> str:
         nodes = [
             self.get_node(node_id)
             for node_id in sorted(self.get_nodes())
@@ -1236,8 +1237,19 @@ class PipelineHandle:
         cont = "┼" if allow_unicode else "-"
         start_left = "└" if allow_unicode else "\\"
         bar = "─" if allow_unicode else "-"
+        vsec = "│" if allow_unicode else "|"
+        vstart = "├" if allow_unicode else "|"
+        vend = "┤" if allow_unicode else "|"
+        hsec = "─" if allow_unicode else "-"
+        tl = "┌" if allow_unicode else "+"
+        tr = "┐" if allow_unicode else "+"
+        bl = "└" if allow_unicode else "+"
+        br = "┘" if allow_unicode else "+"
+        conn_top = "┴" if allow_unicode else "-"
+        conn_bottom = "┬" if allow_unicode else "-"
         space = " "
-        indent = space * 3
+        prefix_len = 3
+        indent = space * prefix_len
 
         def topo(cur: NodeHandle) -> None:
             if cur in already:
@@ -1321,6 +1333,7 @@ class PipelineHandle:
             edges: List[Tuple[Optional[NodeHandle], str, int]] = []
             for node in order:
                 top_gaps = [edge[2] for edge in edges[:-1]]
+                top_nodes = [edge[0] for edge in edges]
                 same_ids = [edge[0] == node for edge in edges]
                 empty_top = [edge[0] is None for edge in edges]
                 edges, in_line = draw_in_edges(node, edges)
@@ -1330,9 +1343,15 @@ class PipelineHandle:
                 edges, out_line = draw_out_edges(node, edges)
                 bottom_gaps = [edge[2] for edge in edges[:-1]]
                 empty_bottom = [edge[0] is None for edge in edges]
+                new_bottom = [
+                    eix >= len(top_nodes) or (
+                        edge[0] is not None and top_nodes[eix] != edge[0]
+                    ) for (eix, edge) in enumerate(edges)
+                ]
                 line_indents: List[str] = []
                 started = False
                 had_same = False
+                highest_iix = -1
                 for (iix, top_gap) in enumerate(top_gaps):
                     if same_ids[iix]:
                         had_same = True
@@ -1347,40 +1366,97 @@ class PipelineHandle:
                             cur_connect = cont_left
                         else:
                             cur_connect = start_left
-                        started = True
                         if len(bottom_gaps) < len(top_gaps):
                             break
+                        started = True
                     else:
                         if started:
                             cur_connect = cont_skip
                         else:
                             cur_connect = cont_pipe
                     cur_line = cont_skip if started else space
-                    gap_size = top_gap - len(cont_pipe)
+                    gap_size = top_gap - len(cur_connect)
                     line_indents.append(f"{cur_connect}{cur_line * gap_size}")
+                    highest_iix = iix
                 if line_indents:
                     line_indents[-1] = line_indents[-1][:-len(indent)]
-                node_line = \
-                    f"{''.join(line_indents)}" \
-                    f"[{node.get_short_status(allow_unicode)} " \
-                    f"{node.get_name()}({node.get_type()}) " \
-                    f"{node.get_highest_chunk()}] "
+                if nodes_only:
+                    mid = f" {node.get_short_status(allow_unicode)} "
+                else:
+                    mid = \
+                        f"{node.get_short_status(allow_unicode)} " \
+                        f"{node.get_name()}({node.get_type()}) " \
+                        f"{node.get_highest_chunk()}"
+                if len(mid) < prefix_len:
+                    mid = f"{mid}{' ' * (prefix_len - len(mid))}"
+                content = f"{vend if started else vsec}{mid}{vsec}"
+                node_line = f"{''.join(line_indents)}{content}"
+                top_indents: List[str] = []
+                bottom_indents: List[str] = []
+                for iix in range(highest_iix + 1):
+                    top_connect = space if empty_top[iix] else cont_pipe
+                    has_bottom = iix >= len(empty_bottom) or empty_bottom[iix]
+                    bottom_connect = space if has_bottom else cont_pipe
+                    top_gap_size = top_gaps[iix] - len(top_connect)
+                    bottom_gap_size = top_gaps[iix] - len(bottom_connect)
+                    if not top_indents:
+                        top_indents.append(indent)
+                    top_indents.append(f"{top_connect}{space * top_gap_size}")
+                    if not bottom_indents:
+                        bottom_indents.append(indent)
+                    bottom_indents.append(
+                        f"{bottom_connect}{space * bottom_gap_size}")
+                if top_indents:
+                    top_indents[-1] = top_indents[-1][:-len(indent)]
+                if bottom_indents:
+                    bottom_indents[-1] = bottom_indents[-1][:-len(indent)]
+                border_len = len(content) - len(tl) - len(tr)
+                top_border: List[str] = [tl] + [hsec] * border_len + [tr]
+                top_ix = len(indent)
+                for iix in range(highest_iix + 1, len(same_ids)):
+                    if top_ix >= len(top_border):
+                        break
+                    if same_ids[iix]:
+                        top_border[top_ix] = conn_top
+                    if iix >= len(top_gaps):
+                        break
+                    top_ix += top_gaps[iix]
+                bottom_border: List[str] = [bl] + [hsec] * border_len + [br]
+                bottom_ix = len(indent)
+                for iix in range(highest_iix + 1, len(new_bottom)):
+                    if bottom_ix >= len(bottom_border):
+                        break
+                    if new_bottom[iix]:
+                        bottom_border[bottom_ix] = conn_bottom
+                    if iix >= len(bottom_gaps):
+                        break
+                    bottom_ix += bottom_gaps[iix]
+                node_top = f"{''.join(top_indents)}{''.join(top_border)}"
+                node_bottom = \
+                    f"{''.join(bottom_indents)}{''.join(bottom_border)}"
                 total_gap_top = sum(top_gaps) - len(node_line)
                 total_gap_bottom = sum(bottom_gaps) - len(node_line)
                 if total_gap_bottom > total_gap_top:
                     connector = corner_right
                     more_gaps = bottom_gaps
+                    top_conn = space
+                    bottom_conn = cont_pipe
                 else:
                     connector = corner_left
                     more_gaps = top_gaps
+                    top_conn = cont_pipe
+                    bottom_conn = space
                 if total_gap_bottom == total_gap_top:
                     connector = pipe
                     more_gaps = bottom_gaps
+                    top_conn = cont_pipe
+                    bottom_conn = cont_pipe
                 total_gap = max(total_gap_bottom, total_gap_top)
-                prefix_len = 2
                 if total_gap >= -prefix_len:
                     bar_len = total_gap + prefix_len
                     full_bar = list(bar * bar_len)
+                    full_top = list(space * bar_len)
+                    full_bottom = list(space * bar_len)
                     bar_ix = prefix_len - len(node_line)
                     for (before_gap_ix, bar_gap) in enumerate(more_gaps):
                         bar_ix += bar_gap
@@ -1391,16 +1467,34 @@ class PipelineHandle:
                         gap_ix = before_gap_ix + 1
                         if gap_ix < len(same_ids) and not same_ids[gap_ix]:
                             mid_connector = cont_skip
+                            mid_top = cont_pipe
+                            mid_bottom = cont_pipe
                         else:
                             mid_connector = cont
+                            mid_top = cont_pipe
+                            mid_bottom = cont_pipe
                         adj_ix = bar_ix - prefix_len
                         if total_gap_bottom >= adj_ix > total_gap_top:
                             mid_connector = cont_right
+                            mid_top = space
                         elif total_gap_bottom < adj_ix <= total_gap_top:
-                            mid_connector = cont_left
+                            if not empty_top[gap_ix]:
+                                mid_connector = cont_left
+                            else:
+                                mid_top = space
+                            mid_bottom = space
                         full_bar[bar_ix] = mid_connector
-                    node_line = f"{node_line}{''.join(full_bar)}{connector}"
-                lines.append(node_line.rstrip())
+                        full_top[bar_ix] = mid_top
+                        full_bottom[bar_ix] = mid_bottom
+                    node_line = \
+                        f"{node_line[:-len(vsec)]}{vstart}" \
+                        f"{''.join(full_bar)}{connector}"
+                    node_top = f"{node_top}{''.join(full_top)}{top_conn}"
+                    node_bottom = \
+                        f"{node_bottom}{''.join(full_bottom)}{bottom_conn}"
+                lines.append(node_top.rstrip())
+                lines.append(node_line)
+                lines.append(node_bottom.rstrip())
                 out_line = out_line.rstrip()
                 if out_line:
                     lines.append(f"{indent}{out_line}")
