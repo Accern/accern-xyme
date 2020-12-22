@@ -1248,7 +1248,7 @@ class PipelineHandle:
         conn_top = "┴" if allow_unicode else "-"
         conn_bottom = "┬" if allow_unicode else "-"
         space = " "
-        prefix_len = 3
+        prefix_len = 2 if nodes_only else 3
         indent = space * prefix_len
 
         def topo(cur: NodeHandle) -> None:
