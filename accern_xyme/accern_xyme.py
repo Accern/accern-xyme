@@ -1451,7 +1451,8 @@ class NodeHandle:
                 self._client,
                 value,
                 is_full=False,
-                pipeline=self.get_pipeline())
+                pipeline=self.get_pipeline(),
+                node=self.get_node())
             for (key, value) in node_info["blobs"].items()
         }
         self._inputs = node_info["inputs"]
@@ -1460,6 +1461,9 @@ class NodeHandle:
 
     def get_pipeline(self) -> PipelineHandle:
         return self._pipeline
+
+    def get_node(self) -> 'NodeHandle':
+        return self
 
     def get_id(self) -> str:
         return self._node_id
@@ -1576,7 +1580,8 @@ class NodeHandle:
             self._client,
             uri,
             is_full=True,
-            pipeline=self.get_pipeline())
+            pipeline=self.get_pipeline(),
+            node=self.get_node())
 
     def read(
             self,
@@ -1643,6 +1648,7 @@ class NodeHandle:
         return CSVBlobHandle(
             self._client,
             self.get_pipeline(),
+            self.get_node(),
             res["csv"],
             res["count"],
             res["pos"],
@@ -1660,6 +1666,7 @@ class NodeHandle:
         return JSONBlobHandle(
             self._client,
             self.get_pipeline(),
+            self.get_node(),
             res["json"],
             res["count"])
 
@@ -1798,11 +1805,14 @@ class BlobHandle:
             client: XYMEClient,
             uri: str,
             is_full: bool,
-            pipeline: PipelineHandle) -> None:
+            pipeline: PipelineHandle,
+            node: NodeHandle) -> None:
         self._client = client
         self._uri = uri
         self._is_full = is_full
         self._pipeline = pipeline
+        self._node = node
+
         self._ctype: Optional[str] = None
 
     def is_full(self) -> bool:
@@ -1816,6 +1826,9 @@ class BlobHandle:
 
     def get_pipeline(self) -> PipelineHandle:
         return self._pipeline
+
+    def get_node(self) -> NodeHandle:
+        return self._node
 
     def get_ctype(self) -> Optional[str]:
         return self._ctype
@@ -1839,13 +1852,15 @@ class BlobHandle:
             METHOD_GET, "/blob_files", {
                 "blob": self._uri,
                 "pipeline": self.get_pipeline().get_id(),
+                "node": self.get_node().get_id(),
             })
         return [
             BlobHandle(
                 self._client,
                 blob_uri,
                 is_full=True,
-                pipeline=self._pipeline)
+                pipeline=self._pipeline,
+                node=self._node)
             for blob_uri in resp["files"]
         ]
 
@@ -1890,7 +1905,11 @@ class BlobHandle:
                 "to_uri": to_uri,
             }))
         return BlobHandle(
-            self._client, res["new_uri"], is_full=False, pipeline=pipe)
+            self._client,
+            res["new_uri"],
+            is_full=False,
+            pipeline=pipe,
+            node=self.get_node())
 
     def download_zip(self, to_path: Optional[str]) -> Optional[io.BytesIO]:
         if self.is_full():
@@ -1926,7 +1945,8 @@ class BlobHandle:
                 self._client,
                 blob_uri,
                 is_full=True,
-                pipeline=self._pipeline)
+                pipeline=self._pipeline,
+                node=self._node)
             for blob_uri in resp["files"]
         ]
 
@@ -1955,13 +1975,16 @@ class CSVBlobHandle(BlobHandle):
             self,
             client: XYMEClient,
             pipe: PipelineHandle,
+            node: NodeHandle,
             uri: str,
             count: int,
             pos: int,
             has_tmp: bool) -> None:
-        super().__init__(client, uri, is_full=False, pipeline=pipe)
+        super().__init__(
+            client, uri, is_full=False, pipeline=pipe, node=node)
         self._client = client
         self._pipe = pipe
+        self._node = node
         self._uri = uri
         self._count = count
         self._pos = pos
@@ -1988,6 +2011,7 @@ class CSVBlobHandle(BlobHandle):
             "blob": self.get_uri(),
             "action": action,
             "pipeline": self.get_pipeline().get_id(),
+            "node": self.get_node().get_id(),
         }
         args.update(additional)
         if fobj is not None:
@@ -2084,11 +2108,14 @@ class JSONBlobHandle(BlobHandle):
             self,
             client: XYMEClient,
             pipe: PipelineHandle,
+            node: NodeHandle,
             uri: str,
             count: int) -> None:
-        super().__init__(client, uri, is_full=False, pipeline=pipe)
+        super().__init__(
+            client, uri, is_full=False, pipeline=pipe, node=node)
         self._client = client
         self._pipe = pipe
+        self._node = node
         self._uri = uri
         self._count = count
 
@@ -2102,6 +2129,7 @@ class JSONBlobHandle(BlobHandle):
         res = self._client._request_json(
             METHOD_PUT, "/json_append", {
                 "pipeline": self.get_pipeline().get_id(),
+                "node": self.get_node().get_id(),
                 "blob": self.get_uri(),
                 "jsons": jsons,
             })
