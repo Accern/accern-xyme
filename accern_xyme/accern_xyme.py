@@ -2014,7 +2014,7 @@ class NodeHandle:
         warning_io = sys.stderr
         warning_io.write(
             "Warning: After calling 'reset' function, all data, and models "
-            f"related to node: {self.get_id()} on the server will be lost.\n"
+            f"related to node: {self.get_id()} on the server will be lost."
         )
         warning_io.flush()
         return cast(NodeState, self._client._request_json(
