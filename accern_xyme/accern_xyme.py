@@ -2010,13 +2010,7 @@ class NodeHandle:
             return None
         return merge_ctype(res, ctype)
 
-    def reset(self) -> NodeState:
-        warning_io = sys.stderr
-        warning_io.write(
-            "Warning: After calling 'reset' function, all data, and models "
-            f"related to node: {self.get_id()} on the server will be lost."
-        )
-        warning_io.flush()
+    def remove(self) -> NodeState:
         return cast(NodeState, self._client._request_json(
             METHOD_PUT, "/node_state", {
                 "pipeline": self.get_pipeline().get_id(),
