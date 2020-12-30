@@ -1452,7 +1452,7 @@ class NodeHandle:
                 value,
                 is_full=False,
                 pipeline=self.get_pipeline(),
-                node=self.get_node())
+                node=self)
             for (key, value) in node_info["blobs"].items()
         }
         self._inputs = node_info["inputs"]
@@ -1461,9 +1461,6 @@ class NodeHandle:
 
     def get_pipeline(self) -> PipelineHandle:
         return self._pipeline
-
-    def get_node(self) -> 'NodeHandle':
-        return self
 
     def get_id(self) -> str:
         return self._node_id
@@ -1581,7 +1578,7 @@ class NodeHandle:
             uri,
             is_full=True,
             pipeline=self.get_pipeline(),
-            node=self.get_node())
+            node=self)
 
     def read(
             self,
@@ -1648,7 +1645,7 @@ class NodeHandle:
         return CSVBlobHandle(
             self._client,
             self.get_pipeline(),
-            self.get_node(),
+            self,
             res["csv"],
             res["count"],
             res["pos"],
@@ -1666,7 +1663,7 @@ class NodeHandle:
         return JSONBlobHandle(
             self._client,
             self.get_pipeline(),
-            self.get_node(),
+            self,
             res["json"],
             res["count"])
 
