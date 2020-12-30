@@ -1,9 +1,10 @@
-from typing import List, Set
+from typing import Any, List, Set, Optional, IO
+import sys
 import uuid
 from typing_extensions import Literal
 
 from accern_xyme.accern_xyme import PipelineHandle, NodeHandle
-from accern_xyme.types import PipelineDef, NodeDef
+from accern_xyme.types import NodeDef
 
 
 ColType = Literal[  # pylint: disable=invalid-name
@@ -154,7 +155,10 @@ class DataPipeline:
         self._nodes.add(node)
         self._dirty = True
 
-    def update_def(self, force: bool) -> None:
+    def update_def(
+            self,
+            force: bool,
+            warnings_io: Optional[IO[Any]] = sys.stderr) -> None:
         if not force and not self._dirty:
             return
         pipe = self.get_pipeline()
@@ -163,14 +167,8 @@ class DataPipeline:
             for node in sorted(self._nodes)
             for node_def in node.as_node_def()
         ]
-        pipe_def: PipelineDef = {
-            "name": pipe.get_name(),
-            "company": pipe.get_company(),
-            "nodes": node_defs,
-            "state": pipe.get_state_type(),
-            "high_priority": pipe.is_high_priority(),
-            "queue_mng": pipe.get_queue_mng(),
-        }
+        pipe_def = pipe.get_def(full=True, warnings_io=warnings_io)
+        pipe_def["nodes"] = node_defs
         pipe.set_pipeline(pipe_def)
         self._dirty = False
 

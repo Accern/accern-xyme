@@ -7,6 +7,7 @@ from typing import (
     Iterable,
     List,
     Optional,
+    Tuple,
     TypeVar,
     Union,
 )
@@ -51,6 +52,42 @@ def set_verbose() -> None:
 
 def is_verbose() -> bool:
     return VERBOSE
+
+
+MINUTE = 60.0
+HOUR = 60.0 * MINUTE
+DAY = 24.0 * HOUR
+WEEK = 7.0 * DAY
+YEAR = 365.0 * DAY
+
+
+def get_age(cur_time: float, other_time: Optional[float]) -> str:
+    if other_time is None:
+        return "never"
+    diff = cur_time - other_time
+    if diff < 0.0:
+        return "soon"
+    if diff < 0.1:
+        return "now"
+    if diff < 1.0:
+        return "<1s"
+    if diff < MINUTE:
+        return "<1m"
+    if diff < HOUR:
+        return f"{diff // MINUTE:.0f}m"
+    if diff < DAY:
+        return f"{diff // HOUR:.0f}h"
+    if diff < WEEK:
+        return f"{diff // DAY:.0f}d"
+    if diff < YEAR:
+        return f"{diff // WEEK:.0f}w"
+    return f"{diff // YEAR:.0f}y"
+
+
+def safe_opt_num(num: Optional[float]) -> Tuple[bool, float]:
+    if num is None:
+        return (False, 0.0)
+    return (True, num)
 
 
 def set_file_upload_chunk_size(size: int) -> None:

@@ -94,10 +94,12 @@ NodeInfo = TypedDict('NodeInfo', {
     "config_error": Optional[str],
 })
 PipelineList = TypedDict('PipelineList', {
-    "pipelines": List[str],
+    "cur_time": float,
+    "pipelines": List[Tuple[str, Optional[float], Optional[float]]],
 })
 VisibleBlobs = TypedDict('VisibleBlobs', {
-    "visible": List[str],
+    "cur_time": float,
+    "visible": List[Tuple[str, Optional[float]]],
 })
 PipelineInfo = TypedDict('PipelineInfo', {
     "company": str,
@@ -124,6 +126,10 @@ PipelineCreate = TypedDict('PipelineCreate', {
     "nodes": List[str],
     "warnings": List[str],
 })
+PipelineReload = TypedDict('PipelineReload', {
+    "pipeline": str,
+    "when": float,
+})
 NodeDef = TypedDict('NodeDef', {
     "id": str,
     "kind": str,
@@ -132,12 +138,16 @@ NodeDef = TypedDict('NodeDef', {
     "params": Dict[str, Any],
 }, total=False)
 PipelineDef = TypedDict('PipelineDef', {
+    "id": str,
     "name": str,
     "company": str,
     "nodes": List[NodeDef],
     "state": str,
+    "settings": Dict[str, Dict[str, Any]],
     "high_priority": bool,
     "queue_mng": Optional[str],
+    "default_input_key": Optional[str],
+    "default_output_key": Optional[str],
 }, total=False)
 Timing = TypedDict('Timing', {
     "name": str,
@@ -218,12 +228,44 @@ FlushAllQueuesResponse = TypedDict('FlushAllQueuesResponse', {
 WorkerScale = TypedDict('WorkerScale', {
     "success": bool,
 })
+SetNamedSecret = TypedDict('SetNamedSecret', {
+    "replaced": bool,
+})
+ListNamedSecretKeys = TypedDict('ListNamedSecretKeys', {
+    "keys": List[str],
+})
 KafkaTopics = TypedDict('KafkaTopics', {
     "topics": Dict[str, Optional[str]],
     "create": bool,
 })
 KafkaMessage = TypedDict('KafkaMessage', {
     "messages": Dict[str, str],
+})
+KafkaOffsets = TypedDict('KafkaOffsets', {
+    "error": int,
+    "input": int,
+    "output": int,
+})
+KafkaGroup = TypedDict('KafkaGroup', {
+    "group": str,
+    "pipeline": str,
+    "reset": Optional[str],
+})
+ThroughputDict = TypedDict('ThroughputDict', {
+    "throughput": float,
+    "max": float,
+    "min": float,
+    "stddev": float,
+    "segments": int,
+    "count": int,
+    "total": float,
+})
+KafkaThroughput = TypedDict('KafkaThroughput', {
+    "pipeline": str,
+    "input": ThroughputDict,
+    "output": ThroughputDict,
+    "faster": Literal["input", "output", "both"],
+    "errors": int,
 })
 PutNodeBlob = TypedDict('PutNodeBlob', {
     "key": str,
@@ -273,4 +315,7 @@ CacheStats = TypedDict('CacheStats', {
 })
 QueueMode = TypedDict('QueueMode', {
     "mode": str,
+})
+ModelReleaseResponse = TypedDict('ModelReleaseResponse', {
+    "release": Optional[str],
 })

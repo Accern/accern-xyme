@@ -38,6 +38,7 @@ from accern_xyme.util import (
     async_compute,
     ByteResponse,
     df_to_csv,
+    get_age,
     get_file_hash,
     get_file_upload_chunk_size,
     get_max_retry,
@@ -45,6 +46,7 @@ from accern_xyme.util import (
     get_retry_sleep,
     interpret_ctype,
     merge_ctype,
+    safe_opt_num,
     ServerSideError,
 )
 from accern_xyme.types import (
@@ -65,11 +67,16 @@ from accern_xyme.types import (
     JobInfo,
     JobList,
     JSONBlobResponse,
+    KafkaGroup,
     KafkaMessage,
+    KafkaOffsets,
+    KafkaThroughput,
     KafkaTopics,
+    ListNamedSecretKeys,
     MaintenanceResponse,
     MinimalQueueStatsResponse,
     ModelParamsResponse,
+    ModelReleaseResponse,
     ModelSetupResponse,
     NodeChunk,
     NodeDef,
@@ -85,11 +92,13 @@ from accern_xyme.types import (
     PipelineInfo,
     PipelineInit,
     PipelineList,
+    PipelineReload,
     PutNodeBlob,
     QueueMode,
     QueueStatsResponse,
     QueueStatus,
     ReadNode,
+    SetNamedSecret,
     TaskStatus,
     Timing,
     TimingResult,
@@ -106,7 +115,7 @@ else:
     WVD = weakref.WeakValueDictionary
 
 
-__version__ = "0.1.10"
+__version__ = "0.1.13"
 # FIXME: async calls, documentation, auth, summary – time it took etc.
 
 
@@ -533,8 +542,28 @@ class XYMEClient:
             METHOD_GET, "/maintenance", {}))
 
     def get_pipelines(self) -> List[str]:
-        return cast(PipelineList, self._request_json(
-            METHOD_GET, "/pipelines", {}))["pipelines"]
+        return [
+            res[0]
+            for res in self.get_pipeline_times(retrieve_times=False)[1]
+        ]
+
+    def get_pipeline_ages(self) -> List[Tuple[str, str, str]]:
+        cur_time, pipelines = self.get_pipeline_times(retrieve_times=True)
+        return [
+            (pipe_id, get_age(cur_time, oldest), get_age(cur_time, latest))
+            for (pipe_id, oldest, latest) in sorted(pipelines, key=lambda el: (
+                safe_opt_num(el[1]), safe_opt_num(el[2]), el[0]))
+        ]
+
+    def get_pipeline_times(
+            self,
+            retrieve_times: bool) -> Tuple[
+                float, List[Tuple[str, Optional[float], Optional[float]]]]:
+        res = cast(PipelineList, self._request_json(
+            METHOD_GET, "/pipelines", {
+                "retrieve_times": int(retrieve_times),
+            }))
+        return res["cur_time"], res["pipelines"]
 
     def get_pipeline(self, pipe_id: str) -> 'PipelineHandle':
         res = self._pipeline_cache.get(pipe_id)
@@ -603,7 +632,8 @@ class XYMEClient:
                     f"Warning while setting pipeline {pipe_id}:\n")
             for warn in warnings:
                 warnings_io.write(f"{warn}\n")
-            warnings_io.flush()
+            if warnings:
+                warnings_io.flush()
         return self.get_pipeline(pipe_id)
 
     def update_settings(
@@ -738,6 +768,10 @@ class XYMEClient:
                 "reset": int(reset),
             }))
 
+    def reset_cache(self) -> CacheStats:
+        return cast(CacheStats, self._request_json(
+            METHOD_POST, "/cache_reset", {}))
+
     def create_kafka_error_topic(self) -> KafkaTopics:
         return cast(KafkaTopics, self._request_json(
             METHOD_POST, "/kafka_topics", {
@@ -750,9 +784,22 @@ class XYMEClient:
                 "num_partitions": 0,
             }))
 
-    def read_kafka_errors(self) -> List[str]:
+    def read_kafka_errors(self, offset: str = "current") -> List[str]:
         return cast(List[str], self._request_json(
-            METHOD_GET, "/kafka_msg", {}))
+            METHOD_GET, "/kafka_msg", {
+                "offset": offset,
+            }))
+
+    def get_named_secret_keys(self) -> List[str]:
+        return cast(ListNamedSecretKeys, self._request_json(
+            METHOD_GET, "/named_secrets", {}))["keys"]
+
+    def set_named_secret(self, key: str, value: str) -> bool:
+        return cast(SetNamedSecret, self._request_json(
+            METHOD_PUT, "/named_secrets", {
+                "key": key,
+                "value": value,
+            }))["replaced"]
 
 
 # *** XYMEClient ***
@@ -1164,7 +1211,8 @@ class PipelineHandle:
             if success:
                 self.set_dynamic_error_message(None)
 
-    def pretty(self, allow_unicode: bool = True) -> str:
+    def pretty(
+            self, nodes_only: bool = False, allow_unicode: bool = True) -> str:
         nodes = [
             self.get_node(node_id)
             for node_id in sorted(self.get_nodes())
@@ -1175,6 +1223,33 @@ class PipelineHandle:
             NodeHandle,
             List[Tuple[NodeHandle, str, str]],
         ] = collections.defaultdict(list)
+        start_pipe = "├" if allow_unicode else "|"
+        end_pipe = "├" if allow_unicode else "|"
+        before_pipe = "│" if allow_unicode else "|"
+        after_pipe = "│" if allow_unicode else "|"
+        pipe = "┤" if allow_unicode else "|"
+        corner_right = "┐" if allow_unicode else "\\"
+        corner_left = "┘" if allow_unicode else "/"
+        cont_right = "┬" if allow_unicode else "\\"
+        cont_left = "┴" if allow_unicode else "/"
+        cont_skip = "─" if allow_unicode else "-"
+        cont_pipe = "│" if allow_unicode else "|"
+        cont = "┼" if allow_unicode else "-"
+        start_left = "└" if allow_unicode else "\\"
+        bar = "─" if allow_unicode else "-"
+        vsec = "│" if allow_unicode else "|"
+        vstart = "├" if allow_unicode else "|"
+        vend = "┤" if allow_unicode else "|"
+        hsec = "─" if allow_unicode else "-"
+        tl = "┌" if allow_unicode else "+"
+        tr = "┐" if allow_unicode else "+"
+        bl = "└" if allow_unicode else "+"
+        br = "┘" if allow_unicode else "+"
+        conn_top = "┴" if allow_unicode else "-"
+        conn_bottom = "┬" if allow_unicode else "-"
+        space = " "
+        prefix_len = 2 if nodes_only else 3
+        indent = space * prefix_len
 
         def topo(cur: NodeHandle) -> None:
             if cur in already:
@@ -1211,14 +1286,15 @@ class PipelineHandle:
                 in_node, in_key, cur_gap = edge
                 before_gap = cur_gap
                 if in_node == node:
-                    cur_str = f"| {in_key} ({get_in_state(in_node, in_key)}) "
+                    in_state = get_in_state(in_node, in_key)
+                    cur_str = f"{end_pipe} {in_key} ({in_state}) "
                     new_edges.append((None, in_key, cur_gap))
                 else:
-                    cur_str = "|" if in_node is not None else ""
+                    cur_str = before_pipe if in_node is not None else ""
                     cur_gap += gap
                     gap = 0
                     new_edges.append((in_node, in_key, cur_gap))
-                segs.append(f"{' ' * prev_gap}{cur_str}")
+                segs.append(f"{space * prev_gap}{cur_str}")
                 prev_gap = max(0, before_gap - len(cur_str))
             while new_edges:
                 if new_edges[-1][0] is None:
@@ -1236,16 +1312,17 @@ class PipelineHandle:
             prev_gap = 0
             for edge in cur_edges:
                 cur_node, _, cur_gap = edge
-                cur_str = "|" if cur_node is not None else ""
-                segs.append(f"{' ' * prev_gap}{cur_str}")
+                cur_str = after_pipe if cur_node is not None else ""
+                segs.append(f"{space * prev_gap}{cur_str}")
                 new_edges.append(edge)
                 prev_gap = max(0, cur_gap - len(cur_str))
             sout = sorted(
                 outs[node], key=lambda e: order_lookup[e[0]], reverse=True)
             for (in_node, in_key, out_key) in sout:
-                cur_str = f"| {out_key} "
-                end_str = f"| {in_key} ({get_in_state(in_node, in_key)}) "
-                segs.append(f"{' ' * prev_gap}{cur_str}")
+                cur_str = f"{start_pipe} {out_key} "
+                in_state = get_in_state(in_node, in_key)
+                end_str = f"{end_pipe} {in_key} ({in_state}) "
+                segs.append(f"{space * prev_gap}{cur_str}")
                 cur_gap = max(len(cur_str), len(end_str))
                 new_edges.append((in_node, in_key, cur_gap))
                 prev_gap = max(0, cur_gap - len(cur_str))
@@ -1255,45 +1332,261 @@ class PipelineHandle:
             lines: List[str] = []
             edges: List[Tuple[Optional[NodeHandle], str, int]] = []
             for node in order:
-                node_line = \
-                    f"{node.get_short_status(allow_unicode)} " \
-                    f"{node.get_type()}[{node.get_id()}] " \
-                    f"{node.get_highest_chunk()} "
-                total_gap_top = max(
-                    0, sum((edge[2] for edge in edges[:-1])) - len(node_line))
+                top_gaps = [edge[2] for edge in edges[:-1]]
+                top_nodes = [edge[0] for edge in edges]
+                same_ids = [edge[0] == node for edge in edges]
+                empty_top = [edge[0] is None for edge in edges]
                 edges, in_line = draw_in_edges(node, edges)
                 in_line = in_line.rstrip()
                 if in_line:
-                    lines.append(f"  {in_line}")
+                    lines.append(f"{indent}{in_line}")
                 edges, out_line = draw_out_edges(node, edges)
-                total_gap_bottom = max(
-                    0, sum((edge[2] for edge in edges[:-1])) - len(node_line))
-                connector = "\\" if total_gap_bottom > total_gap_top else "/"
+                bottom_gaps = [edge[2] for edge in edges[:-1]]
+                empty_bottom = [edge[0] is None for edge in edges]
+                new_bottom = [
+                    eix >= len(top_nodes) or (
+                        edge[0] is not None and top_nodes[eix] != edge[0]
+                    ) for (eix, edge) in enumerate(edges)
+                ]
+                line_indents: List[str] = []
+                started = False
+                had_same = False
+                highest_iix = -1
+                for (iix, top_gap) in enumerate(top_gaps):
+                    if same_ids[iix]:
+                        had_same = True
+                    if had_same and iix >= len(bottom_gaps):
+                        break
+                    if not line_indents:
+                        line_indents.append(indent)
+                    if empty_top[iix]:
+                        cur_connect = cont_skip if started else space
+                    elif iix >= len(empty_bottom) or empty_bottom[iix]:
+                        if started:
+                            cur_connect = cont_left
+                        else:
+                            cur_connect = start_left
+                        if len(bottom_gaps) < len(top_gaps):
+                            break
+                        started = True
+                    else:
+                        if started:
+                            cur_connect = cont_skip
+                        else:
+                            cur_connect = cont_pipe
+                    cur_line = cont_skip if started else space
+                    gap_size = top_gap - len(cur_connect)
+                    line_indents.append(f"{cur_connect}{cur_line * gap_size}")
+                    highest_iix = iix
+                if line_indents:
+                    line_indents[-1] = line_indents[-1][:-len(indent)]
+                if nodes_only:
+                    mid = f" {node.get_short_status(allow_unicode)} "
+                else:
+                    mid = \
+                        f"{node.get_short_status(allow_unicode)} " \
+                        f"{node.get_name()}({node.get_type()}) " \
+                        f"{node.get_highest_chunk()}"
+                if len(mid) < prefix_len:
+                    mid = f"{mid}{space * (prefix_len - len(mid))}"
+                content = f"{vend if started else vsec}{mid}{vsec}"
+                node_line = f"{''.join(line_indents)}{content}"
+                top_indents: List[str] = []
+                bottom_indents: List[str] = []
+                for iix in range(highest_iix + 1):
+                    top_connect = space if empty_top[iix] else cont_pipe
+                    has_bottom = iix >= len(empty_bottom) or empty_bottom[iix]
+                    bottom_connect = space if has_bottom else cont_pipe
+                    top_gap_size = top_gaps[iix] - len(top_connect)
+                    bottom_gap_size = top_gaps[iix] - len(bottom_connect)
+                    if not top_indents:
+                        top_indents.append(indent)
+                    top_indents.append(f"{top_connect}{space * top_gap_size}")
+                    if not bottom_indents:
+                        bottom_indents.append(indent)
+                    bottom_indents.append(
+                        f"{bottom_connect}{space * bottom_gap_size}")
+                if top_indents:
+                    top_indents[-1] = top_indents[-1][:-len(indent)]
+                if bottom_indents:
+                    bottom_indents[-1] = bottom_indents[-1][:-len(indent)]
+                border_len = len(content) - len(tl) - len(tr)
+                top_border: List[str] = [tl] + [hsec] * border_len + [tr]
+                top_ix = len(indent)
+                for iix in range(highest_iix + 1, len(same_ids)):
+                    if top_ix >= len(top_border):
+                        break
+                    if same_ids[iix]:
+                        top_border[top_ix] = conn_top
+                    if iix >= len(top_gaps):
+                        break
+                    top_ix += top_gaps[iix]
+                bottom_border: List[str] = [bl] + [hsec] * border_len + [br]
+                bottom_ix = len(indent)
+                for iix in range(highest_iix + 1, len(new_bottom)):
+                    if bottom_ix >= len(bottom_border):
+                        break
+                    if new_bottom[iix]:
+                        bottom_border[bottom_ix] = conn_bottom
+                    if iix >= len(bottom_gaps):
+                        break
+                    bottom_ix += bottom_gaps[iix]
+                node_top = f"{''.join(top_indents)}{''.join(top_border)}"
+                node_bottom = \
+                    f"{''.join(bottom_indents)}{''.join(bottom_border)}"
+                total_gap_top = sum(top_gaps) - len(node_line)
+                total_gap_bottom = sum(bottom_gaps) - len(node_line)
+                if total_gap_bottom > total_gap_top:
+                    connector = corner_right
+                    more_gaps = bottom_gaps
+                    top_conn = space
+                    bottom_conn = cont_pipe
+                else:
+                    connector = corner_left
+                    more_gaps = top_gaps
+                    top_conn = cont_pipe
+                    bottom_conn = space
                 if total_gap_bottom == total_gap_top:
-                    connector = "|"
+                    connector = pipe
+                    more_gaps = bottom_gaps
+                    top_conn = cont_pipe
+                    bottom_conn = cont_pipe
                 total_gap = max(total_gap_bottom, total_gap_top)
-                if total_gap > 0:
-                    node_line = f"{node_line}{'-' * total_gap}--{connector}"
-                lines.append(node_line.rstrip())
+                if total_gap >= -prefix_len:
+                    bar_len = total_gap + prefix_len
+                    full_bar = list(bar * bar_len)
+                    full_top = list(space * bar_len)
+                    full_bottom = list(space * bar_len)
+                    bar_ix = prefix_len - len(node_line)
+                    for (before_gap_ix, bar_gap) in enumerate(more_gaps):
+                        bar_ix += bar_gap
+                        if bar_ix < 0:
+                            continue
+                        if bar_ix >= len(full_bar):
+                            break
+                        gap_ix = before_gap_ix + 1
+                        if gap_ix < len(same_ids) and not same_ids[gap_ix]:
+                            mid_connector = cont_skip
+                            mid_top = cont_pipe
+                            mid_bottom = cont_pipe
+                        else:
+                            mid_connector = cont
+                            mid_top = cont_pipe
+                            mid_bottom = cont_pipe
+                        adj_ix = bar_ix - prefix_len
+                        if total_gap_bottom >= adj_ix > total_gap_top:
+                            mid_connector = cont_right
+                            mid_top = space
+                        elif total_gap_bottom < adj_ix <= total_gap_top:
+                            if not empty_top[gap_ix]:
+                                mid_connector = cont_left
+                            else:
+                                mid_top = space
+                            mid_bottom = space
+                        full_bar[bar_ix] = mid_connector
+                        full_top[bar_ix] = mid_top
+                        full_bottom[bar_ix] = mid_bottom
+                    node_line = \
+                        f"{node_line[:-len(vsec)]}{vstart}" \
+                        f"{''.join(full_bar)}{connector}"
+                    node_top = f"{node_top}{''.join(full_top)}{top_conn}"
+                    node_bottom = \
+                        f"{node_bottom}{''.join(full_bottom)}{bottom_conn}"
+                lines.append(node_top.rstrip())
+                lines.append(node_line)
+                lines.append(node_bottom.rstrip())
                 out_line = out_line.rstrip()
                 if out_line:
-                    lines.append(f"  {out_line}")
+                    lines.append(f"{indent}{out_line}")
             return lines
 
         return "\n".join(draw())
 
-    def get_def(self, full: bool = True) -> PipelineDef:
-        return cast(PipelineDef, self._client._request_json(
+    def get_def(
+            self,
+            full: bool = True,
+            warnings_io: Optional[IO[Any]] = sys.stderr) -> PipelineDef:
+        res = cast(PipelineDef, self._client._request_json(
             METHOD_GET, "/pipeline_def", {
                 "pipeline": self.get_id(),
                 "full": 1 if full else 0,
             }))
+        # look for warnings
+
+        def s3_warnings(
+                kind: str,
+                settings: Dict[str, Dict[str, Any]],
+                warnings: List[str]) -> None:
+            s3_settings = settings.get(kind, {})
+            for (key, s3_setting) in s3_settings.items():
+                warnings.extend((
+                    f"{kind}:{key}: {warn}"
+                    for warn in s3_setting.get("warnings", [])
+                ))
+
+        if warnings_io is not None:
+            settings = res.get("settings", {})
+            warnings: List[str] = []
+            s3_warnings("s3", settings, warnings)
+            s3_warnings("triton", settings, warnings)
+            if len(warnings) > 1:
+                warnings_io.write(
+                    f"{len(warnings)} warnings while "
+                    f"reconstructing settings:\n")
+            elif len(warnings) == 1:
+                warnings_io.write(
+                    "Warning while reconstructing settings:\n")
+            for warn in warnings:
+                warnings_io.write(f"{warn}\n")
+            if warnings:
+                warnings_io.flush()
+        return res
+
+    def set_attr(
+            self,
+            attr: str,
+            value: Any) -> None:
+        pipe_def = self.get_def()
+        pipe_def[attr] = value  # type: ignore
+        self._client.set_pipeline(self.get_id(), pipe_def)
+
+    def set_name(self, value: str) -> None:
+        self.set_attr("name", value)
+
+    def set_company(self, value: str) -> None:
+        self.set_attr("company", value)
+
+    def set_state(self, value: str) -> None:
+        self.set_attr("state", value)
+
+    def set_high_priority(self, value: bool) -> None:
+        self.set_attr("high_priority", value)
+
+    def set_queue_mng(self, value: Optional[str]) -> None:
+        self.set_attr("queue_mng", value)
 
     def get_visible_blobs(self) -> List[str]:
-        return cast(VisibleBlobs, self._client._request_json(
+        return [
+            res[0]
+            for res in self.get_visible_blob_times(retrieve_times=False)[1]
+        ]
+
+    def get_visible_blob_ages(self) -> List[Tuple[str, str]]:
+        cur_time, visible = self.get_visible_blob_times(retrieve_times=True)
+        return [
+            (blob_id, get_age(cur_time, blob_time))
+            for (blob_id, blob_time) in sorted(visible, key=lambda el: (
+                safe_opt_num(el[1]), el[0]))
+        ]
+
+    def get_visible_blob_times(self, retrieve_times: bool) -> Tuple[
+            float, List[Tuple[str, Optional[float]]]]:
+        res = cast(VisibleBlobs, self._client._request_json(
             METHOD_GET, "/visible_blobs", {
                 "pipeline": self.get_id(),
-            }))["visible"]
+                "retrieve_times": int(retrieve_times),
+            }))
+        return res["cur_time"], res["visible"]
 
     @overload
     def check_queue_stats(  # pylint: disable=no-self-use
@@ -1325,6 +1618,13 @@ class PipelineHandle:
                 "task": None,
             }))["success"]
 
+    def reload(self, timestamp: Optional[float] = None) -> float:
+        return cast(PipelineReload, self._client._request_json(
+            METHOD_PUT, "/pipeline_reload", {
+                "pipeline": self.get_id(),
+                "timestamp": timestamp,
+            }))["when"]
+
     def set_kafka_topic_partitions(self, num_partitions: int) -> KafkaTopics:
         return cast(KafkaTopics, self._client._request_json(
             METHOD_POST, "/kafka_topics", {
@@ -1353,13 +1653,18 @@ class PipelineHandle:
         return [msgs[key] for key in names]
 
     def read_kafka_output(
-            self, max_rows: int = 100) -> Optional[ByteResponse]:
+            self,
+            offset: str = "current",
+            max_rows: int = 100) -> Optional[ByteResponse]:
+        offset_str = [offset]
 
         def read_single() -> Tuple[ByteResponse, str]:
             cur, read_ctype = self._client.request_bytes(
                 METHOD_GET, "/kafka_msg", {
                     "pipeline": self.get_id(),
+                    "offset": offset_str[0],
                 })
+            offset_str[0] = "current"
             return interpret_ctype(cur, read_ctype), read_ctype
 
         if max_rows <= 1:
@@ -1382,6 +1687,103 @@ class PipelineHandle:
         if not res or ctype is None:
             return None
         return merge_ctype(res, ctype)
+
+    def get_kafka_offsets(self, alive: bool) -> KafkaOffsets:
+        return cast(KafkaOffsets, self._client._request_json(
+            METHOD_GET, "/kafka_offsets", {
+                "pipeline": self._pipe_id,
+                "alive": int(alive),
+            }))
+
+    def get_kafka_throughput(
+            self,
+            segment_interval: float = 120.0,
+            segments: int = 5) -> KafkaThroughput:
+        assert segments > 0
+        assert segment_interval > 0.0
+        offsets = self.get_kafka_offsets(alive=False)
+        now = time.monotonic()
+        measurements: List[Tuple[int, int, int, float]] = [(
+            offsets["input"],
+            offsets["output"],
+            offsets["error"],
+            now,
+        )]
+        for _ in range(segments):
+            prev = now
+            while now - prev < segment_interval:
+                time.sleep(max(0.0, segment_interval - (now - prev)))
+                now = time.monotonic()
+            offsets = self.get_kafka_offsets(alive=False)
+            measurements.append((
+                offsets["input"],
+                offsets["output"],
+                offsets["error"],
+                now,
+            ))
+        first = measurements[0]
+        last = measurements[-1]
+        total_input = last[0] - first[0]
+        total_output = last[1] - first[1]
+        errors = last[2] - first[2]
+        total = last[3] - first[3]
+        input_segments: List[float] = []
+        output_segments: List[float] = []
+        cur_input = first[0]
+        cur_output = first[1]
+        cur_time = first[3]
+        for (next_input, next_output, _, next_time) in measurements[1:]:
+            seg_time = next_time - cur_time
+            input_segments.append((next_input - cur_input) / seg_time)
+            output_segments.append((next_output - cur_output) / seg_time)
+            cur_input = next_input
+            cur_output = next_output
+            cur_time = next_time
+        inputs = pd.Series(input_segments)
+        outputs = pd.Series(output_segments)
+        return {
+            "pipeline": self._pipe_id,
+            "input": {
+                "throughput": total_input / total,
+                "max": inputs.max(),
+                "min": inputs.min(),
+                "stddev": inputs.std(),
+                "segments": segments,
+                "count": total_input,
+                "total": total,
+            },
+            "output": {
+                "throughput": total_output / total,
+                "max": outputs.max(),
+                "min": outputs.min(),
+                "stddev": outputs.std(),
+                "segments": segments,
+                "count": total_output,
+                "total": total,
+            },
+            "faster": "both" if total_input == total_output else (
+                "input" if total_input > total_output else "output"),
+            "errors": errors,
+        }
+
+    def get_kafka_group(self) -> KafkaGroup:
+        return cast(KafkaGroup, self._client._request_json(
+            METHOD_GET, "/kafka_group", {
+                "pipeline": self._pipe_id,
+            }))
+
+    def set_kafka_group(
+            self,
+            group_id: Optional[str] = None,
+            reset: Optional[str] = None,
+            **kwargs: Any) -> KafkaGroup:
+        return cast(KafkaGroup, self._client._request_json(
+            METHOD_PUT, "/kafka_group", {
+                "pipeline": self._pipe_id,
+                "group_id": group_id,
+                "reset": reset,
+                **kwargs,
+            }))
 
     def __hash__(self) -> int:
         return hash(self._pipe_id)
@@ -1945,6 +2347,14 @@ class BlobHandle:
                 node=self._node)
             for blob_uri in resp["files"]
         ]
+
+    def convert_model(self) -> ModelReleaseResponse:
+        return cast(ModelReleaseResponse, self._client._request_json(
+            METHOD_POST, "/convert_model", {
+                "blob": self._uri,
+                "pipeline": self.get_pipeline().get_id(),
+            }
+        ))
 
     def __hash__(self) -> int:
         return hash(self.as_str())
