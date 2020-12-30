@@ -1809,7 +1809,6 @@ class BlobHandle:
         self._is_full = is_full
         self._pipeline = pipeline
         self._node = node
-
         self._ctype: Optional[str] = None
 
     def is_full(self) -> bool:
