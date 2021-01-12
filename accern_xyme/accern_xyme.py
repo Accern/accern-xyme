@@ -762,11 +762,9 @@ class XYMEClient:
         while do_flush():  # we flush until there is nothing to flush anymore
             time.sleep(1.0)
 
-    def get_cache_stats(self, reset: bool = False) -> CacheStats:
+    def get_cache_stats(self) -> CacheStats:
         return cast(CacheStats, self._request_json(
-            METHOD_GET, "/cache_stats", {
-                "reset": int(reset),
-            }))
+            METHOD_GET, "/cache_stats", {}))
 
     def reset_cache(self) -> CacheStats:
         return cast(CacheStats, self._request_json(
