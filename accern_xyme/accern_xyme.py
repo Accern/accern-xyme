@@ -1623,11 +1623,15 @@ class PipelineHandle:
                 "timestamp": timestamp,
             }))["when"]
 
-    def set_kafka_topic_partitions(self, num_partitions: int) -> KafkaTopics:
+    def set_kafka_topic_partitions(
+            self,
+            num_partitions: int,
+            large_input_retention: bool = False) -> KafkaTopics:
         return cast(KafkaTopics, self._client._request_json(
             METHOD_POST, "/kafka_topics", {
                 "pipeline": self.get_id(),
                 "num_partitions": num_partitions,
+                "large_input_retention": large_input_retention,
             }))
 
     def post_kafka_objs(self, input_objs: List[Any]) -> List[str]:
