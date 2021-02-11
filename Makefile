@@ -3,7 +3,6 @@ help:
 	@echo "lint-all	run all lint steps"
 	@echo "lint-comment	run linter check over regular comments"
 	@echo "lint-docstring	run linter check over docstring"
-	@echo "lint-emptyinit	main inits must be empty"
 	@echo "lint-flake8	run flake8 checker to detect missing trailing comma"
 	@echo "lint-forgottonformat	ensures format strings are used"
 	@echo "lint-pycodestyle	run linter check using pycodestyle standard"
@@ -21,9 +20,6 @@ lint-comment:
 
 lint-docstring:
 	flake8 --verbose --select DAR --exclude venv --show-source ./
-
-lint-emptyinit:
-	[ ! -s monitor/__init__.py ] && [ ! -s worker/__init__.py ]
 
 lint-flake8:
 	flake8 --verbose --select C815 --exclude venv --show-source ./
@@ -59,7 +55,6 @@ lint-type-check:
 lint-all: \
 	lint-comment \
 	lint-docstring \
-	lint-emptyinit \
 	lint-forgottenformat \
 	lint-requirements \
 	lint-stringformat \
