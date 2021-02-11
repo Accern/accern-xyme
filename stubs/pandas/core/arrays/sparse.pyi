@@ -17,10 +17,10 @@ class SparseDtype(ExtensionDtype):
     def __init__(self, dtype: Dtype = ..., fill_value: Any = ...) -> None:
         ...
 
-    def __hash__(self) -> Any:
+    def __hash__(self) -> int:
         ...
 
-    def __eq__(self, other: Any) -> Any:
+    def __eq__(self, other: Any) -> bool:
         ...
 
     @property
@@ -52,7 +52,7 @@ class SparseDtype(ExtensionDtype):
         ...
 
     @classmethod
-    def is_dtype(cls, dtype: Any) -> Any:
+    def is_dtype(cls, dtype: Any) -> bool:
         ...
 
     def update_dtype(self, dtype: Any) -> Any:

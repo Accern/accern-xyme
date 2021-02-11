@@ -51,6 +51,9 @@ class Timedelta:
     def __ge__(self, other: TDistance) -> bool:
         ...
 
+    def total_seconds(self) -> int:
+        ...
+
 
 delta_to_nanoseconds: Any
 ints_to_pytimedelta: Any

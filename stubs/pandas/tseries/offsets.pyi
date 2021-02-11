@@ -153,11 +153,14 @@ class MonthOffset(SingleConstructorOffset):
 class MonthEnd(MonthOffset):
         ...
 
+
 class MonthBegin(MonthOffset):
         ...
 
+
 class BusinessMonthEnd(MonthOffset):
         ...
+
 
 class BusinessMonthBegin(MonthOffset):
         ...
@@ -187,6 +190,7 @@ class _CustomBusinessMonth(_CustomMixin, BusinessMixin, MonthOffset):
 
 class CustomBusinessMonthEnd(_CustomBusinessMonth):
         ...
+
 
 class CustomBusinessMonthBegin(_CustomBusinessMonth):
         ...
@@ -293,11 +297,14 @@ class QuarterOffset(DateOffset):
 class BQuarterEnd(QuarterOffset):
         ...
 
+
 class BQuarterBegin(QuarterOffset):
         ...
 
+
 class QuarterEnd(QuarterOffset):
         ...
+
 
 class QuarterBegin(QuarterOffset):
         ...
@@ -325,11 +332,14 @@ class YearOffset(DateOffset):
 class BYearEnd(YearOffset):
         ...
 
+
 class BYearBegin(YearOffset):
         ...
 
+
 class YearEnd(YearOffset):
         ...
+
 
 class YearBegin(YearOffset):
         ...
@@ -382,7 +392,7 @@ class FY5253Quarter(DateOffset):
         ...
 
     @property
-    def rule_code(self) -> Any:
+    def rule_code(self) -> str:
         ...
 
 
@@ -409,7 +419,7 @@ class Tick(liboffsets._Tick, SingleConstructorOffset):
     def __eq__(self, other: Any) -> Any:
         ...
 
-    def __hash__(self) -> Any:
+    def __hash__(self) -> int:
         ...
 
     def __ne__(self, other: Any) -> Any:

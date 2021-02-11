@@ -1972,6 +1972,7 @@ class NodeHandle:
         return CSVBlobHandle(
             self._client,
             dag,
+            self,
             res["csv"],
             res["count"],
             res["pos"],
@@ -2284,11 +2285,13 @@ class CSVBlobHandle(BlobHandle):
             self,
             client: XYMEClient,
             dag: DagHandle,
+            node: NodeHandle,
             uri: str,
             count: int,
             pos: int,
             has_tmp: bool) -> None:
         super().__init__(client, uri, is_full=False, dag=dag)
+        self._node = node
         self._count = count
         self._pos = pos
         self._has_tmp = has_tmp
@@ -2311,6 +2314,7 @@ class CSVBlobHandle(BlobHandle):
             "blob": self.get_uri(),
             "action": action,
             "dag": self.get_dag().get_uri(),
+            "node": self._node.get_id(),
         }
         args.update(additional)
         if fobj is not None:

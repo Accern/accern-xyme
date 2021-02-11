@@ -10,8 +10,9 @@ from typing import Any, List
 from pandas._typing import FilePathOrBuffer, Scalar
 from pandas.io.excel._base import _BaseExcelReader
 
+
 class _ODFReader(_BaseExcelReader):
-    def __init__(self, filepath_or_buffer: FilePathOrBuffer):
+    def __init__(self, filepath_or_buffer: FilePathOrBuffer) -> None:
         ...
 
     def load_workbook(self, filepath_or_buffer: FilePathOrBuffer) -> Any:
@@ -31,5 +32,6 @@ class _ODFReader(_BaseExcelReader):
     def get_sheet_by_name(self, name: str) -> Any:
         ...
 
-    def get_sheet_data(self, sheet: Any, convert_float: bool) -> List[List[Scalar]]:
+    def get_sheet_data(
+            self, sheet: Any, convert_float: bool) -> List[List[Scalar]]:
         ...
