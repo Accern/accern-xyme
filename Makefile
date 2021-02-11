@@ -1,5 +1,6 @@
 help:
 	@echo "The following make targets are available:"
+	@echo "lint-all	run all lint steps"
 	@echo "lint-comment	run linter check over regular comments"
 	@echo "lint-docstring	run linter check over docstring"
 	@echo "lint-emptyinit	main inits must be empty"
@@ -54,6 +55,18 @@ lint-stringformat:
 
 lint-type-check:
 	mypy . --config-file mypy.ini
+
+lint-all: \
+	lint-comment \
+	lint-docstring \
+	lint-emptyinit \
+	lint-forgottenformat \
+	lint-requirements \
+	lint-stringformat \
+	lint-pycodestyle \
+	lint-pylint \
+	lint-type-check \
+	lint-flake8
 
 VERSION=`echo "import accern_xyme;print(accern_xyme.__version__)" | python3 2>/dev/null`
 
