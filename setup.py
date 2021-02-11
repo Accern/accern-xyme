@@ -16,9 +16,10 @@ with codecs.open(os.path.join(here, "README.rst"), encoding="utf-8") as f:
 
 setup(
     name="accern_xyme",
-    version="0.1.14",
-    description="AccernXYME is a library for easily "
-                "accessing XYME via python.",
+    version="0.2.0",
+    description=(
+        "AccernXYME is a library for easily "
+        "accessing XYME via python."),
     long_description=long_description,
     url="https://github.com/Accern/accern-xyme",
     author="Accern Corp.",

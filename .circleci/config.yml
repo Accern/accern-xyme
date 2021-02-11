@@ -11,105 +11,9 @@ workflows:
   version: 2
   test:
     jobs:
-      - test-3.6
       - test-3.8
 
 jobs:
-  test-3.6:
-    docker:
-      # specify the version you desire here
-      # use `-browsers` prefix for selenium tests, e.g. `3.6.1-browsers`
-      - image: circleci/python:3.6.4
-        environment:
-          ENV: circleci
-
-      # Specify service dependencies here if necessary
-      # CircleCI maintains a library of pre-built images
-      # documented at https://circleci.com/docs/2.0/circleci-images/
-      # - image: circleci/postgres:9.4
-
-    working_directory: ~/repo
-
-    steps:
-      - checkout
-
-      # Download and cache dependencies
-      - restore_cache:
-          keys:
-          - v1-py36-dependencies-{{ checksum "requirements.lint.txt" }}-{{ checksum "requirements.txt" }}
-
-      - run:
-          name: Install Dependencies
-          command: |
-            python3 -m venv venv
-            . venv/bin/activate
-            pip install --upgrade pip
-            pip install --progress-bar off --upgrade -r requirements.lint.txt
-
-      - save_cache:
-          paths:
-            - ./venv
-          key: v1-py36-dependencies-{{ checksum "requirements.lint.txt" }}-{{ checksum "requirements.txt" }}
-
-      - run:
-          name: Lint Code (use uppercase TODO, XXX, FIXME, NOTE and explain nopep8)
-          command: |
-            make lint-comment
-
-      - run:
-          name: Lint Code (use empty main inits)
-          command: |
-            make lint-emptyinit
-
-      - run:
-          name: Lint Code (sort requirements)
-          command: |
-            make lint-requirements
-
-      - run:
-          name: Lint Code (use f"" style formating)
-          command: |
-            make lint-stringformat
-
-      - run:
-          name: Lint Code (no f"a", "{a}", or f'{a}')
-          command: |
-            make lint-forgottenformat
-
-      - run:
-          name: Lint Code (missing trailing comma)
-          command: |
-            . venv/bin/activate
-            make lint-flake8
-
-      - run:
-          name: Lint Code (pycodestyle)
-          command: |
-            . venv/bin/activate
-            make lint-pycodestyle
-
-      - run:
-          name: Lint Code (type-check)
-          command: |
-            . venv/bin/activate
-            make lint-type-check
-
-      - run:
-          name: Lint Code (pylint)
-          command: |
-            . venv/bin/activate
-            make lint-pylint
-
-      - run:
-          name: Lint Code (docstring)
-          command: |
-            . venv/bin/activate
-            make lint-docstring
-
-      - store_artifacts:
-          path: test-reports
-          destination: test-reports
-
   test-3.8:
     docker:
       # specify the version you desire here
@@ -189,11 +93,11 @@ jobs:
             . venv/bin/activate
             make lint-type-check
 
-      # - run:
-      #     name: Lint Code (pylint)
-      #     command: |
-      #       . venv/bin/activate
-      #       make lint-pylint
+      - run:
+          name: Lint Code (pylint)
+          command: |
+            . venv/bin/activate
+            make lint-pylint
 
       - run:
           name: Lint Code (docstring)

@@ -1,60 +1,8 @@
-from typing import Any, Optional, List, Dict, Tuple, Union
+# pylint: disable=invalid-name
+from typing import Any, Optional, List, Dict, Tuple
 from typing_extensions import TypedDict, Literal
 
 
-DagDef = TypedDict('DagDef', {
-    "name": str,
-    "company": str,
-    "nodes": List[str],
-    "state": str,
-    "high_priority": bool,
-    "queue_mng": Optional[str],
-    "default_input_key": Optional[str],
-    "default_output_key": Optional[str],
-})
-NodeDef = TypedDict('NodeDef', {
-    "id": str,
-    "kind": str,
-    "inputs": Dict[str, Tuple[str, str]],
-    "blobs": Dict[str, str],
-    "params": Dict[str, Any],
-}, total=False)
-S3BucketSettings = TypedDict('S3BucketSettings', {
-    "api_version": Optional[str],
-    "aws_access_key_id": str,
-    "aws_secret_access_key": str,
-    "aws_session_token": Optional[str],
-    "bucket": str,
-    "prefix": List[str],
-    "endpoint_url": Optional[str],
-    "region_name": Optional[str],
-    "use_ssl": Optional[bool],
-    "verify": Optional[bool],
-})
-ESConnectorSettings = TypedDict('ESConnectorSettings', {
-    "host": str,
-    "password": str,
-})
-SettingsObj = TypedDict('SettingsObj', {
-    "s3": Dict[str, S3BucketSettings],
-    "triton": Dict[str, S3BucketSettings],
-    "es": Dict[str, ESConnectorSettings],
-}, total=False)
-TaskType = Literal[
-    "node:cpubig",
-    "node:cpusmall",
-]
-QueueType = Literal[
-    "parallel:kafka",
-    "parallel:queue",
-]
-QueueStatus = Literal[
-    "waiting",
-    "running",
-    "result",
-    "error",
-    "void",
-]
 TaskStatus = Literal[
     "blocked",
     "waiting",
@@ -68,41 +16,15 @@ TaskStatus = Literal[
     "queue",
 ]
 ParamType = Literal[
-    "bool",
-    "choice_list",
-    "choice_set",
-    "choice",
-    "col",
-    "date",
-    "int",
-    "list_col",
-    "list_str",
-    "list_tup_str",
-    "mapping_col_num",
-    "mapping_col_type",
-    "mapping_int_int",
-    "mapping_str_str",
-    "mapping_str_tup_str_int",
-    "mapping_tup_int_float",
-    "mapping_tup_int_tup_int_int_int_int",
-    "mapping_tup_str_str",
-    "num",
-    "opt_col",
-    "opt_coltype",
-    "opt_date",
-    "opt_int",
-    "opt_scol",
-    "opt_str",
-    "pair_num",
-    "scol",
     "str",
-    "col_or_mapping_str_col",
+    "int",
+    "num",
+    "mapping_str_str",
+    "list_str",
 ]
 InstanceStatus = Literal[
     "busy_queue",
     "busy_task",
-    "data_queue",
-    "off",
     "ready_queue",
     "ready_task",
 ]
@@ -111,19 +33,21 @@ ParamDef = TypedDict('ParamDef', {
     "help": str,
     "type": ParamType,
     "required": bool,
-    "default": Optional[Union[str, float, int, List[str]]],
+    "default": Optional[Any],
 })
 ParamDefs = Dict[str, ParamDef]
-ModelParamDefs = Dict[str, Dict[str, ParamDef]]
 Backends = TypedDict('Backends', {
+    "executor_mng": str,
+    "jobs": str,
     "logger": List[str],
-    "status_emitter": List[str],
+    "mtype": str,
     "progress": str,
     "queue_mng": Dict[str, str],
+    "status_emitter": List[str],
     "task_mng": Dict[str, str],
-    "executor_mng": str,
-    "mtype": str,
-    "ns": str,
+})
+MaintenanceResponse = TypedDict('MaintenanceResponse', {
+    "is_maintenance": bool,
 })
 VersionResponse = TypedDict('VersionResponse', {
     "api_version": int,
@@ -142,9 +66,8 @@ NodeDefInfo = TypedDict('NodeDefInfo', {
     "desc": str,
     "input_keys": List[str],
     "output_keys": List[str],
-    "task_types": Optional[List[TaskType]],
-    "queue_types": Optional[List[QueueType]],
-    "blob_types": Dict[str, Union[str, List[str]]],
+    "task_types": Optional[List[str]],
+    "blob_types": Dict[str, str],
     "params": ParamDefs,
 })
 NodeStatus = TypedDict('NodeStatus', {
@@ -170,15 +93,15 @@ NodeInfo = TypedDict('NodeInfo', {
     "state": Optional[int],
     "config_error": Optional[str],
 })
-DagList = TypedDict('DagList', {
+PipelineList = TypedDict('PipelineList', {
     "cur_time": float,
-    "dags": List[Tuple[str, Optional[float], Optional[float]]],
+    "pipelines": List[Tuple[str, Optional[float], Optional[float]]],
 })
 VisibleBlobs = TypedDict('VisibleBlobs', {
     "cur_time": float,
     "visible": List[Tuple[str, Optional[float]]],
 })
-DagInfo = TypedDict('DagInfo', {
+PipelineInfo = TypedDict('PipelineInfo', {
     "company": str,
     "high_priority": bool,
     "ins": List[str],
@@ -186,27 +109,46 @@ DagInfo = TypedDict('DagInfo', {
     "nodes": List[NodeInfo],
     "outs": List[Tuple[str, str]],
     "queue_mng": Optional[str],
+    "settings": Dict[str, Any],
     "state": str,
 })
 BlobInit = TypedDict('BlobInit', {
     "blob": str,
 })
-DagInit = TypedDict('DagInit', {
-    "dag": str,
+PipelineInit = TypedDict('PipelineInit', {
+    "pipeline": str,
 })
-DagCreate = TypedDict('DagCreate', {
-    "dag": str,
+PipelineDupResponse = TypedDict('PipelineDupResponse', {
+    "pipeline": str,
+})
+PipelineCreate = TypedDict('PipelineCreate', {
+    "pipeline": str,
     "nodes": List[str],
     "warnings": List[str],
 })
-NamespaceUpdateSettings = TypedDict('NamespaceUpdateSettings', {
-    "namespace": str,
-    "settings": SettingsObj,
-})
-DagReload = TypedDict('DagReload', {
-    "dag": str,
+PipelineReload = TypedDict('PipelineReload', {
+    "pipeline": str,
     "when": float,
 })
+NodeDef = TypedDict('NodeDef', {
+    "id": str,
+    "kind": str,
+    "inputs": Dict[str, Tuple[str, str]],
+    "blobs": Dict[str, str],
+    "params": Dict[str, Any],
+}, total=False)
+PipelineDef = TypedDict('PipelineDef', {
+    "id": str,
+    "name": str,
+    "company": str,
+    "nodes": List[NodeDef],
+    "state": str,
+    "settings": Dict[str, Dict[str, Any]],
+    "high_priority": bool,
+    "queue_mng": Optional[str],
+    "default_input_key": Optional[str],
+    "default_output_key": Optional[str],
+}, total=False)
 Timing = TypedDict('Timing', {
     "name": str,
     "total": float,
@@ -223,7 +165,7 @@ NodeTiming = TypedDict('NodeTiming', {
     "fns": List[Timing],
 })
 TimingResult = TypedDict('TimingResult', {
-    "dag_total": float,
+    "pipe_total": float,
     "nodes": List[Tuple[str, NodeTiming]],
 })
 InCursors = TypedDict('InCursors', {
@@ -240,39 +182,45 @@ CSVOp = TypedDict('CSVOp', {
     "pos": int,
     "tmp": bool,
 })
-NamespaceList = TypedDict('NamespaceList', {
-    "namespaces": List[str],
+CSVList = TypedDict('CSVList', {
+    "csvs": List[str],
 })
-NodeCustomCode = TypedDict('NodeCustomCode', {
+JobList = TypedDict('JobList', {
+    "jobs": List[str],
+})
+JobInfoEntries = TypedDict('JobInfoEntries', {
+    "data": Optional[Tuple[str, str]],
+    "performance": Optional[Tuple[str, str]],
+    "predictions": Optional[Tuple[str, str]],
+    "sources": List[str],
+})
+JobInfo = TypedDict('JobInfo', {
+    "id": str,
+    "name": str,
+    "owner": str,
+    "company": str,
+    "high_priority": bool,
+    "queue_mng": Optional[str],
+    "entry_points": JobInfoEntries,
+})
+CustomCodeResponse = TypedDict('CustomCodeResponse', {
     "code": str,
 })
-NodeCustomImports = TypedDict('NodeCustomImports', {
-    "modules": List[List[str]],
-})
-AllowedCustomImports = TypedDict('AllowedCustomImports', {
+CustomImportsResponse = TypedDict('CustomImportsResponse', {
     "modules": List[str],
 })
 JSONBlobResponse = TypedDict('JSONBlobResponse', {
     "count": int,
     "json": str,
 })
-JSONBlobAppendResponse = TypedDict('JSONBlobAppendResponse', {
-    "count": int,
-})
-NodeUserColumnsResponse = TypedDict('NodeUserColumnsResponse', {
+UserColumnsResponse = TypedDict('UserColumnsResponse', {
     "user_columns": List[str],
 })
-ModelParamsResponse = TypedDict('ModelParamsResponse', {
-    "model_params": ModelParamDefs,
-})
 ModelSetupResponse = TypedDict('ModelSetupResponse', {
-    "model_info": Dict[str, str],
+    "model_info": Dict[str, Any],
 })
-BlobFilesResponse = TypedDict('BlobFilesResponse', {
-    "files": List[str],
-})
-DagDupResponse = TypedDict('DagDupResponse', {
-    "dag": str,
+ModelParamsResponse = TypedDict('ModelParamsResponse', {
+    "model_params": Dict[str, Any],
 })
 FlushAllQueuesResponse = TypedDict('FlushAllQueuesResponse', {
     "success": bool,
@@ -282,6 +230,9 @@ WorkerScale = TypedDict('WorkerScale', {
 })
 SetNamedSecret = TypedDict('SetNamedSecret', {
     "replaced": bool,
+})
+ListNamedSecretKeys = TypedDict('ListNamedSecretKeys', {
+    "keys": List[str],
 })
 KafkaTopics = TypedDict('KafkaTopics', {
     "topics": Dict[str, Optional[str]],
@@ -297,7 +248,7 @@ KafkaOffsets = TypedDict('KafkaOffsets', {
 })
 KafkaGroup = TypedDict('KafkaGroup', {
     "group": str,
-    "dag": str,
+    "pipeline": str,
     "reset": Optional[str],
 })
 ThroughputDict = TypedDict('ThroughputDict', {
@@ -310,7 +261,7 @@ ThroughputDict = TypedDict('ThroughputDict', {
     "total": float,
 })
 KafkaThroughput = TypedDict('KafkaThroughput', {
-    "dag": str,
+    "pipeline": str,
     "input": ThroughputDict,
     "output": ThroughputDict,
     "faster": Literal["input", "output", "both"],
@@ -321,7 +272,7 @@ PutNodeBlob = TypedDict('PutNodeBlob', {
     "new_uri": str,
 })
 BlobOwner = TypedDict('BlobOwner', {
-    "owner": Optional[List[str]],
+    "owner": str,
 })
 CopyBlob = TypedDict('CopyBlob', {
     "new_uri": str,
@@ -343,24 +294,26 @@ MinimalQueueStatsResponse = TypedDict('MinimalQueueStatsResponse', {
     "active": int,
     "total": int,
 })
+QueueStatus = Literal[
+    "waiting",
+    "running",
+    "result",
+    "error",
+    "void",
+]
 DynamicStatusResponse = TypedDict('DynamicStatusResponse', {
     "status": Dict[str, QueueStatus],
 })
 DynamicResults = TypedDict('DynamicResults', {
     "results": List[Any],
 })
-TritonModelsResponse = TypedDict('TritonModelsResponse', {
-    "models": List[str],
-})
 CacheStats = TypedDict('CacheStats', {
+    "categories": int,
     "total": int,
 })
 QueueMode = TypedDict('QueueMode', {
     "mode": str,
 })
 ModelReleaseResponse = TypedDict('ModelReleaseResponse', {
-    "release": Optional[int],
-})
-ESQueryResponse = TypedDict('ESQueryResponse', {
-    "query": Dict[str, Any],
+    "release": Optional[str],
 })
