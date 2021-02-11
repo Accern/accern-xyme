@@ -40,16 +40,14 @@ jobs:
       - run:
           name: Install Dependencies
           command: |
-            cd ..
             python3 -m venv venv
-            cd -
-            . ../venv/bin/activate
+            . venv/bin/activate
             pip install --upgrade pip
             pip install --progress-bar off --upgrade -r requirements.lint.txt
 
       - save_cache:
           paths:
-            - ../venv
+            - venv
           key: v1-py38-dependencies-{{ checksum "requirements.lint.txt" }}-{{ checksum "requirements.txt" }}
 
       - run:
@@ -75,31 +73,31 @@ jobs:
       - run:
           name: Lint Code (missing trailing comma)
           command: |
-            . ../venv/bin/activate
+            . venv/bin/activate
             make lint-flake8
 
       - run:
           name: Lint Code (pycodestyle)
           command: |
-            . ../venv/bin/activate
+            . venv/bin/activate
             make lint-pycodestyle
 
       - run:
           name: Lint Code (type-check)
           command: |
-            . ../venv/bin/activate
+            . venv/bin/activate
             make lint-type-check
 
       - run:
           name: Lint Code (pylint)
           command: |
-            . ../venv/bin/activate
+            . venv/bin/activate
             make lint-pylint
 
       - run:
           name: Lint Code (docstring)
           command: |
-            . ../venv/bin/activate
+            . venv/bin/activate
             make lint-docstring
 
       - store_artifacts:
