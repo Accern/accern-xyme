@@ -42,10 +42,10 @@ jobs:
           command: |
             cd ..
             python3 -m venv venv
-            . venv/bin/activate
+            cd -
+            . ../venv/bin/activate
             pip install --upgrade pip
             pip install --progress-bar off --upgrade -r requirements.lint.txt
-            cd -
 
       - save_cache:
           paths:
