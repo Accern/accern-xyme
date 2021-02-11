@@ -116,7 +116,7 @@ else:
     WVD = weakref.WeakValueDictionary
 
 
-__version__ = "0.1.13"
+__version__ = "0.1.14"
 # FIXME: async calls, documentation, auth, summary – time it took etc.
 
 
@@ -763,11 +763,9 @@ class XYMEClient:
         while do_flush():  # we flush until there is nothing to flush anymore
             time.sleep(1.0)
 
-    def get_cache_stats(self, reset: bool = False) -> CacheStats:
+    def get_cache_stats(self) -> CacheStats:
         return cast(CacheStats, self._request_json(
-            METHOD_GET, "/cache_stats", {
-                "reset": int(reset),
-            }))
+            METHOD_GET, "/cache_stats", {}))
 
     def reset_cache(self) -> CacheStats:
         return cast(CacheStats, self._request_json(
@@ -1626,11 +1624,15 @@ class PipelineHandle:
                 "timestamp": timestamp,
             }))["when"]
 
-    def set_kafka_topic_partitions(self, num_partitions: int) -> KafkaTopics:
+    def set_kafka_topic_partitions(
+            self,
+            num_partitions: int,
+            large_input_retention: bool = False) -> KafkaTopics:
         return cast(KafkaTopics, self._client._request_json(
             METHOD_POST, "/kafka_topics", {
                 "pipeline": self.get_id(),
                 "num_partitions": num_partitions,
+                "large_input_retention": large_input_retention,
             }))
 
     def post_kafka_objs(self, input_objs: List[Any]) -> List[str]:

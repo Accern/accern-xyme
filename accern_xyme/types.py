@@ -308,10 +308,8 @@ DynamicResults = TypedDict('DynamicResults', {
     "results": List[Any],
 })
 CacheStats = TypedDict('CacheStats', {
-    "approx_total": int,
-    "effectiveness": float,
-    "hits": int,
-    "miss": int,
+    "categories": int,
+    "total": int,
 })
 QueueMode = TypedDict('QueueMode', {
     "mode": str,
