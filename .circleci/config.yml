@@ -58,11 +58,6 @@ jobs:
             make lint-comment
 
       - run:
-          name: Lint Code (use empty main inits)
-          command: |
-            make lint-emptyinit
-
-      - run:
           name: Lint Code (sort requirements)
           command: |
             make lint-requirements
