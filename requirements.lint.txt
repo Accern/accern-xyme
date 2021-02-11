@@ -4,7 +4,7 @@ flake8-commas==2.0.0
 flake8==3.8.4
 ipython==7.20.0
 matplotlib==3.3.4
-mypy==0.800
+mypy==0.790
 pep8==1.7.1
 pycodestyle==2.6.0
 pylint==2.6.0
