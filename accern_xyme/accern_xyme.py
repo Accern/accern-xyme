@@ -28,11 +28,11 @@ import contextlib
 import collections
 from io import BytesIO, StringIO
 import pandas as pd
-import quick_server
 import requests
 from requests import Response
 from requests.exceptions import HTTPError, RequestException
 from typing_extensions import Literal
+import quick_server
 
 from .util import (
     async_compute,
