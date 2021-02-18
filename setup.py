@@ -4,7 +4,7 @@ Created on 2019-12-09
 import os
 import codecs
 
-from setuptools import setup  # type: ignore
+from setuptools import setup
 
 here = os.path.abspath(os.path.dirname(__file__))
 
@@ -38,7 +38,7 @@ setup(
     install_requires=[
         "numpy>=1.17.3",
         "pandas>=0.25.3",
-        "quick-server>=0.7.8",
+        "quick-server>=0.7.14",
         "requests>=2.22.0",
         "RestrictedPython>=5.0",
         "scipy>=1.4.1",

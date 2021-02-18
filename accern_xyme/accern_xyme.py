@@ -50,6 +50,8 @@ from .util import (
     ServerSideError,
 )
 from .types import (
+    # ESQueryResponse,  # FIXME: add!
+    # TritonModelsResponse,  # FIXME: add!
     AllowedCustomImports,
     BlobFilesResponse,
     BlobInit,
@@ -67,7 +69,6 @@ from .types import (
     DagReload,
     DynamicResults,
     DynamicStatusResponse,
-    # ESQueryResponse,  # FIXME: add!
     FlushAllQueuesResponse,
     InCursors,
     InstanceStatus,
@@ -83,7 +84,7 @@ from .types import (
     ModelReleaseResponse,
     ModelSetupResponse,
     NamespaceList,
-    # NamespaceUpdateSettings,  # FIXME: !!!!!
+    NamespaceUpdateSettings,
     NodeChunk,
     NodeCustomCode,
     NodeCustomImports,
@@ -101,11 +102,11 @@ from .types import (
     QueueStatus,
     ReadNode,
     SetNamedSecret,
+    SettingsObj,
     TaskStatus,
     Timing,
     TimingResult,
     Timings,
-    # TritonModelsResponse,  # FIXME: add!
     VersionResponse,
     VisibleBlobs,
     WorkerScale,
@@ -655,12 +656,15 @@ class XYMEClient:
                 warnings_io.flush()
         return self.get_dag(dag_uri)
 
-    # FIXME !!!!!
-    # def update_settings(self, settings: Dict[str, Any]) -> None:
-    #     cast(UpdateSettings, self._request_json(
-    #         METHOD_POST, "/update_settings", {
-    #             "settings": settings,
-    #         }))
+    def update_settings(self, settings: SettingsObj) -> SettingsObj:
+        return cast(NamespaceUpdateSettings, self._request_json(
+            METHOD_POST, "/settings", {
+                "settings": settings,
+            }))["settings"]
+
+    def get_settings(self) -> SettingsObj:
+        return cast(NamespaceUpdateSettings, self._request_json(
+            METHOD_GET, "/settings", {}))["settings"]
 
     def get_allowed_custom_imports(self) -> AllowedCustomImports:
         return cast(AllowedCustomImports, self._request_json(
@@ -1893,7 +1897,7 @@ class NodeHandle:
             force_refresh: bool) -> 'BlobHandle':
         dag = self.get_dag()
         res = cast(ReadNode, self._client._request_json(
-            METHOD_LONGPOST, "/read_node", {
+            METHOD_POST, "/read_node", {
                 "dag": dag.get_uri(),
                 "node": self.get_id(),
                 "key": key,
