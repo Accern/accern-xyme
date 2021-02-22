@@ -69,6 +69,7 @@ from .types import (
     DagReload,
     DynamicResults,
     DynamicStatusResponse,
+    ESQueryResponse,
     FlushAllQueuesResponse,
     InCursors,
     InstanceStatus,
@@ -1940,7 +1941,7 @@ class NodeHandle:
             return None
         return merge_ctype(res, ctype)
 
-    def reset(self) -> NodeState:
+    def remove(self) -> NodeState:
         return cast(NodeState, self._client._request_json(
             METHOD_PUT, "/node_state", {
                 "dag": self.get_dag().get_uri(),
@@ -2015,6 +2016,29 @@ class NodeHandle:
                 "dag": self.get_dag().get_uri(),
                 "node": self.get_id(),
             }))
+
+    def set_es_query(self, query: Dict[str, Any]) -> ESQueryResponse:
+        if self.get_type() != "es_reader":
+            raise ValueError(f"{self} is not an ES reader node")
+
+        return cast(ESQueryResponse, self._client._request_json(
+            METHOD_POST, "/es_query", {
+                "dag": self.get_dag().get_uri(),
+                "blob": self.get_blob_handle("es").get_uri(),
+                "es_query": query,
+            },
+        ))
+
+    def get_es_query(self) -> ESQueryResponse:
+        if self.get_type() != "es_reader":
+            raise ValueError(f"{self} is not an ES reader node")
+
+        return cast(ESQueryResponse, self._client._request_json(
+            METHOD_GET, "/es_query", {
+                "dag": self.get_dag().get_uri(),
+                "blob": self.get_blob_handle("es").get_uri(),
+            },
+        ))
 
     def set_custom_code(self, func: FUNC) -> NodeCustomCode:
         from RestrictedPython import compile_restricted
@@ -2261,8 +2285,7 @@ class BlobHandle:
             METHOD_POST, "/convert_model", {
                 "blob": self._uri,
                 "dag": self.get_dag().get_uri(),
-            }
-        ))
+            }))
 
     def __hash__(self) -> int:
         return hash(self.as_str())
