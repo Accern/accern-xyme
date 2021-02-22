@@ -321,7 +321,8 @@ PutNodeBlob = TypedDict('PutNodeBlob', {
     "new_uri": str,
 })
 BlobOwner = TypedDict('BlobOwner', {
-    "owner": Optional[List[str]],
+    "owner_dag": Optional[str],
+    "owner_node": str,
 })
 CopyBlob = TypedDict('CopyBlob', {
     "new_uri": str,

@@ -2011,7 +2011,7 @@ class NodeHandle:
             return None
         return merge_ctype(res, ctype)
 
-    def remove(self) -> NodeState:
+    def clear(self) -> NodeState:
         return cast(NodeState, self._client._request_json(
             METHOD_PUT, "/node_state", {
                 "pipeline": self.get_pipeline().get_id(),

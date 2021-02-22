@@ -148,11 +148,6 @@ CUSTOM_NODE_TYPES = {
     "custom_json_to_data",
     "custom_json_join_data",
 }
-EMBEDDING_MODEL_NODE_TYPES = {
-    "dyn_embedding_model",
-    "static_embedding_model",
-}
-MODEL_NODE_TYPES = EMBEDDING_MODEL_NODE_TYPES
 
 
 class AccessDenied(Exception):
@@ -1783,11 +1778,7 @@ class NodeHandle:
         self._node_name = node_info["name"]
         self._type = node_info["type"]
         self._blobs = {
-            key: BlobHandle(
-                self._client,
-                value,
-                is_full=False,
-                dag=self.get_dag())
+            key: BlobHandle(self._client, value, is_full=False)
             for (key, value) in node_info["blobs"].items()
         }
         self._inputs = node_info["inputs"]
@@ -1896,6 +1887,7 @@ class NodeHandle:
             key: str,
             chunk: Optional[int],
             force_refresh: bool) -> 'BlobHandle':
+        # FIXME: !!!!!! explicitly repeat on timeout
         dag = self.get_dag()
         res = cast(ReadNode, self._client._request_json(
             METHOD_POST, "/read_node", {
@@ -1909,7 +1901,7 @@ class NodeHandle:
         uri = res["result_uri"]
         if uri is None:
             raise ValueError(f"uri is None: {res}")
-        return BlobHandle(self._client, uri, is_full=True, dag=dag)
+        return BlobHandle(self._client, uri, is_full=True)
 
     def read(
             self,
@@ -1941,7 +1933,7 @@ class NodeHandle:
             return None
         return merge_ctype(res, ctype)
 
-    def remove(self) -> NodeState:
+    def clear(self) -> NodeState:
         return cast(NodeState, self._client._request_json(
             METHOD_PUT, "/node_state", {
                 "dag": self.get_dag().get_uri(),
@@ -1975,25 +1967,19 @@ class NodeHandle:
                 "node": self.get_id(),
             }))
         return CSVBlobHandle(
-            self._client,
-            dag,
-            self,
-            res["csv"],
-            res["count"],
-            res["pos"],
-            res["tmp"])
+            self._client, res["csv"], res["count"], res["pos"], res["tmp"])
 
     def get_json_blob(self) -> 'JSONBlobHandle':
         if self.get_type() != "jsons_reader":
             raise ValueError(
-                f"can not append jsons to {self}, expected 'jsons_reader'")
+                f"can not access JSON of {self}, node is not a 'jsons_reader'")
         dag = self.get_dag()
         res = cast(JSONBlobResponse, self._client._request_json(
             METHOD_GET, "/json_blob", {
                 "dag": dag.get_uri(),
                 "node": self.get_id(),
             }))
-        return JSONBlobHandle(self._client, dag, res["json"], res["count"])
+        return JSONBlobHandle(self._client, res["json"], res["count"])
 
     def check_custom_code_node(self) -> None:
         if not self.get_type() in CUSTOM_NODE_TYPES:
@@ -2095,22 +2081,15 @@ class NodeHandle:
             res[key] = df
         return res
 
-    def setup_model(self, obj: Dict[str, Any]) -> Any:
-        if self.get_type() not in MODEL_NODE_TYPES:
-            raise ValueError(f"{self} is not a model node")
-        model_type: str
-        if self.get_type() in EMBEDDING_MODEL_NODE_TYPES:
-            model_type = "embedding"
-
+    def setup_model(self, obj: Dict[str, Any]) -> ModelSetupResponse:
         return cast(ModelSetupResponse, self._client._request_json(
             METHOD_PUT, "/model_setup", {
                 "dag": self.get_dag().get_uri(),
                 "node": self.get_id(),
                 "config": obj,
-                "model_type": model_type,
             }))
 
-    def get_model_params(self) -> Any:
+    def get_model_params(self) -> ModelParamsResponse:
         return cast(ModelParamsResponse, self._client._request_json(
             METHOD_GET, "/model_params", {
                 "dag": self.get_dag().get_uri(),
@@ -2154,12 +2133,10 @@ class BlobHandle:
             self,
             client: XYMEClient,
             uri: str,
-            is_full: bool,
-            dag: DagHandle) -> None:
+            is_full: bool) -> None:
         self._client = client
         self._uri = uri
         self._is_full = is_full
-        self._dag = dag
         self._ctype: Optional[str] = None
 
     def is_full(self) -> bool:
@@ -2171,9 +2148,6 @@ class BlobHandle:
     def get_uri(self) -> str:
         return self._uri
 
-    def get_dag(self) -> DagHandle:
-        return self._dag
-
     def get_ctype(self) -> Optional[str]:
         return self._ctype
 
@@ -2183,8 +2157,7 @@ class BlobHandle:
         if self.is_empty():
             return None
         fin, ctype = self._client._raw_request_bytes(METHOD_POST, "/uri", {
-            "uri": self._uri,
-            "dag": self.get_dag().get_uri(),
+            "uri": self.get_uri(),
         })
         self._ctype = ctype
         return interpret_ctype(fin, ctype)
@@ -2192,66 +2165,60 @@ class BlobHandle:
     def list_files(self) -> List['BlobHandle']:
         if self.is_full():
             raise ValueError(f"URI must not be full: {self}")
-        dag = self.get_dag()
         resp = cast(BlobFilesResponse, self._client._request_json(
             METHOD_GET, "/blob_files", {
-                "blob": self._uri,
-                "dag": dag.get_uri(),
+                "blob": self.get_uri(),
             }))
         return [
-            BlobHandle(self._client, blob_uri, is_full=True, dag=dag)
+            BlobHandle(self._client, blob_uri, is_full=True)
             for blob_uri in resp["files"]
         ]
 
     def as_str(self) -> str:
         return f"{self.get_uri()}"
 
-    def set_owner(self, new_owner: List[str]) -> Optional[List[str]]:
+    def set_owner(self, owner: NodeHandle) -> BlobOwner:
         if self.is_full():
             raise ValueError(f"URI must not be full: {self}")
-        dag = self.get_dag()
-        res = cast(BlobOwner, self._client._request_json(
+        return cast(BlobOwner, self._client._request_json(
             METHOD_PUT, "/blob_owner", {
-                "dag": dag.get_uri(),
-                "blob": self._uri,
-                "owner": new_owner,
+                "blob": self.get_uri(),
+                "owner_dag": owner.get_dag().get_uri(),
+                "owner_node": owner.get_id(),
             }))
-        return res["owner"]
 
-    def get_owner(self) -> Optional[List[str]]:
+    def get_owner(self) -> BlobOwner:
         if self.is_full():
             raise ValueError(f"URI must not be full: {self}")
-        dag = self.get_dag()
-        res = cast(BlobOwner, self._client._request_json(
+        return cast(BlobOwner, self._client._request_json(
             METHOD_GET, "/blob_owner", {
-                "dag": dag.get_uri(),
-                "blob": self._uri,
+                "blob": self.get_uri(),
             }))
-        return res["owner"]
 
     def copy_to(
             self,
             to_uri: str,
-            new_owner: Optional[str] = None) -> 'BlobHandle':
+            new_owner: Optional[NodeHandle] = None) -> 'BlobHandle':
         if self.is_full():
             raise ValueError(f"URI must not be full: {self}")
-        dag = self.get_dag()
+        owner_dag = \
+            None if new_owner is None else new_owner.get_dag().get_uri()
+        owner_node = None if new_owner is None else new_owner.get_id()
         res = cast(CopyBlob, self._client._request_json(
             METHOD_POST, "/copy_blob", {
-                "dag": dag.get_uri(),
-                "from_uri": self._uri,
-                "owner": new_owner,
+                "from_uri": self.get_uri(),
+                "owner_dag": owner_dag,
+                "owner_node": owner_node,
                 "to_uri": to_uri,
             }))
-        return BlobHandle(self._client, res["new_uri"], is_full=False, dag=dag)
+        return BlobHandle(self._client, res["new_uri"], is_full=False)
 
     def download_zip(self, to_path: Optional[str]) -> Optional[io.BytesIO]:
         if self.is_full():
             raise ValueError(f"URI must not be full: {self}")
         cur_res, _ = self._client._raw_request_bytes(
             METHOD_GET, "/download_zip", {
-                "blob": self._uri,
-                "dag": self.get_dag().get_uri(),
+                "blob": self.get_uri(),
             })
         if to_path is None:
             return io.BytesIO(cur_res.read())
@@ -2267,24 +2234,21 @@ class BlobHandle:
         else:
             zip_stream = source
 
-        dag = self.get_dag()
         resp = cast(BlobFilesResponse, self._client._request_json(
             METHOD_FILE, "/upload_zip", {
-                "blob": self._uri,
-                "dag": dag.get_uri(),
+                "blob": self.get_uri(),
             }, files={
                 "file": zip_stream,
             }))
         return [
-            BlobHandle(self._client, blob_uri, is_full=True, dag=dag)
+            BlobHandle(self._client, blob_uri, is_full=True)
             for blob_uri in resp["files"]
         ]
 
     def convert_model(self) -> ModelReleaseResponse:
         return cast(ModelReleaseResponse, self._client._request_json(
             METHOD_POST, "/convert_model", {
-                "blob": self._uri,
-                "dag": self.get_dag().get_uri(),
+                "blob": self.get_uri(),
             }))
 
     def __hash__(self) -> int:
@@ -2311,14 +2275,11 @@ class CSVBlobHandle(BlobHandle):
     def __init__(
             self,
             client: XYMEClient,
-            dag: DagHandle,
-            node: NodeHandle,
             uri: str,
             count: int,
             pos: int,
             has_tmp: bool) -> None:
-        super().__init__(client, uri, is_full=False, dag=dag)
-        self._node = node
+        super().__init__(client, uri, is_full=False)
         self._count = count
         self._pos = pos
         self._has_tmp = has_tmp
@@ -2336,13 +2297,15 @@ class CSVBlobHandle(BlobHandle):
             self,
             action: str,
             additional: Dict[str, Union[str, int]],
-            fobj: Optional[IO[bytes]]) -> int:
+            fobj: Optional[IO[bytes]],
+            requeue_on_finish: Optional[NodeHandle] = None) -> int:
         args: Dict[str, Union[str, int]] = {
             "blob": self.get_uri(),
             "action": action,
-            "dag": self.get_dag().get_uri(),
-            "node": self._node.get_id(),
         }
+        if requeue_on_finish is not None and action == "finish":
+            args["dag"] = requeue_on_finish.get_dag().get_uri()
+            args["node"] = requeue_on_finish.get_id()
         args.update(additional)
         if fobj is not None:
             method = METHOD_FILE
@@ -2367,21 +2330,27 @@ class CSVBlobHandle(BlobHandle):
                 "hash": hash_str,
                 "size": size,
             },
-            None)
+            fobj=None)
 
     def append_data(self, fobj: IO[bytes]) -> int:
-        return self.perform_action("append", {}, fobj)
+        return self.perform_action("append", {}, fobj=fobj)
 
-    def finish_data(self) -> None:
-        self.perform_action("finish", {}, None)
+    def finish_data(
+            self, requeue_on_finish: Optional[NodeHandle] = None) -> None:
+        self.perform_action(
+            "finish",
+            {},
+            fobj=None,
+            requeue_on_finish=requeue_on_finish)
 
     def clear_tmp(self) -> None:
-        self.perform_action("clear", {}, None)
+        self.perform_action("clear", {}, fobj=None)
 
     def upload_data(
             self,
             file_content: IO[bytes],
             file_ext: str,
+            requeue_on_finish: Optional[NodeHandle] = None,
             progress_bar: Optional[IO[Any]] = sys.stdout) -> int:
         init_pos = file_content.seek(0, io.SEEK_CUR)
         file_hash = get_file_hash(file_content)
@@ -2403,12 +2372,13 @@ class CSVBlobHandle(BlobHandle):
                     f"o:{cur_size} b:{len(buff)}")
             cur_size = new_size
         print_progress(cur_size / total_size, True)
-        self.finish_data()
+        self.finish_data(requeue_on_finish)
         return cur_size
 
     def add_from_file(
             self,
             filename: str,
+            requeue_on_finish: Optional[NodeHandle] = None,
             progress_bar: Optional[IO[Any]] = sys.stdout) -> None:
         fname = filename
         if filename.endswith(INPUT_ZIP_EXT):
@@ -2419,16 +2389,17 @@ class CSVBlobHandle(BlobHandle):
         else:
             raise ValueError("could not determine extension")
         with open(filename, "rb") as fbuff:
-            self.upload_data(fbuff, ext, progress_bar)
+            self.upload_data(fbuff, ext, requeue_on_finish, progress_bar)
 
     def add_from_df(
             self,
             df: pd.DataFrame,
+            requeue_on_finish: Optional[NodeHandle] = None,
             progress_bar: Optional[IO[Any]] = sys.stdout) -> None:
         io_in = None
         try:
             io_in = df_to_csv(df)
-            self.upload_data(io_in, "csv", progress_bar)
+            self.upload_data(io_in, "csv", requeue_on_finish, progress_bar)
         finally:
             if io_in is not None:
                 io_in.close()
@@ -2440,22 +2411,28 @@ class JSONBlobHandle(BlobHandle):
     def __init__(
             self,
             client: XYMEClient,
-            dag: DagHandle,
             uri: str,
             count: int) -> None:
-        super().__init__(client, uri, is_full=False, dag=dag)
+        super().__init__(client, uri, is_full=False)
         self._count = count
 
     def get_count(self) -> int:
         return self._count
 
-    def append_jsons(self, jsons: List[Any]) -> 'JSONBlobHandle':
+    def append_jsons(
+            self,
+            jsons: List[Any],
+            requeue_on_finish: Optional[NodeHandle] = None,
+            ) -> 'JSONBlobHandle':
+        obj = {
+            "blob": self.get_uri(),
+            "jsons": jsons,
+        }
+        if requeue_on_finish is not None:
+            obj["dag"] = requeue_on_finish.get_dag().get_uri()
+            obj["node"] = requeue_on_finish.get_id()
         res = cast(JSONBlobAppendResponse, self._client._request_json(
-            METHOD_PUT, "/json_append", {
-                "dag": self.get_dag().get_uri(),
-                "blob": self.get_uri(),
-                "jsons": jsons,
-            }))
+            METHOD_PUT, "/json_append", obj))
         self._count = res["count"]
         return self
 
