@@ -61,6 +61,7 @@ from accern_xyme.types import (
     CustomImportsResponse,
     DynamicResults,
     DynamicStatusResponse,
+    ESQueryResponse,
     FlushAllQueuesResponse,
     InCursors,
     InstanceStatus,
@@ -2012,7 +2013,7 @@ class NodeHandle:
             return None
         return merge_ctype(res, ctype)
 
-    def reset(self) -> NodeState:
+    def remove(self) -> NodeState:
         return cast(NodeState, self._client._request_json(
             METHOD_PUT, "/node_state", {
                 "pipeline": self.get_pipeline().get_id(),
@@ -2088,6 +2089,29 @@ class NodeHandle:
                 "pipeline": self.get_pipeline().get_id(),
                 "node": self.get_id(),
             }))
+
+    def set_es_query(self, query: Dict[str, Any]) -> ESQueryResponse:
+        if self.get_type() != "es_reader":
+            raise ValueError(f"{self} is not a es reader node")
+
+        return cast(ESQueryResponse, self._client._request_json(
+            METHOD_POST, "/es_query", {
+                "pipeline": self.get_pipeline().get_id(),
+                "blob": self.get_blob_handle("es").get_uri(),
+                "es_query": query,
+            },
+        ))
+
+    def get_es_query(self) -> ESQueryResponse:
+        if self.get_type() != "es_reader":
+            raise ValueError(f"{self} is not a es reader node")
+
+        return cast(ESQueryResponse, self._client._request_json(
+            METHOD_GET, "/es_query", {
+                "pipeline": self.get_pipeline().get_id(),
+                "blob": self.get_blob_handle("es").get_uri(),
+            },
+        ))
 
     def set_custom_code(self, func: FUNC) -> CustomCodeResponse:
         from RestrictedPython import compile_restricted
@@ -2339,7 +2363,7 @@ class BlobHandle:
             METHOD_POST, "/convert_model", {
                 "blob": self._uri,
                 "pipeline": self.get_pipeline().get_id(),
-            }
+            },
         ))
 
     def __hash__(self) -> int:
