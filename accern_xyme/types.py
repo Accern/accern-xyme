@@ -174,9 +174,9 @@ DagList = TypedDict('DagList', {
     "cur_time": float,
     "dags": List[Tuple[str, Optional[float], Optional[float]]],
 })
-VisibleBlobs = TypedDict('VisibleBlobs', {
+KnownBlobs = TypedDict('KnownBlobs', {
     "cur_time": float,
-    "visible": List[Tuple[str, Optional[float]]],
+    "blobs": List[Tuple[str, Optional[float]]],
 })
 DagInfo = TypedDict('DagInfo', {
     "company": str,

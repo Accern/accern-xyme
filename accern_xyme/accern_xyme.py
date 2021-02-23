@@ -50,8 +50,6 @@ from .util import (
     ServerSideError,
 )
 from .types import (
-    # ESQueryResponse,  # FIXME: add!
-    # TritonModelsResponse,  # FIXME: add!
     AllowedCustomImports,
     BlobFilesResponse,
     BlobInit,
@@ -80,6 +78,7 @@ from .types import (
     KafkaOffsets,
     KafkaThroughput,
     KafkaTopics,
+    KnownBlobs,
     MinimalQueueStatsResponse,
     ModelParamsResponse,
     ModelReleaseResponse,
@@ -108,8 +107,8 @@ from .types import (
     Timing,
     TimingResult,
     Timings,
+    TritonModelsResponse,
     VersionResponse,
-    VisibleBlobs,
     WorkerScale,
 )
 
@@ -774,6 +773,41 @@ class XYMEClient:
                 "key": key,
                 "value": value,
             }))["replaced"]
+
+    def get_known_blobs(self, blob_type: Optional[str] = None) -> List[str]:
+        return [
+            res[0]
+            for res in self.get_known_blob_times(
+                retrieve_times=False, blob_type=blob_type)[1]
+        ]
+
+    def get_known_blob_ages(
+            self, blob_type: Optional[str] = None) -> List[Tuple[str, str]]:
+        cur_time, blobs = self.get_known_blob_times(
+            retrieve_times=True, blob_type=blob_type)
+        return [
+            (blob_id, get_age(cur_time, blob_time))
+            for (blob_id, blob_time) in sorted(blobs, key=lambda el: (
+                safe_opt_num(el[1]), el[0]))
+        ]
+
+    def get_known_blob_times(
+            self,
+            retrieve_times: bool,
+            blob_type: Optional[str] = None,
+            ) -> Tuple[float, List[Tuple[str, Optional[float]]]]:
+        obj: Dict[str, Union[int, str]] = {
+            "retrieve_times": int(retrieve_times),
+        }
+        if blob_type is not None:
+            obj["blob_type"] = blob_type
+        res = cast(KnownBlobs, self._request_json(
+            METHOD_GET, "/known_blobs", obj))
+        return res["cur_time"], res["blobs"]
+
+    def get_triton_models(self) -> List[str]:
+        return cast(TritonModelsResponse, self._request_json(
+            METHOD_GET, "/inference_models", {}))["models"]
 
 
 # *** XYMEClient ***
@@ -1491,29 +1525,6 @@ class DagHandle:
 
     def set_queue_mng(self, value: Optional[str]) -> None:
         self.set_attr("queue_mng", value)
-
-    def get_visible_blobs(self) -> List[str]:
-        return [
-            res[0]
-            for res in self.get_visible_blob_times(retrieve_times=False)[1]
-        ]
-
-    def get_visible_blob_ages(self) -> List[Tuple[str, str]]:
-        cur_time, visible = self.get_visible_blob_times(retrieve_times=True)
-        return [
-            (blob_id, get_age(cur_time, blob_time))
-            for (blob_id, blob_time) in sorted(visible, key=lambda el: (
-                safe_opt_num(el[1]), el[0]))
-        ]
-
-    def get_visible_blob_times(self, retrieve_times: bool) -> Tuple[
-            float, List[Tuple[str, Optional[float]]]]:
-        res = cast(VisibleBlobs, self._client._request_json(
-            METHOD_GET, "/visible_blobs", {
-                "dag": self.get_uri(),
-                "retrieve_times": int(retrieve_times),
-            }))
-        return res["cur_time"], res["visible"]
 
     @overload
     def check_queue_stats(  # pylint: disable=no-self-use
