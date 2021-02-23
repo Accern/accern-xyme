@@ -774,17 +774,24 @@ class XYMEClient:
                 "value": value,
             }))["replaced"]
 
-    def get_known_blobs(self, blob_type: Optional[str] = None) -> List[str]:
+    def get_known_blobs(
+            self,
+            blob_type: Optional[str] = None,
+            connector: Optional[str] = None) -> List[str]:
         return [
             res[0]
             for res in self.get_known_blob_times(
-                retrieve_times=False, blob_type=blob_type)[1]
+                retrieve_times=False,
+                blob_type=blob_type,
+                connector=connector)[1]
         ]
 
     def get_known_blob_ages(
-            self, blob_type: Optional[str] = None) -> List[Tuple[str, str]]:
+            self,
+            blob_type: Optional[str] = None,
+            connector: Optional[str] = None) -> List[Tuple[str, str]]:
         cur_time, blobs = self.get_known_blob_times(
-            retrieve_times=True, blob_type=blob_type)
+            retrieve_times=True, blob_type=blob_type, connector=connector)
         return [
             (blob_id, get_age(cur_time, blob_time))
             for (blob_id, blob_time) in sorted(blobs, key=lambda el: (
@@ -795,12 +802,15 @@ class XYMEClient:
             self,
             retrieve_times: bool,
             blob_type: Optional[str] = None,
+            connector: Optional[str] = None,
             ) -> Tuple[float, List[Tuple[str, Optional[float]]]]:
         obj: Dict[str, Union[int, str]] = {
             "retrieve_times": int(retrieve_times),
         }
         if blob_type is not None:
             obj["blob_type"] = blob_type
+        if connector is not None:
+            obj["connector"] = connector
         res = cast(KnownBlobs, self._request_json(
             METHOD_GET, "/known_blobs", obj))
         return res["cur_time"], res["blobs"]
