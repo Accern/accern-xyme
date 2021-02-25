@@ -651,7 +651,7 @@ class XYMEClient:
                 warnings_io.flush()
         return self.get_dag(dag_uri)
 
-    def update_settings(self, settings: SettingsObj) -> SettingsObj:
+    def set_settings(self, settings: SettingsObj) -> SettingsObj:
         return cast(NamespaceUpdateSettings, self._request_json(
             METHOD_POST, "/settings", {
                 "settings": settings,
