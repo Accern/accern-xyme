@@ -2177,11 +2177,26 @@ class BlobHandle:
             raise ValueError(f"URI must be full: {self}")
         if self.is_empty():
             return None
-        fin, ctype = self._client._raw_request_bytes(METHOD_POST, "/uri", {
-            "uri": self.get_uri(),
-        })
-        self._ctype = ctype
-        return interpret_ctype(fin, ctype)
+        sleep_time = 0.1
+        sleep_mul = 1.1
+        sleep_max = 5.0
+        total_time = 60.0
+        start_time = time.monotonic()
+        while True:
+            try:
+                fin, ctype = self._client._raw_request_bytes(
+                    METHOD_POST, "/uri", {
+                        "uri": self.get_uri(),
+                    })
+                self._ctype = ctype
+                return interpret_ctype(fin, ctype)
+            except HTTPError as e:
+                if e.response.status_code != 404:
+                    raise e
+                if time.monotonic() - start_time >= total_time:
+                    raise e
+                time.sleep(sleep_time)
+                sleep_time = min(sleep_time * sleep_mul, sleep_max)
 
     def list_files(self) -> List['BlobHandle']:
         if self.is_full():
