@@ -271,6 +271,11 @@ ModelSetupResponse = TypedDict('ModelSetupResponse', {
 BlobFilesResponse = TypedDict('BlobFilesResponse', {
     "files": List[str],
 })
+UploadFilesResponse = TypedDict('UploadFilesResponse', {
+    "uri": Optional[str],
+    "pos": int,
+    "files": List[str],
+})
 DagDupResponse = TypedDict('DagDupResponse', {
     "dag": str,
 })

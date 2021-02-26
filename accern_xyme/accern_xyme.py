@@ -108,6 +108,7 @@ from .types import (
     TimingResult,
     Timings,
     TritonModelsResponse,
+    UploadFilesResponse,
     VersionResponse,
     WorkerScale,
 )
@@ -2262,23 +2263,93 @@ class BlobHandle:
             file_download.write(cur_res.read())
         return None
 
+    def _perform_upload_action(
+            self,
+            action: str,
+            additional: Dict[str, Union[str, int]],
+            fobj: Optional[IO[bytes]]) -> UploadFilesResponse:
+        args: Dict[str, Union[str, int]] = {
+            "action": action,
+        }
+        args.update(additional)
+        if fobj is not None:
+            method = METHOD_FILE
+            files: Optional[Dict[str, IO[bytes]]] = {
+                "file": fobj,
+            }
+        else:
+            method = METHOD_POST
+            files = None
+        return cast(UploadFilesResponse, self._client._request_json(
+            method, "/upload_zip", args, files=files))
+
+    def _start_upload(self, size: int, hash_str: str) -> str:
+        res = self._perform_upload_action(
+            "start",
+            {
+                "target": self.get_uri(),
+                "hash": hash_str,
+                "size": size,
+            },
+            fobj=None)
+        assert res["uri"] is not None
+        return res["uri"]
+
+    def _append_upload(self, uri: str, fobj: IO[bytes]) -> int:
+        res = self._perform_upload_action("append", {"uri": uri}, fobj=fobj)
+        return res["pos"]
+
+    def _finish_upload(self, uri: str) -> List[str]:
+        res = self._perform_upload_action("finish", {"uri": uri}, fobj=None)
+        return res["files"]
+
+    def _clear_upload(self, uri: str) -> None:
+        self._perform_upload_action("clear", {"uri": uri}, fobj=None)
+
+    def _upload_zip(
+            self,
+            file_content: IO[bytes],
+            progress_bar: Optional[IO[Any]] = sys.stdout) -> List[str]:
+        init_pos = file_content.seek(0, io.SEEK_CUR)
+        file_hash = get_file_hash(file_content)
+        total_size = file_content.seek(0, io.SEEK_END) - init_pos
+        file_content.seek(init_pos, io.SEEK_SET)
+        if progress_bar is not None:
+            progress_bar.write("Uploading file:\n")
+        print_progress = get_progress_bar(out=progress_bar)
+        success = False
+        tmp_uri = self._start_upload(total_size, file_hash)
+        try:
+            cur_size = 0
+            while True:
+                print_progress(cur_size / total_size, False)
+                buff = file_content.read(get_file_upload_chunk_size())
+                if not buff:
+                    break
+                new_size = self._append_upload(tmp_uri, BytesIO(buff))
+                if new_size - cur_size != len(buff):
+                    raise ValueError(
+                        f"incomplete chunk upload n:{new_size} "
+                        f"o:{cur_size} b:{len(buff)}")
+                cur_size = new_size
+            print_progress(cur_size / total_size, True)
+            files = self._finish_upload(tmp_uri)
+            success = True
+        finally:
+            if not success:
+                self._clear_upload(tmp_uri)
+        return files
+
     def upload_zip(
             self, source: Union[str, io.BytesIO]) -> List['BlobHandle']:
         if isinstance(source, str) or not hasattr(source, "read"):
             with open(f"{source}", "rb") as fin:
-                zip_stream = io.BytesIO(fin.read())
+                files = self._upload_zip(fin)
         else:
-            zip_stream = source
-
-        resp = cast(BlobFilesResponse, self._client._request_json(
-            METHOD_FILE, "/upload_zip", {
-                "blob": self.get_uri(),
-            }, files={
-                "file": zip_stream,
-            }))
+            files = self._upload_zip(source)
         return [
             BlobHandle(self._client, blob_uri, is_full=True)
-            for blob_uri in resp["files"]
+            for blob_uri in files
         ]
 
     def convert_model(self) -> ModelReleaseResponse:
