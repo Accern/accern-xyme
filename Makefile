@@ -70,7 +70,7 @@ publish:
 	@test -z `git ls-files --other --exclude-standard --directory` || (echo "there are untracked files" && exit 1)
 	@test `git rev-parse --abbrev-ref HEAD` = "master" || (echo "not on master" && exit 1)
 	python3 setup.py sdist bdist_wheel
-	twine upload dist/accern_xyme-$(VERSION)-py2.py3-none-any.whl dist/accern_xyme-$(VERSION).tar.gz
+	twine upload dist/accern_xyme-$(VERSION)-py3-none-any.whl dist/accern_xyme-$(VERSION).tar.gz
 	git tag "v$(VERSION)"
 	git push origin "v$(VERSION)"
 	@echo "succesfully deployed $(VERSION)"
