@@ -997,7 +997,7 @@ class DagHandle:
                 self.refresh()
             yield do_refresh
 
-    def set_pipeline(self, defs: DagDef) -> None:
+    def set_dag(self, defs: DagDef) -> None:
         self._client.set_dag(self.get_uri(), defs)
 
     def dynamic_model(
