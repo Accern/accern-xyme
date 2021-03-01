@@ -69,7 +69,7 @@ publish:
 	@git diff --exit-code 2>&1 >/dev/null && git diff --cached --exit-code 2>&1 >/dev/null || (echo "working copy is not clean" && exit 1)
 	@test -z `git ls-files --other --exclude-standard --directory` || (echo "there are untracked files" && exit 1)
 	@test `git rev-parse --abbrev-ref HEAD` = "master" || (echo "not on master" && exit 1)
-	rm -r dist build accern_xyme.egg-info
+	rm -r dist build accern_xyme.egg-info || echo "no files to delete"
 	python3 -m pip install -U setuptools twine wheel
 	python3 setup.py sdist bdist_wheel
 	python3 -m twine upload dist/accern_xyme-$(VERSION)-py3-none-any.whl dist/accern_xyme-$(VERSION).tar.gz
