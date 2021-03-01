@@ -607,12 +607,12 @@ class XYMEClient:
     def create_new_dag(
             self,
             username: Optional[str] = None,
-            pipename: Optional[str] = None,
+            dagname: Optional[str] = None,
             index: Optional[int] = None) -> str:
         return cast(DagInit, self._request_json(
             METHOD_POST, "/dag_init", {
                 "user": username,
-                "name": pipename,
+                "name": dagname,
                 "index": index,
             }))["dag"]
 
@@ -631,21 +631,21 @@ class XYMEClient:
             dag_uri: str,
             defs: DagDef,
             warnings_io: Optional[IO[Any]] = sys.stderr) -> 'DagHandle':
-        pipe_create = cast(DagCreate, self._request_json(
+        dag_create = cast(DagCreate, self._request_json(
             METHOD_POST, "/dag_create", {
                 "dag": dag_uri,
                 "defs": defs,
             }))
-        dag_uri = pipe_create["dag"]
+        dag_uri = dag_create["dag"]
         if warnings_io is not None:
-            warnings = pipe_create["warnings"]
+            warnings = dag_create["warnings"]
             if len(warnings) > 1:
                 warnings_io.write(
                     f"{len(warnings)} warnings while "
-                    f"setting pipeline {dag_uri}:\n")
+                    f"setting dag {dag_uri}:\n")
             elif len(warnings) == 1:
                 warnings_io.write(
-                    f"Warning while setting pipeline {dag_uri}:\n")
+                    f"Warning while setting dag {dag_uri}:\n")
             for warn in warnings:
                 warnings_io.write(f"{warn}\n")
             if warnings:
