@@ -8,6 +8,7 @@
 
 from typing import Any
 
+
 def test_value_counts_nunique() -> None:
     ...
 
@@ -28,7 +29,8 @@ def test_is_unique_class_ne(capsys: Any) -> None:
     ...
 
 
-def test_drop_duplicates(any_numpy_dtype: Any, keep: Any, expected: Any) -> None:
+def test_drop_duplicates(
+        any_numpy_dtype: Any, keep: Any, expected: Any) -> None:
     ...
 
 

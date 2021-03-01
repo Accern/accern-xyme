@@ -160,7 +160,7 @@ class DataFrame(NDFrame):
 
     def to_parquet(self, fname: Any, engine: str = ..., compression: str = ...,
                    index: Optional[Any] = ...,
-                   partition_cols: Optional[Any] = ..., **kwargs: Any) -> None:
+                   partition_cols: Optional[Any] = ..., **kwargs: Any) -> bytes:
         ...
 
     def to_html(self, buf: Optional[Any] = ..., columns: Optional[Any] = ...,

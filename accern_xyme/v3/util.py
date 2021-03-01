@@ -20,7 +20,7 @@ from io import BytesIO, TextIOWrapper
 import pandas as pd
 from scipy import sparse
 import torch
-from .types import MinimalQueueStatsResponse, QueueStatus
+from accern_xyme.types import MinimalQueueStatsResponse, QueueStatus
 
 VERBOSE = False
 FILE_UPLOAD_CHUNK_SIZE = 100 * 1024  # 100kb

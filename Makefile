@@ -1,8 +1,8 @@
 help:
 	@echo "The following make targets are available:"
+	@echo "lint-all	run all lint steps"
 	@echo "lint-comment	run linter check over regular comments"
 	@echo "lint-docstring	run linter check over docstring"
-	@echo "lint-emptyinit	main inits must be empty"
 	@echo "lint-flake8	run flake8 checker to detect missing trailing comma"
 	@echo "lint-forgottonformat	ensures format strings are used"
 	@echo "lint-pycodestyle	run linter check using pycodestyle standard"
@@ -20,9 +20,6 @@ lint-comment:
 
 lint-docstring:
 	flake8 --verbose --select DAR --exclude venv --show-source ./
-
-lint-emptyinit:
-	[ ! -s monitor/__init__.py ] && [ ! -s worker/__init__.py ]
 
 lint-flake8:
 	flake8 --verbose --select C815 --exclude venv --show-source ./
@@ -54,6 +51,17 @@ lint-stringformat:
 
 lint-type-check:
 	mypy . --config-file mypy.ini
+
+lint-all: \
+	lint-comment \
+	lint-docstring \
+	lint-forgottenformat \
+	lint-requirements \
+	lint-stringformat \
+	lint-pycodestyle \
+	lint-pylint \
+	lint-type-check \
+	lint-flake8
 
 VERSION=`echo "import accern_xyme;print(accern_xyme.__version__)" | python3 2>/dev/null`
 

@@ -70,7 +70,7 @@ class CategoricalDtype(PandasExtensionDtype, ExtensionDtype):
     base: Any = ...
 
     def __init__(self, categories: Any = ...,
-                 ordered: OrderedType = ...) -> None :
+                 ordered: OrderedType = ...) -> None:
         ...
 
     def __hash__(self) -> int:
@@ -88,7 +88,7 @@ class CategoricalDtype(PandasExtensionDtype, ExtensionDtype):
         ...
 
     @staticmethod
-    def validate_categories(categories: Any, fastpath: bool=...) -> Any:
+    def validate_categories(categories: Any, fastpath: bool = ...) -> Any:
         ...
 
     def update_dtype(self, dtype: CategoricalDtype) -> CategoricalDtype:
@@ -132,7 +132,7 @@ class DatetimeTZDtype(PandasExtensionDtype):
     def name(self) -> Any:
         ...
 
-    def __hash__(self) -> Any:
+    def __hash__(self) -> int:
         ...
 
     def __eq__(self, other: Any) -> Any:
@@ -165,14 +165,14 @@ class PeriodDtype(PandasExtensionDtype):
     def na_value(self) -> Any:
         ...
 
-    def __hash__(self) -> Any:
+    def __hash__(self) -> int:
         ...
 
-    def __eq__(self, other: Any) -> Any:
+    def __eq__(self, other: Any) -> bool:
         ...
 
     @classmethod
-    def is_dtype(cls, dtype: Any) -> Any:
+    def is_dtype(cls, dtype: Any) -> bool:
         ...
 
     @classmethod
@@ -206,7 +206,7 @@ class IntervalDtype(PandasExtensionDtype):
     def type(self) -> Any:
         ...
 
-    def __hash__(self) -> Any:
+    def __hash__(self) -> int:
         ...
 
     def __eq__(self, other: Any) -> bool:

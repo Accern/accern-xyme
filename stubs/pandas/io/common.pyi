@@ -16,6 +16,7 @@ from pandas.errors import ParserError
 
 CParserError = ParserError
 
+
 class BaseIterator:
     def __iter__(self) -> Any:
         ...
@@ -49,10 +50,6 @@ class BytesZipFile(zipfile.ZipFile, BytesIO):  # type: ignore
         ...
 
     def write(self, data: Any) -> None:  # type: ignore
-        ...
-
-    @property
-    def closed(self) -> Any:  # type: ignore
         ...
 
 

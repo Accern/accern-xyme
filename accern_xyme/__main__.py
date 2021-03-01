@@ -19,9 +19,13 @@ def run() -> None:
         type=str,
         help="the server token")
     parser.add_argument(
-        "--pipeline",
+        "--namespace",
         type=str,
-        help="the pipeline to pretty print")
+        help="the namespace")
+    parser.add_argument(
+        "--dag",
+        type=str,
+        help="the dag to pretty print")
     parser.add_argument(
         "--no-unicode",
         dest="no_uni",
@@ -29,8 +33,9 @@ def run() -> None:
         help="avoid unicode characters in the output")
     args = parser.parse_args()
 
-    xyme = accern_xyme.create_xyme_client(args.server, args.token)
-    pipe = xyme.get_pipeline(args.pipeline)
+    xyme = accern_xyme.create_xyme_client(
+        args.server, args.token, args.namespace)
+    pipe = xyme.get_dag(args.dag)
     print(pipe.pretty(not args.no_uni))
 
 

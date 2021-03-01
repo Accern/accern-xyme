@@ -26,7 +26,7 @@ import pandas as pd
 from typing_extensions import TypedDict, Literal, overload
 import quick_server
 
-from accern_xyme.util import (
+from accern_xyme.v2.util import (
     get_file_upload_chunk_size,
     get_max_retry,
     get_retry_sleep,
@@ -36,9 +36,6 @@ from accern_xyme.util import (
     get_progress_bar,
     get_file_hash,
 )
-
-
-# FIXME: async calls, documentation, auth, summary – time it took etc.
 
 
 API_VERSION = 2
@@ -543,7 +540,7 @@ class StdoutWrapper:
 # *** StdoutWrapper ***
 
 
-class MetricWrapper(collections.abc.Sequence):
+class MetricWrapper(collections.abc.Sequence):  # type: ignore
     def get_xaxis(self) -> str:
         raise NotImplementedError()
 
@@ -1155,7 +1152,6 @@ class XYMELegacyClient:
             query: Optional[str] = None,
             context: Optional[int] = None) -> StdoutWrapper:
         obj: Dict[str, Any] = {
-            # FIXME: only regular for now -- other value is deploy
             "logsKind": "regular",
         }
         if query is not None:
@@ -1692,7 +1688,7 @@ class JobHandle:
 
     def can_start(self, force: bool) -> bool:
         notes = self.get_notes(force)
-        # FIXME: notes is None if the job has been started
+        # NOTE: notes is None if the job has been started
         # this is a bug right now
         if notes is None:
             return True
@@ -2339,7 +2335,7 @@ class JobHandle:
 InspectValue = Union['InspectPath', bool, int, float, str, None]
 
 
-class InspectPath(collections.abc.Mapping):
+class InspectPath(collections.abc.Mapping):  # type: ignore
     def __init__(
             self,
             clazz: str,
