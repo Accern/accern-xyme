@@ -116,9 +116,6 @@ else:
     WVD = weakref.WeakValueDictionary
 
 
-__version__ = "0.1.14"
-
-
 API_VERSION = 3
 
 
