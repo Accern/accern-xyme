@@ -3,6 +3,6 @@
 __pycache__
 /build/
 /dist/
-/src/accern_xyme.egg-info
+/accern_xyme.egg-info
 /.mypy_cache
 .vscode
