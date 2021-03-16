@@ -892,10 +892,10 @@ class DagHandle:
         self._maybe_fetch()
         return list(self._nodes.keys())
 
-    def get_node(self, node_id: str) -> 'NodeHandle':
+    def get_node(self, node_name: str) -> 'NodeHandle':
         self._maybe_refresh()
         self._maybe_fetch()
-        node_id = self._node_lookup.get(node_id, node_id)
+        node_id = self._node_lookup.get(node_name, node_name)
         return self._nodes[node_id]
 
     def get_uri(self) -> str:
@@ -922,7 +922,7 @@ class DagHandle:
     def get_timing(
             self,
             blacklist: Optional[List[str]] = None,
-            ) -> Optional[TimingResult]:
+            ) -> TimingResult:
         blist = [] if blacklist is None else blacklist
         node_timing: Dict[str, NodeTiming] = {}
         nodes = self.get_nodes()
@@ -2614,5 +2614,6 @@ def create_xyme_client(
         api_version = lve.get_api_version()
         if api_version == 3:
             from accern_xyme.v3.accern_xyme import create_xyme_client_v3
+
             return create_xyme_client_v3(url, token)  # type: ignore
         raise lve

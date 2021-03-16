@@ -3,6 +3,19 @@
 __pycache__
 /build/
 /dist/
-/accern_xyme.egg-info
-/.mypy_cache
+accern_xyme.egg-info/
+.mypy_cache/
 .vscode
+
+# Typescript
+node_modules/
+*.log
+package-lock.json
+*.js
+*.js.map
+*.d.ts
+
+# ipython
+*.ipynb
+.ipynb_checkpoints/
+*.csv

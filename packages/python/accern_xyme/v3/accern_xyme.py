@@ -2359,7 +2359,7 @@ class BlobHandle:
             METHOD_POST, "/convert_model", {
                 "blob": self._uri,
                 "pipeline": self.get_pipeline().get_id(),
-            }
+            },
         ))
 
     def __hash__(self) -> int:

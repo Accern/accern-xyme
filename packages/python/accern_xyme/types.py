@@ -3,20 +3,22 @@ from typing_extensions import TypedDict, Literal
 
 
 DagDef = TypedDict('DagDef', {
-    "name": str,
     "company": str,
-    "nodes": List[str],
-    "state": str,
-    "high_priority": bool,
-    "queue_mng": Optional[str],
     "default_input_key": Optional[str],
     "default_output_key": Optional[str],
+    "high_priority": bool,
+    "is_parallel": Optional[bool],
+    "name": str,
+    "nodes": List['NodeDef'],
+    "queue_mng": Optional[str],
+    "state": str,
 })
 NodeDef = TypedDict('NodeDef', {
-    "id": str,
-    "kind": str,
-    "inputs": Dict[str, Tuple[str, str]],
     "blobs": Dict[str, str],
+    "id": str,
+    "inputs": Dict[str, Tuple[str, str]],
+    "kind": str,
+    "name": str,
     "params": Dict[str, Any],
 }, total=False)
 S3BucketSettings = TypedDict('S3BucketSettings', {
@@ -114,7 +116,7 @@ ParamDef = TypedDict('ParamDef', {
     "default": Optional[Union[str, float, int, List[str]]],
 })
 ParamDefs = Dict[str, ParamDef]
-ModelParamDefs = Dict[str, Dict[str, ParamDef]]
+ModelParamDefs = Dict[str, ParamDefs]
 Backends = TypedDict('Backends', {
     "logger": List[str],
     "status_emitter": List[str],
