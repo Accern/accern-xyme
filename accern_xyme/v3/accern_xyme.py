@@ -556,10 +556,11 @@ class XYMEClientV3:
             self,
             retrieve_times: bool) -> Tuple[
                 float, List[Tuple[str, Optional[float], Optional[float]]]]:
+        obj = {}
+        if retrieve_times:
+            obj["retrieve_times"] = "1"
         res = cast(PipelineList, self._request_json(
-            METHOD_GET, "/pipelines", {
-                "retrieve_times": int(retrieve_times),
-            }))
+            METHOD_GET, "/pipelines", obj))
         return res["cur_time"], res["pipelines"]
 
     def get_pipeline(self, pipe_id: str) -> 'PipelineHandle':
