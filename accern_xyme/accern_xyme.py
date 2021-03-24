@@ -119,9 +119,6 @@ else:
     WVD = weakref.WeakValueDictionary
 
 
-__version__ = "0.2.3"
-
-
 API_VERSION = 4
 DEFAULT_NAMESPACE = "default"
 
