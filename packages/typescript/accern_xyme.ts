@@ -320,7 +320,7 @@ export default class XYMEClient {
         return await this.requestJSON<BlobInit>({
             method: METHOD_POST,
             path: '/blob_init',
-            addNamespace: false,
+            addNamespace: true,
             args: {
                 type: blobType,
             },
@@ -335,7 +335,7 @@ export default class XYMEClient {
         return await this.requestJSON<DagInit>({
             method: METHOD_POST,
             path: '/dag_init',
-            addNamespace: false,
+            addNamespace: true,
             args: {
                 ...(userName ? { user: userName } : {}),
                 ...(dagName ? { name: dagName } : {}),
