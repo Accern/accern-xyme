@@ -16,7 +16,7 @@ TODO (If this is a bug fix, explain what was causing the issue)
 
 ### Links:
 
-- Accern-xyme: https://github.com/Accern/accern-xyme/pull/000
+- xyme-backend: https://github.com/Accern/xyme-backend/pull/000
 
 ### How did you test this PR?
 
