@@ -4,24 +4,18 @@ TODO (If this is a bug fix, explain what was causing the issue)
 
 ## Changes
 
-- [ ] TODO
+-   [ ] TODO
 
 ## Before reviewing
 
-- [ ] Is there any linked PRs?
-- [ ] Did you test this PR?
-- [ ] Did you write new tests?
-- [ ] Did you add new environment variables?
-- [ ] Is there any migration or seeding necessary?
+-   [ ] Are there any linked PRs?
+-   [ ] Did you test this PR?
+-   [ ] Is there any migration or seeding necessary?
 
 ### Links:
 
-- xyme-backend: https://github.com/Accern/xyme-backend/pull/000
+-   xyme-backend: https://github.com/Accern/xyme-backend/pull/000
 
 ### How did you test this PR?
 
-### Describe your new tests or why no test is necessary
-
-### New environment variables
-
-### Migration/seed steps
+### Migration / seed steps
