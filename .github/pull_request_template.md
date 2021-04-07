@@ -2,16 +2,16 @@
 
 -   [ ] TODO
 
-## Links:
+## Before reviewing
 
--   Jira: https://myaccern.atlassian.net/browse/TAD-000
+-   [ ] Are there any linked PRs?
+-   [ ] Did you test this PR?
+-   [ ] Is there any migration or seeding necessary?
+
+### Links:
 
 -   xyme-backend: https://github.com/Accern/xyme-backend/pull/000
 
--   Notebook: https://github.com/Accern/xyme-notebooks/pull/000
+### How did you test this PR?
 
-## REMINDER
-
-Please update README, env.sample, requirements if necessary.
-
-_If you change the api in one language, please update all other language._
+### Migration / seed steps

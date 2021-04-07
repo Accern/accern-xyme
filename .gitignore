@@ -13,7 +13,6 @@ node_modules/
 package-lock.json
 *.js
 *.js.map
-*.d.ts
 
 # ipython
 *.ipynb

@@ -83,6 +83,7 @@ interface XYMERequestArgument extends Partial<RequestArgument> {
     path: string;
 }
 
+
 export default class XYMEClient {
     apiVersion?: number;
     autoRefresh = true;
