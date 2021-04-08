@@ -57,7 +57,6 @@ from .types import (
     CacheStats,
     CopyBlob,
     CSVBlobResponse,
-    CSVOp,
     DagCreate,
     DagDef,
     DagDupResponse,
@@ -1988,8 +1987,11 @@ class NodeHandle:
                 "dag": dag.get_uri(),
                 "node": self.get_id(),
             }))
-        return CSVBlobHandle(
-            self._client, res["csv"], res["count"], res["pos"], res["tmp"])
+        owner: BlobOwner = {
+            "owner_dag": self.get_dag().get_uri(),
+            "owner_node": self.get_id(),
+        }
+        return CSVBlobHandle(self._client, res["csv"], owner)
 
     def get_json_blob(self) -> 'JSONBlobHandle':
         if self.get_type() != "jsons_reader":
@@ -2267,10 +2269,15 @@ class BlobHandle:
             self,
             action: str,
             additional: Dict[str, Union[str, int]],
-            fobj: Optional[IO[bytes]]) -> UploadFilesResponse:
+            fobj: Optional[IO[bytes]],
+            requeue_on_finish: Optional[NodeHandle] = None,
+                ) -> UploadFilesResponse:
         args: Dict[str, Union[str, int]] = {
             "action": action,
         }
+        if requeue_on_finish is not None and action == "finish":
+            args["dag"] = requeue_on_finish.get_dag().get_uri()
+            args["node"] = requeue_on_finish.get_id()
         args.update(additional)
         if fobj is not None:
             method = METHOD_FILE
@@ -2281,7 +2288,7 @@ class BlobHandle:
             method = METHOD_POST
             files = None
         return cast(UploadFilesResponse, self._client._request_json(
-            method, "/upload_zip", args, files=files))
+            method, "/upload_file", args, files=files))
 
     def _start_upload(self, size: int, hash_str: str) -> str:
         res = self._perform_upload_action(
@@ -2299,17 +2306,36 @@ class BlobHandle:
         res = self._perform_upload_action("append", {"uri": uri}, fobj=fobj)
         return res["pos"]
 
-    def _finish_upload(self, uri: str) -> List[str]:
-        res = self._perform_upload_action("finish", {"uri": uri}, fobj=None)
+    def _finish_upload(
+            self,
+            uri: str,
+            file_type: str,
+            requeue_on_finish: Optional[NodeHandle] = None,
+            owner: Optional[BlobOwner] = None) -> List[str]:
+        args: Dict[str, Union[str, int]] = {
+            "uri": uri,
+            "file_type": file_type,
+        }
+        if owner is not None:
+            args["owner_dag"] = owner["owner_dag"]
+            args["owner_node"] = owner["owner_node"]
+        res = self._perform_upload_action(
+            "finish",
+            args,
+            fobj=None,
+            requeue_on_finish=requeue_on_finish)
         return res["files"]
 
     def _clear_upload(self, uri: str) -> None:
         self._perform_upload_action("clear", {"uri": uri}, fobj=None)
 
-    def _upload_zip(
+    def _upload_file(
             self,
             file_content: IO[bytes],
-            progress_bar: Optional[IO[Any]] = sys.stdout) -> List[str]:
+            file_type: str,
+            requeue_on_finish: Optional[NodeHandle] = None,
+            progress_bar: Optional[IO[Any]] = sys.stdout,
+            owner: Optional[BlobOwner] = None) -> List[str]:
         init_pos = file_content.seek(0, io.SEEK_CUR)
         file_hash = get_file_hash(file_content)
         total_size = file_content.seek(0, io.SEEK_END) - init_pos
@@ -2333,7 +2359,8 @@ class BlobHandle:
                         f"o:{cur_size} b:{len(buff)}")
                 cur_size = new_size
             print_progress(cur_size / total_size, True)
-            files = self._finish_upload(tmp_uri)
+            files = self._finish_upload(
+                tmp_uri, file_type, requeue_on_finish, owner=owner)
             success = True
         finally:
             if not success:
@@ -2344,9 +2371,9 @@ class BlobHandle:
             self, source: Union[str, io.BytesIO]) -> List['BlobHandle']:
         if isinstance(source, str) or not hasattr(source, "read"):
             with open(f"{source}", "rb") as fin:
-                files = self._upload_zip(fin)
+                files = self._upload_file(fin, file_type="zip")
         else:
-            files = self._upload_zip(source)
+            files = self._upload_file(source, file_type="zip")
         return [
             BlobHandle(self._client, blob_uri, is_full=True)
             for blob_uri in files
@@ -2383,120 +2410,23 @@ class CSVBlobHandle(BlobHandle):
             self,
             client: XYMEClient,
             uri: str,
-            count: int,
-            pos: int,
-            has_tmp: bool) -> None:
+            owner: BlobOwner) -> None:
         super().__init__(client, uri, is_full=False)
-        self._count = count
-        self._pos = pos
-        self._has_tmp = has_tmp
-
-    def get_count(self) -> int:
-        return self._count
-
-    def get_pos(self) -> int:
-        return self._pos
-
-    def has_tmp(self) -> bool:
-        return self._has_tmp
-
-    def perform_action(
-            self,
-            action: str,
-            additional: Dict[str, Union[str, int]],
-            fobj: Optional[IO[bytes]],
-            requeue_on_finish: Optional[NodeHandle] = None) -> int:
-        args: Dict[str, Union[str, int]] = {
-            "blob": self.get_uri(),
-            "action": action,
-        }
-        if requeue_on_finish is not None and action == "finish":
-            args["dag"] = requeue_on_finish.get_dag().get_uri()
-            args["node"] = requeue_on_finish.get_id()
-        args.update(additional)
-        if fobj is not None:
-            method = METHOD_FILE
-            files: Optional[Dict[str, IO[bytes]]] = {
-                "file": fobj,
-            }
-        else:
-            method = METHOD_POST
-            files = None
-        res = cast(CSVOp, self._client._request_json(
-            method, "/csv_action", args, files=files))
-        self._count = res["count"]
-        self._has_tmp = res["tmp"]
-        self._pos = res["pos"]
-        return self._pos
-
-    def start_data(self, size: int, hash_str: str, ext: str) -> int:
-        return self.perform_action(
-            "start",
-            {
-                "ext": ext,
-                "hash": hash_str,
-                "size": size,
-            },
-            fobj=None)
-
-    def append_data(self, fobj: IO[bytes]) -> int:
-        return self.perform_action("append", {}, fobj=fobj)
-
-    def finish_data(
-            self, requeue_on_finish: Optional[NodeHandle] = None) -> None:
-        self.perform_action(
-            "finish",
-            {},
-            fobj=None,
-            requeue_on_finish=requeue_on_finish)
-
-    def clear_tmp(self) -> None:
-        self.perform_action("clear", {}, fobj=None)
-
-    def upload_data(
-            self,
-            file_content: IO[bytes],
-            file_ext: str,
-            requeue_on_finish: Optional[NodeHandle] = None,
-            progress_bar: Optional[IO[Any]] = sys.stdout) -> int:
-        init_pos = file_content.seek(0, io.SEEK_CUR)
-        file_hash = get_file_hash(file_content)
-        total_size = file_content.seek(0, io.SEEK_END) - init_pos
-        file_content.seek(init_pos, io.SEEK_SET)
-        if progress_bar is not None:
-            progress_bar.write("Uploading file:\n")
-        print_progress = get_progress_bar(out=progress_bar)
-        cur_size = self.start_data(total_size, file_hash, file_ext)
-        while True:
-            print_progress(cur_size / total_size, False)
-            buff = file_content.read(get_file_upload_chunk_size())
-            if not buff:
-                break
-            new_size = self.append_data(BytesIO(buff))
-            if new_size - cur_size != len(buff):
-                raise ValueError(
-                    f"incomplete chunk upload n:{new_size} "
-                    f"o:{cur_size} b:{len(buff)}")
-            cur_size = new_size
-        print_progress(cur_size / total_size, True)
-        self.finish_data(requeue_on_finish)
-        return cur_size
+        self._owner = owner
 
     def add_from_file(
             self,
             filename: str,
             requeue_on_finish: Optional[NodeHandle] = None,
             progress_bar: Optional[IO[Any]] = sys.stdout) -> None:
-        fname = filename
-        if filename.endswith(INPUT_ZIP_EXT):
-            fname = filename[:-len(INPUT_ZIP_EXT)]
-        ext_pos = fname.rfind(".")
-        if ext_pos >= 0:
-            ext = filename[ext_pos + 1:]  # full filename
-        else:
-            raise ValueError("could not determine extension")
+        print("self._owner", self._owner)
         with open(filename, "rb") as fbuff:
-            self.upload_data(fbuff, ext, requeue_on_finish, progress_bar)
+            self._upload_file(
+                fbuff,
+                "csv",
+                requeue_on_finish,
+                progress_bar,
+                owner=self._owner)
 
     def add_from_df(
             self,
@@ -2506,7 +2436,12 @@ class CSVBlobHandle(BlobHandle):
         io_in = None
         try:
             io_in = df_to_csv(df)
-            self.upload_data(io_in, "csv", requeue_on_finish, progress_bar)
+            self._upload_file(
+                io_in,
+                "csv",
+                requeue_on_finish,
+                progress_bar,
+                owner=self._owner)
         finally:
             if io_in is not None:
                 io_in.close()

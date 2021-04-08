@@ -1,5 +1,5 @@
 import * as log4js from 'log4js';
-import { FileHandle } from 'fs/promises';
+import { open, FileHandle } from 'fs/promises';
 import jsSHA from 'jssha';
 import { DictStrStr } from './types';
 
@@ -137,4 +137,9 @@ export function forceKey(obj: { [key: string]: any }, key: string): any {
             `unfound key: ${key} in object ${JSON.stringify(obj)}`
         );
     }
+}
+
+export async function openWrite(buffer: Buffer, fileName: string) {
+    const fileHandle = await open(fileName, 'r');
+    await fileHandle.write(buffer);
 }

@@ -25,6 +25,7 @@ import {
     KafkaTopics,
     KnownBlobs,
     MinimalQueueStatsResponse,
+    ModelReleaseResponse,
     NamespaceUpdateSettings,
     NodeChunk,
     NodeDefInfo,
@@ -43,7 +44,6 @@ import {
     Timings,
     TritonModelsResponse,
     VersionResponse,
-    XYMEConfig,
 } from './types';
 import {
     HTTPResponseError,
@@ -55,6 +55,7 @@ import {
     rawRequestJSON,
     rawRequestString,
     RequestArgument,
+    RetryOptions,
 } from './request';
 import {
     assertBoolean,
@@ -65,6 +66,7 @@ import {
     getFileUploadChunkSize,
     isUndefined,
     KeyError,
+    openWrite,
     safeOptNumber,
     useLogger,
 } from './util';
@@ -73,6 +75,13 @@ const API_VERSION = 4;
 const EMPTY_BLOB_PREFIX = 'null://';
 const PREFIX = 'xyme';
 const logger = useLogger('xyme');
+const DEFAULT_NAMESPACE = 'default';
+
+export interface XYMEConfig {
+    url: string;
+    token: string;
+    namespace?: string;
+}
 
 interface XYMERequestArgument extends Partial<RequestArgument> {
     files?: { [key: string]: any };
@@ -82,7 +91,6 @@ interface XYMERequestArgument extends Partial<RequestArgument> {
     method: string;
     path: string;
 }
-
 
 export default class XYMEClient {
     apiVersion?: number;
@@ -96,7 +104,7 @@ export default class XYMEClient {
     constructor(config: XYMEConfig) {
         this.token = config.token;
         this.url = config.url;
-        this.namespace = config.namespace;
+        this.namespace = config.namespace || DEFAULT_NAMESPACE;
         this.dagCache = new WeakMap();
     }
 
@@ -1226,16 +1234,17 @@ export class BlobHandle {
         const startTime = performance.now();
         while (performance.now() - startTime <= totalTime) {
             try {
+                const retryOptions: Partial<RetryOptions> = {
+                    attempts: 1,
+                    delay: sleepTime,
+                };
                 return await this.client.requestBytes({
                     method: METHOD_POST,
                     path: '/uri',
                     args: {
                         uri: this.getUri(),
                     },
-                    retry: {
-                        attempts: 1,
-                        delay: sleepTime,
-                    },
+                    retry: retryOptions,
                 });
             } catch (error) {
                 if (error.response.status === 404) {
@@ -1317,32 +1326,23 @@ export class BlobHandle {
         });
         return new BlobHandle(this.client, response.new_uri, false);
     }
-}
 
-export class CSVBlobHandle extends BlobHandle {
-    count: number;
-    pos: number;
-    hasTmp: boolean;
-
-    constructor(
-        client: XYMEClient,
-        uri: string,
-        count: number,
-        pos: number,
-        hasTmp: boolean
-    ) {
-        super(client, uri, false);
-        this.count = count;
-        this.pos = pos;
-        this.hasTmp = hasTmp;
-    }
-
-    public getCount(): number {
-        return this.count;
-    }
-
-    public getPos(): number {
-        return this.pos;
+    public async downloadZip(toPath?: string): Promise<Buffer | undefined> {
+        if (this.isFull) {
+            throw new Error(`URI must not be full: ${this.getUri()}`);
+        }
+        const res = await this.client.requestBytes({
+            method: METHOD_GET,
+            path: '/download_zip',
+            args: {
+                blob: this.getUri(),
+            },
+        });
+        if (isUndefined(toPath)) {
+            return res;
+        }
+        await openWrite(res, toPath);
+        return;
     }
 
     public async performAction(
@@ -1387,7 +1387,7 @@ export class CSVBlobHandle extends BlobHandle {
             ...args,
             ...additional,
         };
-        const res = await this.client.requestJSON<CSVOp>({
+        await this.client.requestJSON<CSVOp>({
             method,
             path: '/upload_file',
             args: {
@@ -1396,10 +1396,7 @@ export class CSVBlobHandle extends BlobHandle {
             },
             files,
         });
-        this.count = res.count;
-        this.hasTmp = res.tmp;
-        this.pos = res.pos;
-        return this.pos;
+        return 0;
     }
 
     public async startData(size: number, hashStr: string): Promise<number> {
@@ -1441,7 +1438,7 @@ export class CSVBlobHandle extends BlobHandle {
         let curSize = await this.startData(totalSize, fileHash);
         let curPos = 0;
         async function uploadNextChunk(
-            that: CSVBlobHandle,
+            that: BlobHandle,
             chunk: number,
             fileHandle: FileHandle
         ): Promise<void> {
@@ -1472,6 +1469,43 @@ export class CSVBlobHandle extends BlobHandle {
         await uploadNextChunk(this, getFileUploadChunkSize(), fileContent);
         await this.finishData(requeueOnFinish);
         return curSize;
+    }
+
+    public async convertModel(): Promise<ModelReleaseResponse> {
+        return await this.client.requestJSON<ModelReleaseResponse>({
+            method: METHOD_POST,
+            path: '/convert_model',
+            args: {
+                blob: this.getUri(),
+            },
+        });
+    }
+}
+
+export class CSVBlobHandle extends BlobHandle {
+    count: number;
+    pos: number;
+    hasTmp: boolean;
+
+    constructor(
+        client: XYMEClient,
+        uri: string,
+        count: number,
+        pos: number,
+        hasTmp: boolean
+    ) {
+        super(client, uri, false);
+        this.count = count;
+        this.pos = pos;
+        this.hasTmp = hasTmp;
+    }
+
+    public getCount(): number {
+        return this.count;
+    }
+
+    public getPos(): number {
+        return this.pos;
     }
 
     public async addFromFile(

@@ -1,0 +1,23 @@
+{
+    "name": "accern-xyme",
+    "version": "4.0.0-rc.2+ed51a8c0",
+    "description": "accern-xyme is a library for easily accessing XYME via typescript.",
+    "repository": "https://github.com/Accern/accern-xyme",
+    "main": "dist/accern_xyme.js",
+    "types": "dist/accern_xyme.d.ts",
+    "author": "Yuxiang Zhang <rico.zhang9318@gmail.com>",
+    "license": "MIT",
+    "scripts": {
+        "typecheck": "tsc",
+        "lint": "eslint 'packages/typescript/**/*.ts'",
+        "build": "npx tsc -p tsconfig.json"
+    },
+    "dependencies": {
+        "abort-controller": "^3.0.0",
+        "form-data": "^4.0.0",
+        "jssha": "^3.2.0",
+        "log4js": "^6.3.0",
+        "node-fetch": "^2.6.1"
+    },
+    "yalcSig": "ed51a8c0db0e7dec4f820af5981a86ad"
+}
