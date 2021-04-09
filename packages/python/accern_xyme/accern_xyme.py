@@ -2293,13 +2293,14 @@ class BlobHandle:
         return cast(UploadFilesResponse, self._client._request_json(
             method, "/upload_file", args, files=files))
 
-    def _start_upload(self, size: int, hash_str: str) -> str:
+    def _start_upload(self, size: int, hash_str: str, ext: str) -> str:
         res = self._perform_upload_action(
             "start",
             {
                 "target": self.get_uri(),
                 "hash": hash_str,
                 "size": size,
+                "ext": ext,
             },
             fobj=None)
         assert res["uri"] is not None
@@ -2325,7 +2326,8 @@ class BlobHandle:
     def _upload_file(
             self,
             file_content: IO[bytes],
-            progress_bar: Optional[IO[Any]] = sys.stdout) -> List[str]:
+            ext: str,
+            progress_bar: Optional[IO[Any]] = sys.stdout) -> None:
         init_pos = file_content.seek(0, io.SEEK_CUR)
         file_hash = get_file_hash(file_content)
         total_size = file_content.seek(0, io.SEEK_END) - init_pos
@@ -2333,7 +2335,7 @@ class BlobHandle:
         if progress_bar is not None:
             progress_bar.write("Uploading file:\n")
         print_progress = get_progress_bar(out=progress_bar)
-        tmp_uri = self._start_upload(total_size, file_hash)
+        tmp_uri = self._start_upload(total_size, file_hash, ext)
         self._tmp_uri = tmp_uri
         cur_size = 0
         while True:
@@ -2355,9 +2357,9 @@ class BlobHandle:
         try:
             if isinstance(source, str) or not hasattr(source, "read"):
                 with open(f"{source}", "rb") as fin:
-                    self._upload_file(fin, file_type="zip")
+                    self._upload_file(fin, ext="zip")
             else:
-                self._upload_file(source, file_type="zip")
+                self._upload_file(source, ext="zip")
             files = self._finish_upload()
         finally:
             self._clear_upload()
@@ -2417,42 +2419,43 @@ class CSVBlobHandle(BlobHandle):
     def add_from_file(
             self,
             filename: str,
-            *,
-            requeue_on_finish: Optional[NodeHandle] = None,
             progress_bar: Optional[IO[Any]] = sys.stdout,
-                ) -> Optional[UploadFilesResponse]:
+            ) -> Optional[UploadFilesResponse]:
+        fname = filename
+        if filename.endswith(INPUT_ZIP_EXT):
+            fname = filename[:-len(INPUT_ZIP_EXT)]
+        ext_pos = fname.rfind(".")
+        if ext_pos >= 0:
+            ext = filename[ext_pos + 1:]  # full filename
+        else:
+            raise ValueError("could not determine extension")
         try:
             with open(filename, "rb") as fbuff:
                 self._upload_file(
                     fbuff,
-                    "csv",
-                    requeue_on_finish,
-                    progress_bar,
-                    owner=self._owner)
+                    ext=ext,
+                    progress_bar=progress_bar)
             return self.finish_csv_upload()
         finally:
-            self._clear_upload(self.get_uri())
+            self._clear_upload()
 
     def add_from_df(
             self,
             df: pd.DataFrame,
-            requeue_on_finish: Optional[NodeHandle] = None,
             progress_bar: Optional[IO[Any]] = sys.stdout,
-                ) -> Optional[UploadFilesResponse]:
+            ) -> Optional[UploadFilesResponse]:
         io_in = None
         try:
             io_in = df_to_csv(df)
             self._upload_file(
                 io_in,
-                "csv",
-                requeue_on_finish,
-                progress_bar,
-                owner=self._owner)
+                ext="csv",
+                progress_bar=progress_bar)
             return self.finish_csv_upload()
         finally:
             if io_in is not None:
                 io_in.close()
-            self._clear_upload(self.get_uri())
+            self._clear_upload()
 
 # *** CSVBlobHandle ***
 
