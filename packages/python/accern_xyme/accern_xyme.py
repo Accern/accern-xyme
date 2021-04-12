@@ -2404,7 +2404,7 @@ class CSVBlobHandle(BlobHandle):
         tmp_uri = self._tmp_uri
         assert tmp_uri is not None
         owner = self._owner
-        args: Dict[str, Union[str, int]] = {
+        args: Dict[str, Optional[Union[str, int]]] = {
             "tmp_uri": tmp_uri,
             "csv_uri": self.get_uri(),
             "owner_dag": owner["owner_dag"],
