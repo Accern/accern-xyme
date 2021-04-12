@@ -2267,15 +2267,10 @@ class BlobHandle:
             self,
             action: str,
             additional: Dict[str, Union[str, int]],
-            fobj: Optional[IO[bytes]],
-            requeue_on_finish: Optional[NodeHandle] = None,
-                ) -> UploadFilesResponse:
+            fobj: Optional[IO[bytes]]) -> UploadFilesResponse:
         args: Dict[str, Union[str, int]] = {
             "action": action,
         }
-        if requeue_on_finish is not None and action == "finish":
-            args["dag"] = requeue_on_finish.get_dag().get_uri()
-            args["node"] = requeue_on_finish.get_id()
         args.update(additional)
         if fobj is not None:
             method = METHOD_FILE
@@ -2307,11 +2302,12 @@ class BlobHandle:
         res = self._perform_upload_action("append", {"uri": uri}, fobj=fobj)
         return res["pos"]
 
-    def _finish_upload(self) -> List[str]:
+    def _finish_upload_zip(self) -> List[str]:
         uri = self._tmp_uri
         if uri is None:
             raise ValueError("tmp_uri is None")
-        res = self._perform_upload_action("finish", {"uri": uri}, fobj=None)
+        res = cast(UploadFilesResponse, self._client._request_json(
+            METHOD_POST, "/finish_zip", {"uri": uri}))
         return res["files"]
 
     def _clear_upload(self) -> None:
@@ -2357,7 +2353,7 @@ class BlobHandle:
                     self._upload_file(fin, ext="zip")
             else:
                 self._upload_file(source, ext="zip")
-            files = self._finish_upload()
+            files = self._finish_upload_zip()
         finally:
             self._clear_upload()
         return [
