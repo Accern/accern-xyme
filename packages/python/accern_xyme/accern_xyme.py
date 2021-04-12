@@ -2090,9 +2090,6 @@ class NodeHandle:
             }))
 
     def get_input_example(self) -> Dict[str, Optional[ByteResponse]]:
-        if self.get_type() != "custom_data":
-            raise ValueError(
-                "can only load example input data for 'custom' node")
         res = {}
         for key in self.get_inputs():
             input_node, out_key = self.get_input(key)
