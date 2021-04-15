@@ -75,13 +75,13 @@ import {
     getFileUploadChunkSize,
     interpretCtype,
     isUndefined,
-    KeyError,
     mergeCtype,
     openWrite,
     safeOptNumber,
     std,
     useLogger,
 } from './util';
+import { KeyError } from './errors';
 
 const API_VERSION = 4;
 const EMPTY_BLOB_PREFIX = 'null://';

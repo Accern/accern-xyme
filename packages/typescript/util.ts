@@ -2,6 +2,7 @@ import * as log4js from 'log4js';
 import { open, FileHandle } from 'fs/promises';
 import jsSHA from 'jssha';
 import { DictStrStr } from './types';
+import { KeyError, ServerSideError } from './errors';
 
 const MINUTE = 60.0;
 const HOUR = 60.0 * MINUTE;
@@ -136,10 +137,6 @@ export async function getFileHash(fileHandle: FileHandle): Promise<string> {
 export function getFileUploadChunkSize(): number {
     return FILE_UPLOAD_CHUNK_SIZE;
 }
-
-export class KeyError extends Error {}
-
-export class ServerSideError extends Error {}
 
 export function forceKey(obj: { [key: string]: any }, key: string): any {
     if (key in obj) {

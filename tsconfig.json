@@ -1,7 +1,10 @@
 {
   "compilerOptions": {
-    "target": "es5",
+    "declaration": true,
     "esModuleInterop": true,
+    "outDir": "dist",
+    "sourceMap": true,
+    "target": "es5",
     "lib": [
       "es2019"
     ]

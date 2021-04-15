@@ -7,7 +7,6 @@ DagDef = TypedDict('DagDef', {
     "default_input_key": Optional[str],
     "default_output_key": Optional[str],
     "high_priority": bool,
-    "is_parallel": Optional[bool],
     "name": str,
     "nodes": List['NodeDef'],
     "queue_mng": Optional[str],
