@@ -16,12 +16,17 @@ import {
     DagInfo,
     DagInit,
     DagList,
+    DagReload,
     DictStrStr,
     DynamicFormat,
     DynamicResults,
     FlushAllQueuesResponse,
     InCursors,
     InstanceStatus,
+    KafkaGroup,
+    KafkaMessage,
+    KafkaOffsets,
+    KafkaThroughput,
     KafkaTopics,
     KnownBlobs,
     MinimalQueueStatsResponse,
@@ -32,6 +37,7 @@ import {
     NodeInfo,
     NodeState,
     NodeStatus,
+    NodeTiming,
     NodeTypes,
     PutNodeBlob,
     QueueMode,
@@ -41,9 +47,11 @@ import {
     SettingsObj,
     TaskStatus,
     Timing,
+    TimingResult,
     Timings,
     TritonModelsResponse,
     VersionResponse,
+    WorkerScale,
 } from './types';
 import {
     HTTPResponseError,
@@ -68,6 +76,7 @@ import {
     KeyError,
     openWrite,
     safeOptNumber,
+    std,
     useLogger,
 } from './util';
 
@@ -202,7 +211,9 @@ export default class XYMEClient {
         return await rawRequestString(requestArgs);
     }
 
-    public async requestBytes(rargs: XYMERequestArgument): Promise<Buffer> {
+    public async requestBytes(
+        rargs: XYMERequestArgument
+    ): Promise<[Buffer, string]> {
         const {
             addNamespace = true,
             addPrefix = true,
@@ -740,11 +751,50 @@ export class DagHandle {
         return assertString(this.state);
     }
 
-    // public getTiming(blacklist?: string[]): TimingResult {
-    //     const blist = blacklist ?? [];
-    //     const nodeTiming: { [key: string]: NodeTiming } = {};
-    //     return
-    // }
+    public async getTiming(blacklist?: string[]): Promise<TimingResult> {
+        const blist = blacklist ?? [];
+        const nodeTiming: { [key: string]: NodeTiming } = {};
+        const nodes = await this.getNodes();
+
+        function getFilteredTimes(
+            nodeTime: Timing[]
+        ): [number, number, Timing[]] {
+            let fns: Timing[] = [];
+            let nodeTotal = 0.0;
+            nodeTime.forEach((value) => {
+                if (blist.indexOf(value.name) < 0) {
+                    fns = [...fns, value];
+                    nodeTotal += value.total;
+                }
+            });
+            if (fns.length <= 0) {
+                return [0, 0, fns];
+            }
+            return [nodeTotal, nodeTotal / fns.length, fns];
+        }
+
+        let dagTotal = 0.0;
+        nodes.forEach(async (nodeStr) => {
+            const node = await this.getNode(nodeStr);
+            const nodeTime = await node.getTiming();
+            const [nodeTotal, avgTime, fns] = getFilteredTimes(nodeTime);
+            const nodeName = await node.getNodeDef().then((res) => res.name);
+            nodeTiming[node.getId()] = {
+                nodeName,
+                nodeTotal,
+                nodeAvg: avgTime,
+                fns,
+            };
+            dagTotal += nodeTotal;
+        });
+        const nodeTimingSorted = Object.entries(nodeTiming).sort(
+            ([, a], [, b]) => a['node_total'] - b['node_total']
+        );
+        return {
+            dagTotal,
+            nodes: nodeTimingSorted,
+        };
+    }
 
     public async isHighPriority(): Promise<boolean> {
         this.maybeRefresh();
@@ -807,17 +857,6 @@ export class DagHandle {
             .then((response) => response.results);
     }
 
-    public async getDef(full = true): Promise<DagDef> {
-        return await this.client.requestJSON({
-            method: METHOD_GET,
-            path: '/dag_def',
-            args: {
-                dag: this.getUri(),
-                full: +full,
-            },
-        });
-    }
-
     // public async dynamicList(
     //     inputs: any[],
     //     inputKey: string | undefined,
@@ -841,10 +880,10 @@ export class DagHandle {
             files: {
                 file: inputData,
             },
-        });
+        })[0];
     }
 
-    public async dynamic_obj(inputObj: any): Promise<Buffer> {
+    public async dynamicObj(inputObj: any): Promise<Buffer> {
         const buffer = Buffer.from(JSON.stringify(inputObj));
         return this.dynamic(buffer);
     }
@@ -905,7 +944,7 @@ export class DagHandle {
                     dag: this.getUri(),
                     id: valueId,
                 },
-            });
+            })[0];
         } catch (error) {
             if (
                 error instanceof HTTPResponseError &&
@@ -915,6 +954,316 @@ export class DagHandle {
             }
             throw error;
         }
+    }
+
+    public async pretty() {
+        return await this.client.requestString({
+            method: METHOD_GET,
+            path: '/dag_pretty',
+            args: {
+                dag: this.getUri(),
+            },
+        });
+    }
+
+    public async getDef(full = true): Promise<DagDef> {
+        return await this.client.requestJSON({
+            method: METHOD_GET,
+            path: '/dag_def',
+            args: {
+                dag: this.getUri(),
+                full: +full,
+            },
+        });
+    }
+
+    public async setAttr(attr: string, value: any): Promise<void> {
+        let dagDef = await this.getDef();
+        dagDef = {
+            ...dagDef,
+            [attr]: value,
+        };
+        await this.client.setDag(this.getUri(), dagDef);
+    }
+
+    public async setName(value: string): Promise<void> {
+        await this.setAttr('name', value);
+    }
+
+    public async setCompany(value: string): Promise<void> {
+        await this.setAttr('company', value);
+    }
+
+    public async setState(value: string): Promise<void> {
+        await this.setAttr('state', value);
+    }
+
+    public async setHighPriority(value: string): Promise<void> {
+        await this.setAttr('high_priority', value);
+    }
+
+    public async setQueueMng(value: string | undefined): Promise<void> {
+        await this.setAttr('queue_mng', value);
+    }
+
+    public async checkQueueStats(minimal: false): Promise<QueueStatsResponse>;
+    public async checkQueueStats(
+        minimal: true
+    ): Promise<MinimalQueueStatsResponse>;
+    public async checkQueueStats(
+        minimal: boolean
+    ): Promise<MinimalQueueStatsResponse | MinimalQueueStatsResponse> {
+        // FIXME: WTF? https://github.com/microsoft/TypeScript/issues/19360
+        if (minimal) {
+            return await this.client.checkQueueStats(true, this.getUri());
+        } else {
+            return await this.client.checkQueueStats(false, this.getUri());
+        }
+    }
+
+    public async scaleWorker(replicas: number): Promise<boolean> {
+        return await this.client
+            .requestJSON<WorkerScale>({
+                method: METHOD_POST,
+                path: '/worker',
+                args: {
+                    dag: this.getUri(),
+                    replicas,
+                    task: undefined,
+                },
+            })
+            .then((res) => res.success);
+    }
+
+    public async reload(timestamp: number = undefined): Promise<number> {
+        return await this.client
+            .requestJSON<DagReload>({
+                method: METHOD_POST,
+                path: '/dag_reload',
+                args: {
+                    dag: this.getUri(),
+                    when: timestamp,
+                },
+            })
+            .then((res) => res.when);
+    }
+
+    public async setKafkaTopicPartitions(
+        numPartitions: number,
+        largeInputRetention = false
+    ): Promise<KafkaTopics> {
+        return await this.client.requestJSON<KafkaTopics>({
+            method: METHOD_POST,
+            path: '/kafka_to[ics',
+            args: {
+                dag: this.getUri(),
+                num_partitions: numPartitions,
+                large_input_retention: largeInputRetention,
+            },
+        });
+    }
+
+    public async postKafkaObjs(inputObjs: any[]): Promise<string[]> {
+        const bios = inputObjs.reduce(
+            (o, inputObj) => [...o, Buffer.from(JSON.stringify(inputObj))],
+            []
+        );
+        return await this.postKafkaMsgs(bios);
+    }
+
+    public async postKafkaMsgs(inputData: Buffer[]): Promise<string[]> {
+        const names = inputData.reduce(
+            (acc, _cV, cIndex) => [...acc, `file${cIndex}`],
+            []
+        );
+        const files = inputData.reduce(
+            (acc, _cV, cIndex) => ({
+                ...acc,
+                [`file${cIndex}`]: inputData[cIndex],
+            }),
+            {}
+        );
+        const msgs = await this.client
+            .requestJSON<KafkaMessage>({
+                method: METHOD_FILE,
+                path: '/kafka_msg',
+                args: {
+                    dag: this.getUri(),
+                },
+                files,
+            })
+            .then((res) => res.messages);
+        return names.reduce((acc, name) => [...acc, msgs[name]], []);
+    }
+
+    public async readKafkaOutput(
+        offset = 'current',
+        maxRows = 100
+    ): Promise<Buffer | null> {
+        const offsetStr = [offset];
+        const readSingle = async () => {
+            return await this.client.requestBytes({
+                method: METHOD_GET,
+                path: '/kafka_msg',
+                args: {
+                    dag: this.getUri(),
+                    offset: offsetStr[0],
+                },
+            });
+        };
+        if (maxRows <= 1) {
+            return await readSingle()[0];
+        }
+        let res: Buffer[] = [];
+        let ctype: string = undefined;
+        // eslint-disable-next-line no-constant-condition
+        while (true) {
+            const [val, curCtype] = await readSingle();
+            if (val === null) {
+                break;
+            }
+            if (curCtype === null) {
+                ctype = curCtype;
+            } else if (ctype !== curCtype) {
+                throw new Error(
+                    `inconsistent return types ${ctype} != ${curCtype}`
+                );
+            }
+            res = [...res, val];
+            if (res.length >= maxRows) {
+                break;
+            }
+        }
+
+        if (res.length === 0) {
+            return null;
+        }
+    }
+
+    public async getKafkaOffsets(alive: boolean): Promise<KafkaOffsets> {
+        return await this.client.requestJSON({
+            method: METHOD_GET,
+            path: '/kafka_offsets',
+            args: {
+                dag: this.getUri(),
+                alive: +alive,
+            },
+        });
+    }
+
+    public async getKafkaThroughput(
+        segmentInterval = 120.0,
+        segments = 5
+    ): Promise<KafkaThroughput> {
+        if (segmentInterval <= 0) {
+            throw new Error('segmentInterval should be > 0');
+        }
+        if (segments <= 0) {
+            throw new Error('segments should be > 0');
+        }
+        let offsets = await this.getKafkaOffsets(false);
+        let now = performance.now();
+        let measurements: [number, number, number, number][] = [
+            [offsets.input, offsets.output, offsets.error, now],
+        ];
+        let prev: number;
+        const range = Array.from(Array(segments).keys());
+        range.forEach(async () => {
+            prev = now;
+            while (now - prev < segmentInterval) {
+                const timeout = Math.max(0.0, segmentInterval - (now - prev));
+                // eslint-disable-next-line @typescript-eslint/no-empty-function
+                setTimeout(() => {}, timeout);
+                now = performance.now();
+            }
+            offsets = await this.getKafkaOffsets(false);
+            measurements = [
+                ...measurements,
+                [offsets.input, offsets.output, offsets.error, now],
+            ];
+        });
+        const first = measurements[0];
+        const last = measurements[-1];
+        const totalInput = last[0] - first[0];
+        const totalOutput = last[1] - first[1];
+        const errors = last[2] - first[2];
+        const total = last[3] - first[3];
+        let inputSegments: number[] = [];
+        let outputSegments: number[] = [];
+        let curInput = first[0];
+        let curOutput = first[1];
+        let curTime = first[3];
+        measurements.slice(1).forEach((measurement) => {
+            const [nextInput, nextOutput, , nextTime] = measurement;
+            const segTime = nextTime - curTime;
+            inputSegments = [
+                ...inputSegments,
+                (nextInput - curInput) / segTime,
+            ];
+            outputSegments = [
+                ...outputSegments,
+                (nextOutput - curOutput) / segTime,
+            ];
+            curInput = nextInput;
+            curOutput = nextOutput;
+            curTime = nextTime;
+        });
+        let faster: 'input' | 'output' | 'both' = 'output';
+        if (totalInput === totalOutput) {
+            faster = 'both';
+        } else if (totalInput > totalOutput) {
+            faster = 'input';
+        }
+        return {
+            dag: this.getUri(),
+            input: {
+                throughput: totalInput / total,
+                max: Math.max(...inputSegments),
+                min: Math.min(...inputSegments),
+                stddev: std(inputSegments),
+                segments,
+                count: totalInput,
+                total: total,
+            },
+            output: {
+                throughput: totalOutput / total,
+                max: Math.max(...outputSegments),
+                min: Math.min(...outputSegments),
+                stddev: std(outputSegments),
+                segments,
+                count: totalOutput,
+                total: total,
+            },
+            faster,
+            errors,
+        };
+    }
+
+    public async getKafkaGroup(): Promise<KafkaGroup> {
+        return await this.client.requestJSON({
+            method: METHOD_GET,
+            path: '/kafka_group',
+            args: {
+                dag: this.getUri(),
+            },
+        });
+    }
+
+    public async setKafkaGroup(
+        groupId: string | undefined,
+        reset: string | undefined,
+        ...kwargs: any[]
+    ): Promise<KafkaGroup> {
+        return await this.client.requestJSON<KafkaGroup>({
+            method: METHOD_PUT,
+            path: '/kafka_group',
+            args: {
+                dag: this.getUri(),
+                groupId,
+                reset,
+                ...kwargs,
+            },
+        });
     }
 }
 
@@ -1117,7 +1466,7 @@ export class NodeHandle {
         return logs;
     }
 
-    public async getTimings(): Promise<Timing[]> {
+    public async getTiming(): Promise<Timing[]> {
         return await this.client
             .requestJSON<Timings>({
                 method: METHOD_GET,
@@ -1245,7 +1594,7 @@ export class BlobHandle {
                         uri: this.getUri(),
                     },
                     retry: retryOptions,
-                });
+                })[0];
             } catch (error) {
                 if (error.response.status === 404) {
                     throw error;
@@ -1337,7 +1686,7 @@ export class BlobHandle {
             args: {
                 blob: this.getUri(),
             },
-        });
+        })[0];
         if (isUndefined(toPath)) {
             return res;
         }

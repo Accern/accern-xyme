@@ -143,3 +143,13 @@ export async function openWrite(buffer: Buffer, fileName: string) {
     const fileHandle = await open(fileName, 'r');
     await fileHandle.write(buffer);
 }
+
+export function std(arr: number[], usePopulation = false): number {
+    const mean = arr.reduce((acc, val) => acc + val, 0) / arr.length;
+    return Math.sqrt(
+        arr
+            .reduce((acc, val) => acc.concat((val - mean) ** 2), [])
+            .reduce((acc, val) => acc + val, 0) /
+            (arr.length - (usePopulation ? 0 : 1))
+    );
+}

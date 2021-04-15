@@ -226,7 +226,7 @@ export async function fallibleRawRequestString(
 
 export async function fallibleRawRequestBytes(
     rargs: RequestArgument
-): Promise<Buffer> {
+): Promise<[Buffer, string]> {
     const { method, URL, args, retry, ...rest } = rargs;
     const options: RequestInit = {
         ...rest,
@@ -254,7 +254,7 @@ export async function fallibleRawRequestBytes(
     if (response) {
         handleError(response);
         try {
-            return await response.buffer();
+            return [await response.buffer(), response.headers['content-type']];
         } catch (error) {
             throw new Error('JSON parse error');
         }
@@ -271,7 +271,7 @@ export async function rawRequestJSON<T>(
 
 export async function rawRequestBytes(
     rargs: BytesRequestArgument
-): Promise<Buffer> {
+): Promise<[Buffer, string]> {
     return await fallibleRawRequestBytes(rargs);
 }
 
