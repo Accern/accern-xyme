@@ -1,10 +1,9 @@
 {
-    "compilerOptions": {
-      "target": "es5",
-      "module": "commonjs",
-      "sourceMap": true,
-      "esModuleInterop": true,
-      "declaration": true,
-      "outDir": "dist"
-    }
+  "compilerOptions": {
+    "target": "es5",
+    "esModuleInterop": true,
+    "lib": [
+      "es2019"
+    ]
   }
+}

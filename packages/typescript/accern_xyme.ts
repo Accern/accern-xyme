@@ -68,12 +68,15 @@ import {
 import {
     assertBoolean,
     assertString,
+    ByteResponse,
     forceKey,
     getAge,
     getFileHash,
     getFileUploadChunkSize,
+    interpretCtype,
     isUndefined,
     KeyError,
+    mergeCtype,
     openWrite,
     safeOptNumber,
     std,
@@ -119,12 +122,16 @@ export default class XYMEClient {
 
     public async getAPIVersion(): Promise<number> {
         if (typeof this.apiVersion === undefined) {
-            this.apiVersion = await this.getServerVersion().then((response) => {
-                if (response.api_version < API_VERSION) {
-                    throw new Error(`Legacy version ${response.api_version}`);
+            this.apiVersion = await this.getServerVersion().then(
+                (response) => {
+                    if (response.api_version < API_VERSION) {
+                        throw new Error(
+                            `Legacy version ${response.api_version}`
+                        );
+                    }
+                    return response.api_version;
                 }
-                return response.api_version;
-            });
+            );
         }
         if (this.apiVersion === undefined) {
             throw new Error('no apiVersion');
@@ -571,7 +578,10 @@ export default class XYMEClient {
         });
     }
 
-    public async setNamedSecrets(key: string, value: string): Promise<boolean> {
+    public async setNamedSecrets(
+        key: string,
+        value: string
+    ): Promise<boolean> {
         return await this.requestJSON<SetNamedSecret>({
             method: METHOD_PUT,
             path: '/named_secrets',
@@ -870,8 +880,8 @@ export class DagHandle {
 
     // }
 
-    public async dynamic(inputData: Buffer): Promise<Buffer> {
-        return await this.client.requestBytes({
+    public async dynamic(inputData: Buffer): Promise<ByteResponse> {
+        const [res, ctype] = await this.client.requestBytes({
             method: METHOD_FILE,
             path: '/dynamic',
             args: {
@@ -880,10 +890,11 @@ export class DagHandle {
             files: {
                 file: inputData,
             },
-        })[0];
+        });
+        return interpretCtype(res, ctype);
     }
 
-    public async dynamicObj(inputObj: any): Promise<Buffer> {
+    public async dynamicObj(inputObj: any): Promise<ByteResponse> {
         const buffer = Buffer.from(JSON.stringify(inputObj));
         return this.dynamic(buffer);
     }
@@ -935,16 +946,17 @@ export class DagHandle {
         );
     }
 
-    public async getDynamicResult(valueId: string): Promise<Buffer> {
+    public async getDynamicResult(valueId: string): Promise<ByteResponse> {
         try {
-            return this.client.requestBytes({
+            const [res, ctype] = await this.client.requestBytes({
                 method: METHOD_GET,
                 path: 'dynamic_result',
                 args: {
                     dag: this.getUri(),
                     id: valueId,
                 },
-            })[0];
+            });
+            return interpretCtype(res, ctype);
         } catch (error) {
             if (
                 error instanceof HTTPResponseError &&
@@ -1035,7 +1047,7 @@ export class DagHandle {
             .then((res) => res.success);
     }
 
-    public async reload(timestamp: number = undefined): Promise<number> {
+    public async reload(timestamp: number | undefined): Promise<number> {
         return await this.client
             .requestJSON<DagReload>({
                 method: METHOD_POST,
@@ -1072,10 +1084,9 @@ export class DagHandle {
     }
 
     public async postKafkaMsgs(inputData: Buffer[]): Promise<string[]> {
-        const names = inputData.reduce(
-            (acc, _cV, cIndex) => [...acc, `file${cIndex}`],
-            []
-        );
+        const range = Array.from(Array(inputData.length).keys());
+        const names: string[] = range.map((ix) => `file_${ix}`);
+
         const files = inputData.reduce(
             (acc, _cV, cIndex) => ({
                 ...acc,
@@ -1093,13 +1104,13 @@ export class DagHandle {
                 files,
             })
             .then((res) => res.messages);
-        return names.reduce((acc, name) => [...acc, msgs[name]], []);
+        return names.map((name) => msgs[name]);
     }
 
     public async readKafkaOutput(
         offset = 'current',
         maxRows = 100
-    ): Promise<Buffer | null> {
+    ): Promise<ByteResponse | null> {
         const offsetStr = [offset];
         const readSingle = async () => {
             return await this.client.requestBytes({
@@ -1112,10 +1123,11 @@ export class DagHandle {
             });
         };
         if (maxRows <= 1) {
-            return await readSingle()[0];
+            const [res, ctype] = await readSingle();
+            return interpretCtype(res, ctype);
         }
         let res: Buffer[] = [];
-        let ctype: string = undefined;
+        let ctype: string | undefined;
         // eslint-disable-next-line no-constant-condition
         while (true) {
             const [val, curCtype] = await readSingle();
@@ -1134,10 +1146,10 @@ export class DagHandle {
                 break;
             }
         }
-
-        if (res.length === 0) {
+        if (res.length === 0 || isUndefined(ctype)) {
             return null;
         }
+        return mergeCtype(res, ctype);
     }
 
     public async getKafkaOffsets(alive: boolean): Promise<KafkaOffsets> {
@@ -1172,7 +1184,8 @@ export class DagHandle {
             prev = now;
             while (now - prev < segmentInterval) {
                 const timeout = Math.max(0.0, segmentInterval - (now - prev));
-                // eslint-disable-next-line @typescript-eslint/no-empty-function
+                // @typescript-eslint/no-empty-function
+                // eslint-disable-next-line
                 setTimeout(() => {}, timeout);
                 now = performance.now();
             }
@@ -1507,10 +1520,9 @@ export class NodeHandle {
         key: string,
         chunk: number | undefined,
         forceRefresh?: boolean
-    ): Promise<Buffer | null> {
+    ): Promise<ByteResponse | null> {
         const blob = await this.readBlob(key, chunk, forceRefresh || false);
-        const content = await blob.getContent();
-        return content;
+        return await blob.getContent();
     }
 
     public async clear(): Promise<NodeState> {
@@ -1571,7 +1583,7 @@ export class BlobHandle {
         return this.ctype;
     }
 
-    public async getContent(): Promise<Buffer | null> {
+    public async getContent(): Promise<ByteResponse | null> {
         this.ensureIsFull();
         if (this.isEmpty()) {
             return null;
@@ -1587,14 +1599,15 @@ export class BlobHandle {
                     attempts: 1,
                     delay: sleepTime,
                 };
-                return await this.client.requestBytes({
+                const [res, ctype] = await this.client.requestBytes({
                     method: METHOD_POST,
                     path: '/uri',
                     args: {
                         uri: this.getUri(),
                     },
                     retry: retryOptions,
-                })[0];
+                });
+                return interpretCtype(res, ctype);
             } catch (error) {
                 if (error.response.status === 404) {
                     throw error;
@@ -1662,7 +1675,8 @@ export class BlobHandle {
         this.ensureNotFull();
         const ownerDag =
             newOwner !== undefined ? newOwner.getDag().getUri() : undefined;
-        const ownerNode = newOwner !== undefined ? newOwner.getId() : undefined;
+        const ownerNode =
+            newOwner !== undefined ? newOwner.getId() : undefined;
         const response = await this.client.requestJSON<CopyBlob>({
             method: METHOD_POST,
             path: '/copy_blob',
@@ -1680,13 +1694,13 @@ export class BlobHandle {
         if (this.isFull) {
             throw new Error(`URI must not be full: ${this.getUri()}`);
         }
-        const res = await this.client.requestBytes({
+        const [res] = await this.client.requestBytes({
             method: METHOD_GET,
             path: '/download_zip',
             args: {
                 blob: this.getUri(),
             },
-        })[0];
+        });
         if (isUndefined(toPath)) {
             return res;
         }
@@ -1875,7 +1889,7 @@ export class CSVBlobHandle extends BlobHandle {
 export class ComputationHandle {
     dag: DagHandle;
     valueId: string;
-    value: Buffer | undefined = undefined;
+    value: ByteResponse | undefined = undefined;
     getDynError: () => string | undefined;
     setDynError: (error: string) => void;
     constructor(
@@ -1894,7 +1908,7 @@ export class ComputationHandle {
         return this.value !== undefined;
     }
 
-    public async get(): Promise<Buffer> {
+    public async get(): Promise<ByteResponse> {
         try {
             if (isUndefined(this.value)) {
                 const res = await this.dag.getDynamicResult(this.valueId);

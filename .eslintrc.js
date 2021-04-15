@@ -7,6 +7,7 @@ module.exports = {
         '@typescript-eslint/explicit-module-boundary-types': 'off',
         '@typescript-eslint/ban-ts-comment': 'off',
         '@typescript-eslint/no-explicit-any': 'off',
+        'max-len': [2, { code: 79, tabWidth: 4, ignoreUrls: true }],
     },
     extends: [
         'eslint:recommended',

@@ -11,6 +11,9 @@ const YEAR = 365.0 * DAY;
 const FILE_UPLOAD_CHUNK_SIZE = 100 * 1024; // 100kb
 const FILE_HASH_CHUNK_SIZE = FILE_UPLOAD_CHUNK_SIZE;
 
+type dict = { [key: string]: any };
+export type ByteResponse = Buffer | dict | dict[];
+
 export function useLogger(catrgory?: string) {
     return log4js.getLogger(catrgory);
 }
@@ -65,6 +68,13 @@ function isBoolean(s: unknown): s is boolean {
 
 function isString(s: unknown): s is string {
     return typeof s === 'string';
+}
+
+function isIterable(obj: any) {
+    if (obj == null) {
+        return false;
+    }
+    return typeof obj[Symbol.iterator] === 'function';
 }
 
 export function assertString(value: unknown): string {
@@ -129,6 +139,8 @@ export function getFileUploadChunkSize(): number {
 
 export class KeyError extends Error {}
 
+export class ServerSideError extends Error {}
+
 export function forceKey(obj: { [key: string]: any }, key: string): any {
     if (key in obj) {
         return obj[key];
@@ -144,12 +156,63 @@ export async function openWrite(buffer: Buffer, fileName: string) {
     await fileHandle.write(buffer);
 }
 
-export function std(arr: number[], usePopulation = false): number {
+export function std(arr: number[]): number {
     const mean = arr.reduce((acc, val) => acc + val, 0) / arr.length;
     return Math.sqrt(
-        arr
-            .reduce((acc, val) => acc.concat((val - mean) ** 2), [])
-            .reduce((acc, val) => acc + val, 0) /
-            (arr.length - (usePopulation ? 0 : 1))
+        arr.reduce((acc, n) => (n - mean) ** 2) / (arr.length - 1)
     );
+}
+
+export function interpretCtype(data: Buffer, ctype: string): ByteResponse {
+    if (ctype === 'application/json') {
+        return JSON.parse(data.toString());
+    }
+    if (ctype === 'application/problem+json') {
+        const res = JSON.parse(data.toString());
+        throw new ServerSideError(res['errMessage']);
+    }
+    if (ctype == 'application/parquet') {
+        return data;
+    }
+    if (ctype == 'application/torch') {
+        return data;
+    }
+    if (ctype == 'application/npz') {
+        return data;
+    }
+    if (ctype == 'application/jsonl') {
+        return data;
+        // FIXME: use readline
+        // return data[
+        //     json.load(BytesIO(line))
+        //     for line in data
+        // ]
+    }
+    return data;
+}
+
+export function mergeCtype(
+    datas: ByteResponse[],
+    ctype: string
+): ByteResponse {
+    if (ctype === 'application/json') {
+        return datas;
+    }
+    if (ctype === 'application/parquet') {
+        return datas;
+    }
+    if (ctype === 'application/torch') {
+        return datas;
+    }
+    if (ctype == 'application/npz') {
+        return datas;
+    }
+    if (ctype == 'application/jsonl') {
+        if (isIterable(datas)) {
+            return datas.flat();
+        } else {
+            throw new Error(`${datas} is not iterable`);
+        }
+    }
+    return datas;
 }
