@@ -23,9 +23,8 @@ export interface S3BucketSettings {
     aws_access_key_id: string;
     aws_secret_access_key: string;
     aws_session_token?: string;
-    bucket: string;
+    buckets: DictStrStr;
     endpoint_url: string;
-    prefix: string[];
     region_name: string;
     use_ssl?: boolean;
     verify?: boolean;
@@ -37,9 +36,9 @@ export interface ESConnectorSettings {
 }
 
 export interface SettingsObj {
-    s3: S3BucketSettings;
-    triton: S3BucketSettings;
-    es: ESConnectorSettings;
+    es?: { [key: string]: ESConnectorSettings };
+    s3?: { [key: string]: S3BucketSettings };
+    triton?: { [key: string]: S3BucketSettings };
 }
 
 export type TaskType = 'node:cpubig' | 'node:cpusmall';

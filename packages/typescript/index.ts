@@ -82,6 +82,9 @@ import {
     useLogger,
 } from './util';
 import { KeyError } from './errors';
+export * from './errors';
+export * from './request';
+export * from './types';
 
 const API_VERSION = 4;
 const EMPTY_BLOB_PREFIX = 'null://';
@@ -121,19 +124,17 @@ export default class XYMEClient {
     }
 
     public async getAPIVersion(): Promise<number> {
-        if (typeof this.apiVersion === undefined) {
-            this.apiVersion = await this.getServerVersion().then(
-                (response) => {
-                    if (response.api_version < API_VERSION) {
-                        throw new Error(
-                            `Legacy version ${response.api_version}`
-                        );
-                    }
-                    return response.api_version;
-                }
-            );
+        if (isUndefined(this.apiVersion)) {
+            const serverVersions = await this.getServerVersion();
+
+            if (serverVersions.api_version < API_VERSION) {
+                throw new Error(
+                    `Legacy version ${serverVersions.api_version}`
+                );
+            }
+            this.apiVersion = serverVersions.api_version;
         }
-        if (this.apiVersion === undefined) {
+        if (isUndefined(this.apiVersion)) {
             throw new Error('no apiVersion');
         }
         return this.apiVersion;
@@ -174,7 +175,6 @@ export default class XYMEClient {
         if (addPrefix) {
             URL = `${this.url}${PREFIX}/v${API_VERSION}${path}`;
         }
-
         const requestArgs: RequestArgument = {
             ...rest,
             method,
@@ -253,7 +253,7 @@ export default class XYMEClient {
     public async getServerVersion(): Promise<VersionResponse> {
         return await this.requestJSON<VersionResponse>({
             method: METHOD_GET,
-            path: `${PREFIX}/v${API_VERSION}/verion`,
+            path: `${PREFIX}/v${API_VERSION}/version`,
             addPrefix: false,
             addNamespace: false,
             args: {},
@@ -567,7 +567,7 @@ export default class XYMEClient {
     }
 
     public async getNamedSecrets(
-        showValues: false
+        showValues = false
     ): Promise<{ [key: string]: string | null }> {
         return await this.requestJSON<{ [key: string]: string | null }>({
             method: METHOD_GET,

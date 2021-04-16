@@ -1,0 +1,134 @@
+Mark all function that's been tested.
+F - need fix
+X - tested
+
+## class XYMEClient
+[F] getAPIVersion(): Promise<number>;
+[X] getServerVersion(): Promise<VersionResponse>;
+[X] getNamespaces(): Promise<string[]>;
+[X] getDags(): Promise<string[]>;
+[ ] getDagAges(): Promise<[string, string, string][]>;
+[ ] getDagTimes(retrieveTimes: boolean): Promise<[DagList['cur_time'], DagList['dags']]>;
+[X] getDag(dagUri: string): Promise<DagHandle>;
+[ ] getBlobHandle(uri: string, isFull?: boolean): BlobHandle;
+[X] getNodeDefs(): Promise<NodeTypes['info']>;
+[ ] createNewBlob(blobType: string): Promise<string>;
+[X] createNewDag(userName?: string, dagName?: string, index?: string): Promise<string>;
+[ ] duplicateDag(dagUri: string, destUri?: string): Promise<string>;
+[X] setDag(dagUri: string, defs: DagDef): Promise<DagHandle>;
+[ ] setSettings(settings: SettingsObj): Promise<SettingsObj>;
+[X] getSettings(): Promise<SettingsObj>;
+[ ] getAllowedCustomImports(): Promise<AllowedCustomImports>;
+[ ] checkQueueStats(minimal: false, dag?: string): Promise<QueueStatsResponse>;
+[ ] getInstanceStatus(dagUri?: string, nodeId?: string):
+[ ] getQueueMode(): Promise<string>;
+[ ] setQueueMode(mode: string): Promise<string>;
+[ ] flushAllQueueData(): Promise<void>;
+[ ] getCacheStats(): Promise<CacheStats>;
+[ ] resetCacheStats(): Promise<CacheStats>;
+[ ] createKafkaErrorTopic(): Promise<KafkaTopics>;
+[ ] deleteKafkaErrorTopic(): Promise<KafkaTopics>;
+[ ] readKafkaErrors(offset: string): Promise<string[]>;
+[X] getNamedSecrets(showValues: false): Promise
+[ ] setNamedSecrets(key: string, value: string): Promise<boolean>;
+[ ] getKnownBlobAges(blobType?: string, connector?: string): Promise<[string, string][]>;
+[ ] getTritonModels(): Promise<string[]>;
+
+## class DagHandle
+[ ] getInfo(): Promise<DagInfo>;
+[ ] getUri(): string;
+[ ] getNodes(): Promise<string[]>;
+[X] getNode(nodeName: string): Promise<NodeHandle>;
+[ ] getName(): Promise<string>;
+[ ] getCompany(): Promise<string>;
+[ ] getStateType(): Promise<string>;
+[ ] getTiming(blacklist?: string[]): Promise<TimingResult>
+[ ] isHighPriority(): Promise<boolean>;
+[ ] isQueue(): Promise<boolean>;
+[ ] getQueueMng(): Promise<string | undefined>;
+[ ] getIns(): Promise<string[]>;
+[ ] getOuts(): Promise<[string, string][]>;
+[ ] setDag(defs: DagDef): void;
+[ ] dynamicModel(inputs: any[], formatMethod?: DynamicFormat, noCache?: boolean):
+[ ] dynamic(inputData: Buffer): Promise<ByteResponse>;
+[ ] dynamicObj(inputObj: any): Promise<ByteResponse>;
+[ ] dynamicAsync(inputData: Buffer[]): Promise<ComputationHandle[]>;
+[ ] setDynamicErrorMessage(msg?: string): void;
+[ ] getDynamicErrorMessage(): string | undefined;
+[ ] dynamicAsyncObj(inputData: any[]): Promise<ComputationHandle[]>;
+[ ] getDynamicResult(valueId: string): Promise<ByteResponse>;
+[ ] pretty(): Promise<Readable>;
+[ ] getDef(full?: boolean): Promise<DagDef>;
+[ ] setAttr(attr: string, value: any): Promise<void>;
+[ ] setName(value: string): Promise<void>;
+[ ] setCompany(value: string): Promise<void>;
+[ ] setState(value: string): Promise<void>;
+[ ] setHighPriority(value: string): Promise<void>;
+[ ] setQueueMng(value: string | undefined): Promise<void>;
+[ ] checkQueueStats(minimal: false): Promise<QueueStatsResponse>;
+[ ] checkQueueStats(minimal: true): Promise<MinimalQueueStatsResponse>;
+[ ] scaleWorker(replicas: number): Promise<boolean>;
+[ ] reload(timestamp: number | undefined): Promise<number>;
+[ ] setKafkaTopicPartitions(numPartitions: number, largeInputRetention?: boolean): Promise<KafkaTopics>;
+[ ] postKafkaObjs(inputObjs: any[]): Promise<string[]>;
+[ ] postKafkaMsgs(inputData: Buffer[]): Promise<string[]>;
+[ ] readKafkaOutput(offset?: string, maxRows?: number): Promise<ByteResponse | null>;
+[ ] getKafkaOffsets(alive: boolean): Promise<KafkaOffsets>;
+[ ] getKafkaThroughput(segmentInterval?: number, segments?: number): Promise<KafkaThroughput>;
+[ ] getKafkaGroup(): Promise<KafkaGroup>;
+[ ] setKafkaGroup(groupId: string | undefined, reset: string | undefined, ...kwargs: any[]):
+
+## class NodeHandle
+[ ] static fromNodeInfo(client: XYMEClient, dag: DagHandle, nodeInfo: NodeInfo, prev?:
+[ ] getDag(): DagHandle;
+[ ] getId(): string;
+[ ] getName(): string;
+[ ] getType(): string;
+[ ] getNodeDef(): Promise<NodeDefInfo>;
+[ ] getInputs(): Set<string>;
+[ ] getInput(key: string): Promise<[NodeHandle, string]>;
+[ ] getStatus(): Promise<TaskStatus>;
+[ ] hasConfigError(): boolean;
+[ ] getBlobs(): string[];
+[ ] getBlobHandles(): {[key: string]: BlobHandle;};
+[ ] getBlobHandle(key: string): BlobHandle;
+[ ] setBlobUri(key: string, blobUri: string): Promise<string>;
+[ ] getInCursorStates(): Promise<{[key: string]: number;}>;
+[ ] getHighestChunk(): Promise<number>;
+[ ] getShortStatus(allowUnicode?: boolean): Promise<string>;
+[ ] getLogs(): Promise<string>;
+[ ] getTiming(): Promise<Timing[]>;
+[ ] readBlob(key: string, chunk: number | undefined, forceRefresh?: boolean)Promise<BlobHandle>;
+[ ] read(key: string, chunk: number | undefined, forceRefresh?: boolean): Promise<ByteResponse | null>;
+[ ] clear(): Promise<NodeState>;
+[ ] getCSVBlob(): Promise<CSVBlobHandle>;
+
+## class BlobHandle
+[ ] getUri(): string;
+[ ] getCtype(): string | undefined;
+[ ] getContent(): Promise<ByteResponse | null>;
+[ ] private asStr;
+[ ] private ensureIsFull;
+[ ] private ensureNotFull;
+[ ] listFiles(): Promise<BlobHandle[]>;
+[ ] setOwner(owner: NodeHandle): Promise<BlobOwner>;
+[ ] getOwner(): Promise<BlobOwner>;
+[ ] copyTo(toUri: string, newOwner: NodeHandle | undefined): Promise<BlobHandle>;
+[ ] downloadZip(toPath?: string): Promise<Buffer | undefined>;
+[ ] startData(size: number, hashStr: string): Promise<number>;
+[ ] appendData(fobj: Buffer): Promise<number>;
+[ ] finishData(requeueOnFinish?: NodeHandle | undefined): Promise<void>;
+[ ] clearTmp(): Promise<void>;
+[ ] WritableStream | undefined): Promise<number>;
+[ ] convertModel(): Promise<ModelReleaseResponse>;
+
+## class CSVBlobHandle
+[ ] getCount(): number;
+[ ] getPos(): number;
+[ ] WritableStream | undefined): Promise<void>;
+
+## class ComputationHandle
+[ ] setDynError: (error: string) => void);
+[ ] hasFetched(): boolean;
+[ ] get(): Promise<ByteResponse>;
+[ ] getId(): string;

@@ -9,6 +9,7 @@ dist/
 
 # Typescript
 .yalc/
+*.d.ts
 *.js
 *.js.map
 *.log
