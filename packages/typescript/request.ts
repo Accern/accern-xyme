@@ -87,14 +87,6 @@ export const METHOD_GET = 'GET';
 export const METHOD_LONGPOST = 'LONGPOST';
 export const METHOD_POST = 'POST';
 export const METHOD_PUT = 'PUT';
-// export interface RequestArgument {
-//     args: DictStrStr;
-//     URL: string;
-//     headers: DictStrStr;
-//     method: string;
-//     retry?: Partial<RetryOptions>;
-//     timeout?: number;
-// }
 
 export async function handleError(response: Response) {
     if (response.headers.get('content-type') === 'application/problem+json') {
