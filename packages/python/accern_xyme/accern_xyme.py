@@ -207,6 +207,7 @@ class XYMEClient:
         if self.is_auto_refresh():
             self.refresh()
 
+    # FIXME: Do we still need this?
     @contextlib.contextmanager
     def bulk_operation(self) -> Iterator[bool]:
         old_refresh = self.is_auto_refresh()
@@ -534,7 +535,7 @@ class XYMEClient:
         return self._raw_request_bytes(
             method, path, args, files, add_prefix, add_namespace, api_version)
 
-    def _request_json(
+    def request_json(
             self,
             method: str,
             path: str,
@@ -547,12 +548,15 @@ class XYMEClient:
             method, path, args, add_prefix, add_namespace, files, api_version)
 
     def get_server_version(self) -> VersionResponse:
-        return cast(VersionResponse, self._raw_request_json(
-            METHOD_GET, f"{PREFIX}/v{API_VERSION}/version", {
-            }, add_prefix=False, add_namespace=False))
+        return cast(VersionResponse, self.request_json(
+            METHOD_GET,
+            f"{PREFIX}/v{API_VERSION}/version",
+            {},
+            add_prefix=False,
+            add_namespace=False))
 
     def get_namespaces(self) -> List[str]:
-        return cast(NamespaceList, self._request_json(
+        return cast(NamespaceList, self.request_json(
             METHOD_GET, "/namespaces", {}))["namespaces"]
 
     def get_dags(self) -> List[str]:
@@ -571,7 +575,7 @@ class XYMEClient:
 
     def get_dag_times(self, retrieve_times: bool) -> Tuple[
             float, List[Tuple[str, Optional[float], Optional[float]]]]:
-        res = cast(DagList, self._request_json(
+        res = cast(DagList, self.request_json(
             METHOD_GET, "/dags", {
                 "retrieve_times": int(retrieve_times),
             }))
@@ -592,13 +596,13 @@ class XYMEClient:
         self._maybe_refresh()
         if self._node_defs is not None:
             return self._node_defs
-        res = cast(NodeTypes, self._request_json(
+        res = cast(NodeTypes, self.request_json(
             METHOD_GET, "/node_types", {}, add_namespace=False))["info"]
         self._node_defs = res
         return res
 
     def create_new_blob(self, blob_type: str) -> str:
-        return cast(BlobInit, self._request_json(
+        return cast(BlobInit, self.request_json(
             METHOD_POST, "/blob_init", {
                 "type": blob_type,
             }, add_namespace=False))["blob"]
@@ -608,7 +612,7 @@ class XYMEClient:
             username: Optional[str] = None,
             dagname: Optional[str] = None,
             index: Optional[int] = None) -> str:
-        return cast(DagInit, self._request_json(
+        return cast(DagInit, self.request_json(
             METHOD_POST, "/dag_init", {
                 "user": username,
                 "name": dagname,
@@ -622,7 +626,7 @@ class XYMEClient:
         }
         if dest_uri is not None:
             args["dest"] = dest_uri
-        return cast(DagDupResponse, self._request_json(
+        return cast(DagDupResponse, self.request_json(
             METHOD_POST, "/dag_dup", args))["dag"]
 
     def set_dag(
@@ -630,7 +634,7 @@ class XYMEClient:
             dag_uri: str,
             defs: DagDef,
             warnings_io: Optional[IO[Any]] = sys.stderr) -> 'DagHandle':
-        dag_create = cast(DagCreate, self._request_json(
+        dag_create = cast(DagCreate, self.request_json(
             METHOD_POST, "/dag_create", {
                 "dag": dag_uri,
                 "defs": defs,
@@ -652,17 +656,17 @@ class XYMEClient:
         return self.get_dag(dag_uri)
 
     def set_settings(self, settings: SettingsObj) -> SettingsObj:
-        return cast(NamespaceUpdateSettings, self._request_json(
+        return cast(NamespaceUpdateSettings, self.request_json(
             METHOD_POST, "/settings", {
                 "settings": settings,
             }))["settings"]
 
     def get_settings(self) -> SettingsObj:
-        return cast(NamespaceUpdateSettings, self._request_json(
+        return cast(NamespaceUpdateSettings, self.request_json(
             METHOD_GET, "/settings", {}))["settings"]
 
     def get_allowed_custom_imports(self) -> AllowedCustomImports:
-        return cast(AllowedCustomImports, self._request_json(
+        return cast(AllowedCustomImports, self.request_json(
             METHOD_GET, "/allowed_custom_imports", {}, add_namespace=False))
 
     @overload
@@ -693,12 +697,12 @@ class XYMEClient:
             minimal: bool = False) -> Union[
                 MinimalQueueStatsResponse, QueueStatsResponse]:
         if minimal:
-            return cast(MinimalQueueStatsResponse, self._request_json(
+            return cast(MinimalQueueStatsResponse, self.request_json(
                 METHOD_GET, "/queue_stats", {
                     "dag": dag,
                     "minimal": 1,
                 }))
-        return cast(QueueStatsResponse, self._request_json(
+        return cast(QueueStatsResponse, self.request_json(
             METHOD_GET, "/queue_stats", {
                 "dag": dag,
                 "minimal": 0,
@@ -708,18 +712,18 @@ class XYMEClient:
             self,
             dag_uri: Optional[str] = None,
             node_id: Optional[str] = None) -> Dict[InstanceStatus, int]:
-        return cast(Dict[InstanceStatus, int], self._request_json(
+        return cast(Dict[InstanceStatus, int], self.request_json(
             METHOD_GET, "/instance_status", {
                 "dag": dag_uri,
                 "node": node_id,
             }))
 
     def get_queue_mode(self) -> str:
-        return cast(QueueMode, self._request_json(
+        return cast(QueueMode, self.request_json(
             METHOD_GET, "/queue_mode", {}, add_namespace=False))["mode"]
 
     def set_queue_mode(self, mode: str) -> str:
-        return cast(QueueMode, self._request_json(
+        return cast(QueueMode, self.request_json(
             METHOD_PUT, "/queue_mode", {
                 "mode": mode,
             }, add_namespace=False))["mode"]
@@ -727,7 +731,7 @@ class XYMEClient:
     def flush_all_queue_data(self) -> None:
 
         def do_flush() -> bool:
-            res = cast(FlushAllQueuesResponse, self._request_json(
+            res = cast(FlushAllQueuesResponse, self.request_json(
                 METHOD_POST, "/flush_all_queues", {}, add_namespace=False))
             return bool(res["success"])
 
@@ -735,40 +739,40 @@ class XYMEClient:
             time.sleep(1.0)
 
     def get_cache_stats(self) -> CacheStats:
-        return cast(CacheStats, self._request_json(
+        return cast(CacheStats, self.request_json(
             METHOD_GET, "/cache_stats", {}, add_namespace=False))
 
     def reset_cache(self) -> CacheStats:
-        return cast(CacheStats, self._request_json(
+        return cast(CacheStats, self.request_json(
             METHOD_POST, "/cache_reset", {}, add_namespace=False))
 
     def create_kafka_error_topic(self) -> KafkaTopics:
-        return cast(KafkaTopics, self._request_json(
+        return cast(KafkaTopics, self.request_json(
             METHOD_POST, "/kafka_topics", {
                 "num_partitions": 1,
             }))
 
     def delete_kafka_error_topic(self) -> KafkaTopics:
-        return cast(KafkaTopics, self._request_json(
+        return cast(KafkaTopics, self.request_json(
             METHOD_POST, "/kafka_topics", {
                 "num_partitions": 0,
             }))
 
     def read_kafka_errors(self, offset: str = "current") -> List[str]:
-        return cast(List[str], self._request_json(
+        return cast(List[str], self.request_json(
             METHOD_GET, "/kafka_msg", {
                 "offset": offset,
             }))
 
     def get_named_secrets(
             self, show_values: bool = False) -> Dict[str, Optional[str]]:
-        return cast(Dict[str, Optional[str]], self._request_json(
+        return cast(Dict[str, Optional[str]], self.request_json(
             METHOD_GET, "/named_secrets", {
                 "show": int(bool(show_values)),
             }))
 
     def set_named_secret(self, key: str, value: str) -> bool:
-        return cast(SetNamedSecret, self._request_json(
+        return cast(SetNamedSecret, self.request_json(
             METHOD_PUT, "/named_secrets", {
                 "key": key,
                 "value": value,
@@ -811,12 +815,12 @@ class XYMEClient:
             obj["blob_type"] = blob_type
         if connector is not None:
             obj["connector"] = connector
-        res = cast(KnownBlobs, self._request_json(
+        res = cast(KnownBlobs, self.request_json(
             METHOD_GET, "/known_blobs", obj))
         return res["cur_time"], res["blobs"]
 
     def get_triton_models(self) -> List[str]:
-        return cast(TritonModelsResponse, self._request_json(
+        return cast(TritonModelsResponse, self.request_json(
             METHOD_GET, "/inference_models", {}))["models"]
 
 
@@ -860,7 +864,7 @@ class DagHandle:
             self._fetch_info()
 
     def get_info(self) -> DagInfo:
-        return cast(DagInfo, self._client._request_json(
+        return cast(DagInfo, self._client.request_json(
             METHOD_GET, "/dag_info", {
                 "dag": self.get_uri(),
             }))
@@ -1004,7 +1008,7 @@ class DagHandle:
             inputs: List[Any],
             format_method: str = "simple",
             no_cache: bool = False) -> List[Any]:
-        res = cast(DynamicResults, self._client._request_json(
+        res = cast(DynamicResults, self._client.request_json(
             METHOD_POST, "/dynamic_model", {
                 "format": format_method,
                 "inputs": inputs,
@@ -1024,7 +1028,7 @@ class DagHandle:
             force_keys: bool = False,
             no_cache: bool = False) -> List[Any]:
         if split_th is None or len(inputs) <= split_th:
-            res = cast(DynamicResults, self._client._request_json(
+            res = cast(DynamicResults, self._client.request_json(
                 METHOD_POST, "/dynamic_list", {
                     "force_keys": force_keys,
                     "format": format_method,
@@ -1108,7 +1112,7 @@ class DagHandle:
     def dynamic_async(
             self, input_data: List[BytesIO]) -> List['ComputationHandle']:
         names = [f"file{pos}" for pos in range(len(input_data))]
-        res: Dict[str, str] = self._client._request_json(
+        res: Dict[str, str] = self._client.request_json(
             METHOD_FILE, "/dynamic_async", {
                 "dag": self.get_uri(),
             }, files=dict(zip(names, input_data)))
@@ -1154,7 +1158,7 @@ class DagHandle:
             self,
             value_ids: List['ComputationHandle']) -> Dict[
                 'ComputationHandle', QueueStatus]:
-        res = cast(DynamicStatusResponse, self._client._request_json(
+        res = cast(DynamicStatusResponse, self._client.request_json(
             METHOD_POST, "/dynamic_status", {
                 "value_ids": [value_id.get_id() for value_id in value_ids],
                 "dag": self.get_uri(),
@@ -1510,7 +1514,7 @@ class DagHandle:
         return "\n".join(draw())
 
     def get_def(self, full: bool = True) -> DagDef:
-        return cast(DagDef, self._client._request_json(
+        return cast(DagDef, self._client.request_json(
             METHOD_GET, "/dag_def", {
                 "dag": self.get_uri(),
                 "full": 1 if full else 0,
@@ -1557,7 +1561,7 @@ class DagHandle:
         return self._client.check_queue_stats(self.get_uri(), minimal=minimal)
 
     def scale_worker(self, replicas: int) -> bool:
-        return cast(WorkerScale, self._client._request_json(
+        return cast(WorkerScale, self._client.request_json(
             METHOD_PUT, "/worker", {
                 "dag": self.get_uri(),
                 "replicas": replicas,
@@ -1565,7 +1569,7 @@ class DagHandle:
             }))["success"]
 
     def reload(self, timestamp: Optional[float] = None) -> float:
-        return cast(DagReload, self._client._request_json(
+        return cast(DagReload, self._client.request_json(
             METHOD_PUT, "/dag_reload", {
                 "dag": self.get_uri(),
                 "when": timestamp,
@@ -1575,7 +1579,7 @@ class DagHandle:
             self,
             num_partitions: int,
             large_input_retention: bool = False) -> KafkaTopics:
-        return cast(KafkaTopics, self._client._request_json(
+        return cast(KafkaTopics, self._client.request_json(
             METHOD_POST, "/kafka_topics", {
                 "dag": self.get_uri(),
                 "num_partitions": num_partitions,
@@ -1595,7 +1599,7 @@ class DagHandle:
 
     def post_kafka_msgs(self, input_data: List[BytesIO]) -> List[str]:
         names = [f"file{pos}" for pos in range(len(input_data))]
-        res = cast(KafkaMessage, self._client._request_json(
+        res = cast(KafkaMessage, self._client.request_json(
             METHOD_FILE, "/kafka_msg", {
                 "dag": self.get_uri(),
             }, files=dict(zip(names, input_data))))
@@ -1639,7 +1643,7 @@ class DagHandle:
         return merge_ctype(res, ctype)
 
     def get_kafka_offsets(self, alive: bool) -> KafkaOffsets:
-        return cast(KafkaOffsets, self._client._request_json(
+        return cast(KafkaOffsets, self._client.request_json(
             METHOD_GET, "/kafka_offsets", {
                 "dag": self.get_uri(),
                 "alive": int(alive),
@@ -1717,7 +1721,7 @@ class DagHandle:
         }
 
     def get_kafka_group(self) -> KafkaGroup:
-        return cast(KafkaGroup, self._client._request_json(
+        return cast(KafkaGroup, self._client.request_json(
             METHOD_GET, "/kafka_group", {
                 "dag": self.get_uri(),
             }))
@@ -1727,7 +1731,7 @@ class DagHandle:
             group_id: Optional[str] = None,
             reset: Optional[str] = None,
             **kwargs: Any) -> KafkaGroup:
-        return cast(KafkaGroup, self._client._request_json(
+        return cast(KafkaGroup, self._client.request_json(
             METHOD_PUT, "/kafka_group", {
                 "dag": self.get_uri(),
                 "group_id": group_id,
@@ -1829,7 +1833,7 @@ class NodeHandle:
         return self.get_dag().get_node(node_id), out_key
 
     def get_status(self) -> TaskStatus:
-        return cast(NodeStatus, self._client._request_json(
+        return cast(NodeStatus, self._client.request_json(
             METHOD_GET, "/node_status", {
                 "dag": self.get_dag().get_uri(),
                 "node": self.get_id(),
@@ -1851,7 +1855,7 @@ class NodeHandle:
         return self._blobs[key]
 
     def set_blob_uri(self, key: str, blob_uri: str) -> str:
-        return cast(PutNodeBlob, self._client._request_json(
+        return cast(PutNodeBlob, self._client.request_json(
             METHOD_PUT, "/node_blob", {
                 "dag": self.get_dag().get_uri(),
                 "node": self.get_id(),
@@ -1860,14 +1864,14 @@ class NodeHandle:
             }))["new_uri"]
 
     def get_in_cursor_states(self) -> Dict[str, int]:
-        return cast(InCursors, self._client._request_json(
+        return cast(InCursors, self._client.request_json(
             METHOD_GET, "/node_in_cursors", {
                 "dag": self.get_dag().get_uri(),
                 "node": self.get_id(),
             }))["cursors"]
 
     def get_highest_chunk(self) -> int:
-        return cast(NodeChunk, self._client._request_json(
+        return cast(NodeChunk, self._client.request_json(
             METHOD_GET, "/node_chunk", {
                 "dag": self.get_dag().get_uri(),
                 "node": self.get_id(),
@@ -1897,7 +1901,7 @@ class NodeHandle:
             return fin.read()
 
     def get_timing(self) -> List[Timing]:
-        return cast(Timings, self._client._request_json(
+        return cast(Timings, self._client.request_json(
             METHOD_GET, "/node_perf", {
                 "dag": self.get_dag().get_uri(),
                 "node": self.get_id(),
@@ -1910,7 +1914,7 @@ class NodeHandle:
             force_refresh: bool) -> 'BlobHandle':
         # FIXME: !!!!!! explicitly repeat on timeout
         dag = self.get_dag()
-        res = cast(ReadNode, self._client._request_json(
+        res = cast(ReadNode, self._client.request_json(
             METHOD_POST, "/read_node", {
                 "dag": dag.get_uri(),
                 "node": self.get_id(),
@@ -1955,7 +1959,7 @@ class NodeHandle:
         return merge_ctype(res, ctype)
 
     def clear(self) -> NodeState:
-        return cast(NodeState, self._client._request_json(
+        return cast(NodeState, self._client.request_json(
             METHOD_PUT, "/node_state", {
                 "dag": self.get_dag().get_uri(),
                 "node": self.get_id(),
@@ -1963,7 +1967,7 @@ class NodeHandle:
             }))
 
     def requeue(self) -> NodeState:
-        return cast(NodeState, self._client._request_json(
+        return cast(NodeState, self._client.request_json(
             METHOD_PUT, "/node_state", {
                 "dag": self.get_dag().get_uri(),
                 "node": self.get_id(),
@@ -1971,7 +1975,7 @@ class NodeHandle:
             }))
 
     def fix_error(self) -> NodeState:
-        return cast(NodeState, self._client._request_json(
+        return cast(NodeState, self._client.request_json(
             METHOD_PUT, "/node_state", {
                 "dag": self.get_dag().get_uri(),
                 "node": self.get_id(),
@@ -1982,7 +1986,7 @@ class NodeHandle:
         if self.get_type() != "csv_reader":
             raise ValueError("node doesn't have csv blob")
         dag = self.get_dag()
-        res = cast(CSVBlobResponse, self._client._request_json(
+        res = cast(CSVBlobResponse, self._client.request_json(
             METHOD_GET, "/csv_blob", {
                 "dag": dag.get_uri(),
                 "node": self.get_id(),
@@ -1998,7 +2002,7 @@ class NodeHandle:
             raise ValueError(
                 f"can not access JSON of {self}, node is not a 'jsons_reader'")
         dag = self.get_dag()
-        res = cast(JSONBlobResponse, self._client._request_json(
+        res = cast(JSONBlobResponse, self._client.request_json(
             METHOD_GET, "/json_blob", {
                 "dag": dag.get_uri(),
                 "node": self.get_id(),
@@ -2012,7 +2016,7 @@ class NodeHandle:
     def set_custom_imports(
             self, modules: List[List[str]]) -> NodeCustomImports:
         self.check_custom_code_node()
-        return cast(NodeCustomImports, self._client._request_json(
+        return cast(NodeCustomImports, self._client.request_json(
             METHOD_PUT, "/custom_imports", {
                 "dag": self.get_dag().get_uri(),
                 "node": self.get_id(),
@@ -2021,7 +2025,7 @@ class NodeHandle:
 
     def get_custom_imports(self) -> NodeCustomImports:
         self.check_custom_code_node()
-        return cast(NodeCustomImports, self._client._request_json(
+        return cast(NodeCustomImports, self._client.request_json(
             METHOD_GET, "/custom_imports", {
                 "dag": self.get_dag().get_uri(),
                 "node": self.get_id(),
@@ -2031,7 +2035,7 @@ class NodeHandle:
         if self.get_type() != "es_reader":
             raise ValueError(f"{self} is not an ES reader node")
 
-        return cast(ESQueryResponse, self._client._request_json(
+        return cast(ESQueryResponse, self._client.request_json(
             METHOD_POST, "/es_query", {
                 "dag": self.get_dag().get_uri(),
                 "blob": self.get_blob_handle("es").get_uri(),
@@ -2043,7 +2047,7 @@ class NodeHandle:
         if self.get_type() != "es_reader":
             raise ValueError(f"{self} is not an ES reader node")
 
-        return cast(ESQueryResponse, self._client._request_json(
+        return cast(ESQueryResponse, self._client.request_json(
             METHOD_GET, "/es_query", {
                 "dag": self.get_dag().get_uri(),
                 "blob": self.get_blob_handle("es").get_uri(),
@@ -2066,7 +2070,7 @@ class NodeHandle:
             return res
 
         raw_code = fn_as_str(func)
-        return cast(NodeCustomCode, self._client._request_json(
+        return cast(NodeCustomCode, self._client.request_json(
             METHOD_PUT, "/custom_code", {
                 "dag": self.get_dag().get_uri(),
                 "node": self.get_id(),
@@ -2075,14 +2079,14 @@ class NodeHandle:
 
     def get_custom_code(self) -> NodeCustomCode:
         self.check_custom_code_node()
-        return cast(NodeCustomCode, self._client._request_json(
+        return cast(NodeCustomCode, self._client.request_json(
             METHOD_GET, "/custom_code", {
                 "dag": self.get_dag().get_uri(),
                 "node": self.get_id(),
             }))
 
     def get_user_columns(self, key: str) -> NodeUserColumnsResponse:
-        return cast(NodeUserColumnsResponse, self._client._request_json(
+        return cast(NodeUserColumnsResponse, self._client.request_json(
             METHOD_GET, "/user_columns", {
                 "dag": self.get_dag().get_uri(),
                 "node": self.get_id(),
@@ -2103,7 +2107,7 @@ class NodeHandle:
         return res
 
     def setup_model(self, obj: Dict[str, Any]) -> ModelSetupResponse:
-        return cast(ModelSetupResponse, self._client._request_json(
+        return cast(ModelSetupResponse, self._client.request_json(
             METHOD_PUT, "/model_setup", {
                 "dag": self.get_dag().get_uri(),
                 "node": self.get_id(),
@@ -2111,14 +2115,14 @@ class NodeHandle:
             }))
 
     def get_model_params(self) -> ModelParamsResponse:
-        return cast(ModelParamsResponse, self._client._request_json(
+        return cast(ModelParamsResponse, self._client.request_json(
             METHOD_GET, "/model_params", {
                 "dag": self.get_dag().get_uri(),
                 "node": self.get_id(),
             }))
 
     def get_def(self) -> NodeDef:
-        return cast(NodeDef, self._client._request_json(
+        return cast(NodeDef, self._client.request_json(
             METHOD_GET, "/node_def", {
                 "dag": self.get_dag().get_uri(),
                 "node": self.get_id(),
@@ -2185,7 +2189,7 @@ class BlobHandle:
         start_time = time.monotonic()
         while True:
             try:
-                fin, ctype = self._client._raw_request_bytes(
+                fin, ctype = self._client.request_bytes(
                     METHOD_POST, "/uri", {
                         "uri": self.get_uri(),
                     })
@@ -2202,7 +2206,7 @@ class BlobHandle:
     def list_files(self) -> List['BlobHandle']:
         if self.is_full():
             raise ValueError(f"URI must not be full: {self}")
-        resp = cast(BlobFilesResponse, self._client._request_json(
+        resp = cast(BlobFilesResponse, self._client.request_json(
             METHOD_GET, "/blob_files", {
                 "blob": self.get_uri(),
             }))
@@ -2217,7 +2221,7 @@ class BlobHandle:
     def set_owner(self, owner: NodeHandle) -> BlobOwner:
         if self.is_full():
             raise ValueError(f"URI must not be full: {self}")
-        return cast(BlobOwner, self._client._request_json(
+        return cast(BlobOwner, self._client.request_json(
             METHOD_PUT, "/blob_owner", {
                 "blob": self.get_uri(),
                 "owner_dag": owner.get_dag().get_uri(),
@@ -2227,7 +2231,7 @@ class BlobHandle:
     def get_owner(self) -> BlobOwner:
         if self.is_full():
             raise ValueError(f"URI must not be full: {self}")
-        return cast(BlobOwner, self._client._request_json(
+        return cast(BlobOwner, self._client.request_json(
             METHOD_GET, "/blob_owner", {
                 "blob": self.get_uri(),
             }))
@@ -2241,7 +2245,7 @@ class BlobHandle:
         owner_dag = \
             None if new_owner is None else new_owner.get_dag().get_uri()
         owner_node = None if new_owner is None else new_owner.get_id()
-        res = cast(CopyBlob, self._client._request_json(
+        res = cast(CopyBlob, self._client.request_json(
             METHOD_POST, "/copy_blob", {
                 "from_uri": self.get_uri(),
                 "owner_dag": owner_dag,
@@ -2253,7 +2257,7 @@ class BlobHandle:
     def download_zip(self, to_path: Optional[str]) -> Optional[io.BytesIO]:
         if self.is_full():
             raise ValueError(f"URI must not be full: {self}")
-        cur_res, _ = self._client._raw_request_bytes(
+        cur_res, _ = self._client.request_bytes(
             METHOD_GET, "/download_zip", {
                 "blob": self.get_uri(),
             })
@@ -2282,7 +2286,7 @@ class BlobHandle:
             files = None
         if action == "clear":
             self._tmp_uri = None
-        return cast(UploadFilesResponse, self._client._request_json(
+        return cast(UploadFilesResponse, self._client.request_json(
             method, "/upload_file", args, files=files))
 
     def _start_upload(self, size: int, hash_str: str, ext: str) -> str:
@@ -2306,7 +2310,7 @@ class BlobHandle:
         uri = self._tmp_uri
         if uri is None:
             raise ValueError("tmp_uri is None")
-        res = cast(UploadFilesResponse, self._client._request_json(
+        res = cast(UploadFilesResponse, self._client.request_json(
             METHOD_POST, "/finish_zip", {"uri": uri}))
         return res["files"]
 
@@ -2362,7 +2366,7 @@ class BlobHandle:
         ]
 
     def convert_model(self) -> ModelReleaseResponse:
-        return cast(ModelReleaseResponse, self._client._request_json(
+        return cast(ModelReleaseResponse, self._client.request_json(
             METHOD_POST, "/convert_model", {
                 "blob": self.get_uri(),
             }))
@@ -2406,7 +2410,7 @@ class CSVBlobHandle(BlobHandle):
             "owner_dag": owner["owner_dag"],
             "owner_node": owner["owner_node"],
         }
-        return cast(UploadFilesResponse, self._client._request_json(
+        return cast(UploadFilesResponse, self._client.request_json(
             METHOD_POST, "/finish_csv", args))
 
     def add_from_file(
@@ -2477,7 +2481,7 @@ class JSONBlobHandle(BlobHandle):
         if requeue_on_finish is not None:
             obj["dag"] = requeue_on_finish.get_dag().get_uri()
             obj["node"] = requeue_on_finish.get_id()
-        res = cast(JSONBlobAppendResponse, self._client._request_json(
+        res = cast(JSONBlobAppendResponse, self._client.request_json(
             METHOD_PUT, "/json_append", obj))
         self._count = res["count"]
         return self

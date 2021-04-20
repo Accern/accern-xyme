@@ -1,4 +1,3 @@
-import * as log4js from 'log4js';
 import { open, FileHandle } from 'fs/promises';
 import jsSHA from 'jssha';
 import { DictStrStr } from './types';
@@ -14,10 +13,6 @@ const FILE_HASH_CHUNK_SIZE = FILE_UPLOAD_CHUNK_SIZE;
 
 type dict = { [key: string]: any };
 export type ByteResponse = Buffer | dict | dict[];
-
-export function useLogger(catrgory?: string) {
-    return log4js.getLogger(catrgory);
-}
 
 export function safeOptNumber(numOrNull: number | null): [boolean, number] {
     if (numOrNull === null) {
@@ -60,7 +55,7 @@ export function getAge(curTime: number, otherTime: number | null): string {
 }
 
 export function isUndefined(s: unknown): s is undefined {
-    return typeof s === undefined;
+    return s === undefined;
 }
 
 function isBoolean(s: unknown): s is boolean {

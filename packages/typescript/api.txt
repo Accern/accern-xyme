@@ -3,36 +3,36 @@ F - need fix
 X - tested
 
 ## class XYMEClient
-[F] getAPIVersion(): Promise<number>;
+[X] getAPIVersion(): Promise<number>;
 [X] getServerVersion(): Promise<VersionResponse>;
 [X] getNamespaces(): Promise<string[]>;
 [X] getDags(): Promise<string[]>;
-[ ] getDagAges(): Promise<[string, string, string][]>;
-[ ] getDagTimes(retrieveTimes: boolean): Promise<[DagList['cur_time'], DagList['dags']]>;
+[X] getDagAges(): Promise<[string, string, string][]>;
+[X] getDagTimes(retrieveTimes: boolean): Promise<[DagList['cur_time'], DagList['dags']]>;
 [X] getDag(dagUri: string): Promise<DagHandle>;
-[ ] getBlobHandle(uri: string, isFull?: boolean): BlobHandle;
+[X] getBlobHandle(uri: string, isFull?: boolean): BlobHandle;
 [X] getNodeDefs(): Promise<NodeTypes['info']>;
-[ ] createNewBlob(blobType: string): Promise<string>;
+[X] createNewBlob(blobType: string): Promise<string>;
 [X] createNewDag(userName?: string, dagName?: string, index?: string): Promise<string>;
-[ ] duplicateDag(dagUri: string, destUri?: string): Promise<string>;
+[X] duplicateDag(dagUri: string, destUri?: string): Promise<string>;
 [X] setDag(dagUri: string, defs: DagDef): Promise<DagHandle>;
-[ ] setSettings(settings: SettingsObj): Promise<SettingsObj>;
+[X] setSettings(settings: SettingsObj): Promise<SettingsObj>;
 [X] getSettings(): Promise<SettingsObj>;
-[ ] getAllowedCustomImports(): Promise<AllowedCustomImports>;
-[ ] checkQueueStats(minimal: false, dag?: string): Promise<QueueStatsResponse>;
+[X] getAllowedCustomImports(): Promise<AllowedCustomImports>;
+[X] checkQueueStats(minimal: false, dag?: string): Promise<QueueStatsResponse>;
 [ ] getInstanceStatus(dagUri?: string, nodeId?: string):
-[ ] getQueueMode(): Promise<string>;
-[ ] setQueueMode(mode: string): Promise<string>;
+[X] getQueueMode(): Promise<string>;
+[X] setQueueMode(mode: string): Promise<string>;
 [ ] flushAllQueueData(): Promise<void>;
-[ ] getCacheStats(): Promise<CacheStats>;
-[ ] resetCacheStats(): Promise<CacheStats>;
+[X] getCacheStats(): Promise<CacheStats>;
+[X] resetCacheStats(): Promise<CacheStats>;
 [ ] createKafkaErrorTopic(): Promise<KafkaTopics>;
-[ ] deleteKafkaErrorTopic(): Promise<KafkaTopics>;
-[ ] readKafkaErrors(offset: string): Promise<string[]>;
+[X] deleteKafkaErrorTopic(): Promise<KafkaTopics>;
+[X] readKafkaErrors(offset: string): Promise<string[]>;
 [X] getNamedSecrets(showValues: false): Promise
-[ ] setNamedSecrets(key: string, value: string): Promise<boolean>;
-[ ] getKnownBlobAges(blobType?: string, connector?: string): Promise<[string, string][]>;
-[ ] getTritonModels(): Promise<string[]>;
+[X] setNamedSecrets(key: string, value: string): Promise<boolean>;
+[X] getKnownBlobAges(blobType?: string, connector?: string): Promise<[string, string][]>;
+[X] getTritonModels(): Promise<string[]>;
 
 ## class DagHandle
 [ ] getInfo(): Promise<DagInfo>;
@@ -107,12 +107,9 @@ X - tested
 [ ] getUri(): string;
 [ ] getCtype(): string | undefined;
 [ ] getContent(): Promise<ByteResponse | null>;
-[ ] private asStr;
-[ ] private ensureIsFull;
-[ ] private ensureNotFull;
 [ ] listFiles(): Promise<BlobHandle[]>;
-[ ] setOwner(owner: NodeHandle): Promise<BlobOwner>;
-[ ] getOwner(): Promise<BlobOwner>;
+[X] setOwner(owner: NodeHandle): Promise<BlobOwner>;
+[X] getOwner(): Promise<BlobOwner>;
 [ ] copyTo(toUri: string, newOwner: NodeHandle | undefined): Promise<BlobHandle>;
 [ ] downloadZip(toPath?: string): Promise<Buffer | undefined>;
 [ ] startData(size: number, hashStr: string): Promise<number>;

@@ -1,6 +1,8 @@
 /// <reference lib="dom" />
 import { Readable } from 'stream';
+import FormData from 'form-data';
 import { open, FileHandle } from 'fs/promises';
+import { HeadersInit, Response, RequestInit } from 'node-fetch';
 import { performance } from 'perf_hooks';
 import {
     AllowedCustomImports,
@@ -59,11 +61,10 @@ import {
     METHOD_GET,
     METHOD_POST,
     METHOD_PUT,
-    rawRequestBytes,
-    rawRequestJSON,
-    rawRequestString,
-    RequestArgument,
+    retryWithTimeout,
     RetryOptions,
+    handleError,
+    METHOD_DELETE,
 } from './request';
 import {
     assertBoolean,
@@ -73,13 +74,13 @@ import {
     getAge,
     getFileHash,
     getFileUploadChunkSize,
+    getQueryURL,
     interpretCtype,
     isUndefined,
     mergeCtype,
     openWrite,
     safeOptNumber,
     std,
-    useLogger,
 } from './util';
 import { KeyError } from './errors';
 export * from './errors';
@@ -89,7 +90,6 @@ export * from './types';
 const API_VERSION = 4;
 const EMPTY_BLOB_PREFIX = 'null://';
 const PREFIX = 'xyme';
-const logger = useLogger('xyme');
 const DEFAULT_NAMESPACE = 'default';
 
 export interface XYMEConfig {
@@ -98,13 +98,15 @@ export interface XYMEConfig {
     namespace?: string;
 }
 
-interface XYMERequestArgument extends Partial<RequestArgument> {
-    files?: { [key: string]: any };
+interface XYMERequestArgument {
     addNamespace?: boolean;
     addPrefix?: boolean;
+    apiVersion?: number;
     args: { [key: string]: any };
+    files?: { [key: string]: Buffer };
     method: string;
     path: string;
+    retry?: Partial<RetryOptions>;
 }
 
 export default class XYMEClient {
@@ -157,65 +159,263 @@ export default class XYMEClient {
             this.refresh();
         }
     }
-
-    public async requestJSON<T>(rargs: XYMERequestArgument): Promise<T> {
-        const {
-            addNamespace = true,
-            addPrefix = true,
-            path,
-            args,
-            method,
-            ...rest
-        } = rargs;
-        const targs = { ...args };
-        if (addNamespace) {
-            targs.namespace = this.namespace;
-        }
-        let URL = `${this.url}${path}`;
+    private async getPrefix(
+        addPrefix: boolean,
+        apiVersion: number | undefined
+    ): Promise<string> {
+        let prefix = '';
         if (addPrefix) {
-            URL = `${this.url}${PREFIX}/v${API_VERSION}${path}`;
+            let apiVersionNumber: number;
+            if (isUndefined(apiVersion)) {
+                apiVersionNumber = await this.getAPIVersion();
+            } else {
+                apiVersionNumber = apiVersion;
+            }
+            prefix = `${PREFIX}/v${apiVersionNumber}`;
         }
-        const requestArgs: RequestArgument = {
-            ...rest,
-            method,
-            args,
-            URL,
-            headers: {
-                'Authorization': this.token,
-                'content-type': 'application/json',
-            },
-        };
-        return await rawRequestJSON<T>(requestArgs);
+        return prefix;
     }
 
-    public async requestString(rargs: XYMERequestArgument): Promise<Readable> {
+    private async rawRequestBytes(
+        rargs: XYMERequestArgument
+    ): Promise<[Buffer, string]> {
         const {
-            addNamespace = true,
-            addPrefix = true,
+            method,
             path,
             args,
-            method,
+            addPrefix,
+            addNamespace,
+            apiVersion,
+            files,
+            retry,
             ...rest
         } = rargs;
-        const targs = { ...args };
+        const prefix = await this.getPrefix(addPrefix, apiVersion);
+        const url = `${this.url}${prefix}${path}`;
+        let headers: HeadersInit = {
+            Authorization: this.token,
+        };
         if (addNamespace) {
-            targs.namespace = this.namespace;
+            headers = {
+                ...headers,
+                namespace: this.namespace,
+            };
         }
-        let URL = `${this.url}${path}`;
-        if (addPrefix) {
-            URL = `${this.url}${PREFIX}/v${API_VERSION}${path}`;
+        const options: RequestInit = {
+            method,
+            headers,
+            body: JSON.stringify(args),
+            ...(rest as RequestInit),
+        };
+        if (method !== 'FILE' && files !== undefined) {
+            throw new Error(
+                `files are only allow for post (got ${method}): ${files}`
+            );
         }
-        const requestArgs: RequestArgument = {
+        let response: Response | undefined = undefined;
+
+        switch (method) {
+            case METHOD_GET: {
+                // eslint-disable-next-line @typescript-eslint/no-unused-vars
+                const { body, ...init } = options;
+                response = await retryWithTimeout(
+                    getQueryURL(args, url),
+                    retry,
+                    init
+                );
+                break;
+            }
+            case METHOD_POST:
+            case METHOD_PUT:
+            case METHOD_DELETE: {
+                response = await retryWithTimeout(url, retry, options);
+                break;
+            }
+            case METHOD_FILE: {
+                const { headers } = options;
+                const formData = new FormData();
+                if (files) {
+                    Object.keys(files).map((key) => {
+                        let newBuffer: Buffer;
+                        files[key].copy(newBuffer, 0, 0, files[key].length);
+                        formData.append(key, newBuffer);
+                    });
+                    Object.keys(args).map((key) => {
+                        formData.append(key, args[key]);
+                    });
+                    response = await retryWithTimeout(url, retry, {
+                        ...options,
+                        method: METHOD_POST,
+                        body: formData,
+                        headers: {
+                            ...headers,
+                            ...formData.getHeaders(),
+                        },
+                    });
+                }
+                break;
+            }
+            default:
+                throw new Error(`unknown method ${method}`);
+        }
+        if (response) {
+            handleError(response);
+            return [await response.buffer(), response.headers['content-type']];
+        } else {
+            throw new Error('no server response');
+        }
+    }
+
+    private async rawRequestJSON<T>(rargs: XYMERequestArgument): Promise<T> {
+        const {
+            method,
+            path,
+            args,
+            addPrefix,
+            addNamespace,
+            apiVersion,
+            files,
+            retry,
+            ...rest
+        } = rargs;
+        const prefix = await this.getPrefix(addPrefix, apiVersion);
+        const url = `${this.url}${prefix}${path}`;
+        let headers: HeadersInit = {
+            'Authorization': this.token,
+            'content-type': 'application/json',
+        };
+        if (addNamespace) {
+            headers = {
+                ...headers,
+                namespace: this.namespace,
+            };
+        }
+        const options: RequestInit = {
+            method,
+            headers,
+            body: JSON.stringify(args),
+            ...(rest as RequestInit),
+        };
+        if (method !== 'FILE' && files !== undefined) {
+            throw new Error(
+                `files are only allow for post (got ${method}): ${files}`
+            );
+        }
+        let response: Response | undefined = undefined;
+
+        switch (method) {
+            case METHOD_GET: {
+                // eslint-disable-next-line @typescript-eslint/no-unused-vars
+                const { body, ...init } = options;
+                response = await retryWithTimeout(
+                    getQueryURL(args, url),
+                    retry,
+                    init
+                );
+                break;
+            }
+            case METHOD_POST:
+            case METHOD_PUT:
+            case METHOD_DELETE: {
+                response = await retryWithTimeout(url, retry, options);
+                break;
+            }
+            case METHOD_FILE: {
+                const { headers } = options;
+                const formData = new FormData();
+                if (files) {
+                    Object.keys(files).map((key) => {
+                        let newBuffer: Buffer;
+                        files[key].copy(newBuffer, 0, 0, files[key].length);
+                        formData.append(key, newBuffer);
+                    });
+                    Object.keys(args).map((key) => {
+                        formData.append(key, args[key]);
+                    });
+                    response = await retryWithTimeout(url, retry, {
+                        ...options,
+                        method: METHOD_POST,
+                        body: formData,
+                        headers: {
+                            ...headers,
+                            ...formData.getHeaders(),
+                        },
+                    });
+                }
+                break;
+            }
+            default:
+                throw new Error(`unknown method ${method}`);
+        }
+        if (response) {
+            handleError(response);
+            return await response.json();
+        } else {
+            throw new Error('no server response');
+        }
+    }
+
+    private async rawRequestString(
+        rargs: XYMERequestArgument
+    ): Promise<Readable> {
+        const {
+            method,
+            path,
+            args,
+            addPrefix,
+            addNamespace,
+            apiVersion,
+            retry,
+            ...rest
+        } = rargs;
+        const prefix = await this.getPrefix(addPrefix, apiVersion);
+        const url = `${this.url}${prefix}${path}`;
+        let response: Response = undefined;
+        let headers: HeadersInit = {
+            'Authorization': this.token,
+            'content-type': 'application/text',
+        };
+        if (addNamespace) {
+            headers = {
+                ...headers,
+                namespace: this.namespace,
+            };
+        }
+        const options: RequestInit = {
             ...rest,
             method,
-            args,
-            URL,
-            headers: {
-                'Authorization': this.token,
-                'content-type': 'application/text',
-            },
+            headers,
+            body: JSON.stringify(args),
         };
-        return await rawRequestString(requestArgs);
+
+        switch (method) {
+            case METHOD_GET: {
+                // eslint-disable-next-line @typescript-eslint/no-unused-vars
+                const { body, ...init } = options;
+                response = await retryWithTimeout(
+                    getQueryURL(args, url),
+                    retry,
+                    init
+                );
+                break;
+            }
+            case METHOD_POST:
+                response = await retryWithTimeout(url, retry, options);
+                break;
+            default:
+                throw new Error(`unknown method ${method}`);
+        }
+        if (response) {
+            handleError(response);
+            try {
+                const text = await response.text();
+                return Readable.from(text);
+            } catch (error) {
+                throw new Error('JSON parse error');
+            }
+        } else {
+            throw new Error('no server response');
+        }
     }
 
     public async requestBytes(
@@ -224,30 +424,45 @@ export default class XYMEClient {
         const {
             addNamespace = true,
             addPrefix = true,
-            path,
-            args,
-            method,
+            apiVersion = undefined,
             ...rest
         } = rargs;
-        const targs = { ...args };
-        if (addNamespace) {
-            targs.namespace = this.namespace;
-        }
-        let URL = `${this.url}${path}`;
-        if (addPrefix) {
-            URL = `${this.url}${PREFIX}/v${API_VERSION}${path}`;
-        }
-        const requestArgs: RequestArgument = {
+        return await this.rawRequestBytes({
             ...rest,
-            method,
-            args,
-            URL,
-            headers: {
-                'Authorization': this.token,
-                'content-type': 'application/json',
-            },
-        };
-        return await rawRequestBytes(requestArgs);
+            addNamespace,
+            addPrefix,
+            apiVersion,
+        });
+    }
+
+    public async requestJSON<T>(rargs: XYMERequestArgument): Promise<T> {
+        const {
+            addNamespace = true,
+            addPrefix = true,
+            apiVersion = undefined,
+            ...rest
+        } = rargs;
+        return await this.rawRequestJSON({
+            ...rest,
+            addNamespace,
+            addPrefix,
+            apiVersion,
+        });
+    }
+
+    public async requestString(rargs: XYMERequestArgument): Promise<Readable> {
+        const {
+            addNamespace = true,
+            addPrefix = true,
+            apiVersion = undefined,
+            ...rest
+        } = rargs;
+        return await this.rawRequestString({
+            ...rest,
+            addNamespace,
+            addPrefix,
+            apiVersion,
+        });
     }
 
     public async getServerVersion(): Promise<VersionResponse> {
@@ -275,7 +490,7 @@ export default class XYMEClient {
     }
 
     public async getDagAges(): Promise<[string, string, string][]> {
-        const [cur_time, dags] = await this.getDagTimes(false);
+        const [curTime, dags] = await this.getDagTimes(true);
         const sorted = dags.sort((a, b) => {
             const oldA = safeOptNumber(a[1]);
             const oldB = safeOptNumber(b[1]);
@@ -295,8 +510,8 @@ export default class XYMEClient {
         sorted.forEach((dag) => {
             ages.push([
                 dag[0],
-                getAge(cur_time, dag[1]),
-                getAge(cur_time, dag[2]),
+                getAge(curTime, dag[1]),
+                getAge(curTime, dag[2]),
             ]);
         });
         return ages;
@@ -398,12 +613,12 @@ export default class XYMEClient {
         const warnings = dagCreate.warnings;
         const numWarnings = warnings.length;
         if (numWarnings > 1) {
-            logger.info(`
+            console.info(`
                 ${numWarnings} warnings while setting dag ${dagUri}:\n"`);
         } else if (numWarnings === 1) {
-            logger.info(`Warning while setting dag ${dagUri}:\n`);
+            console.info(`Warning while setting dag ${dagUri}:\n`);
         }
-        warnings.forEach((warn) => logger.info(`${warn}\n`));
+        warnings.forEach((warn) => console.info(`${warn}\n`));
         return this.getDag(uri);
     }
 
@@ -446,23 +661,26 @@ export default class XYMEClient {
         minimal: boolean,
         dag?: string
     ): Promise<MinimalQueueStatsResponse | MinimalQueueStatsResponse> {
+        let args: { [key: string]: number | string } = {
+            minimal: +minimal,
+        };
+        if (!isUndefined(dag)) {
+            args = {
+                ...args,
+                dag,
+            };
+        }
         if (minimal) {
             return await this.requestJSON<MinimalQueueStatsResponse>({
                 method: METHOD_GET,
                 path: '/queue_stats',
-                args: {
-                    dag,
-                    minimal: 1,
-                },
+                args,
             });
         } else {
             return this.requestJSON<QueueStatsResponse>({
                 method: METHOD_GET,
                 path: '/queue_stats',
-                args: {
-                    dag,
-                    minimal: 0,
-                },
+                args,
             });
         }
     }
