@@ -1,0 +1,22 @@
+# Folders
+stubs/
+packages/
+.circleci/
+.github/
+.mypy_cache/
+.vscode/
+.yalc/
+
+MANIFEST.in
+requirements*
+setup*
+mypy.ini
+.pylintrc
+mypy.ini
+*.sh
+yarn*
+yalc*
+.pre-commit-config.yaml
+.prettierrc
+tsconfig.json
+.eslint*

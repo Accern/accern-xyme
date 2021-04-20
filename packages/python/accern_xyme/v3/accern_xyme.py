@@ -34,7 +34,7 @@ from requests.exceptions import HTTPError, RequestException
 from typing_extensions import Literal
 import quick_server
 
-from .util import (
+from accern_xyme.v3.util import (
     async_compute,
     ByteResponse,
     df_to_csv,
@@ -49,45 +49,37 @@ from .util import (
     safe_opt_num,
     ServerSideError,
 )
-from .types import (
-    AllowedCustomImports,
-    BlobFilesResponse,
+from accern_xyme.v3.types import (
     BlobInit,
     BlobOwner,
     CacheStats,
     CopyBlob,
     CSVBlobResponse,
+    CSVList,
     CSVOp,
-    DagCreate,
-    DagDef,
-    DagDupResponse,
-    DagInfo,
-    DagInit,
-    DagList,
-    DagReload,
+    CustomCodeResponse,
+    CustomImportsResponse,
     DynamicResults,
     DynamicStatusResponse,
     ESQueryResponse,
     FlushAllQueuesResponse,
     InCursors,
     InstanceStatus,
-    JSONBlobAppendResponse,
+    JobInfo,
+    JobList,
     JSONBlobResponse,
     KafkaGroup,
     KafkaMessage,
     KafkaOffsets,
     KafkaThroughput,
     KafkaTopics,
-    KnownBlobs,
+    ListNamedSecretKeys,
+    MaintenanceResponse,
     MinimalQueueStatsResponse,
     ModelParamsResponse,
     ModelReleaseResponse,
     ModelSetupResponse,
-    NamespaceList,
-    NamespaceUpdateSettings,
     NodeChunk,
-    NodeCustomCode,
-    NodeCustomImports,
     NodeDef,
     NodeDefInfo,
     NodeInfo,
@@ -95,32 +87,36 @@ from .types import (
     NodeStatus,
     NodeTiming,
     NodeTypes,
-    NodeUserColumnsResponse,
+    PipelineCreate,
+    PipelineDef,
+    PipelineDupResponse,
+    PipelineInfo,
+    PipelineInit,
+    PipelineList,
+    PipelineReload,
     PutNodeBlob,
     QueueMode,
     QueueStatsResponse,
     QueueStatus,
     ReadNode,
     SetNamedSecret,
-    SettingsObj,
     TaskStatus,
     Timing,
     TimingResult,
     Timings,
-    TritonModelsResponse,
-    UploadFilesResponse,
+    UserColumnsResponse,
     VersionResponse,
+    VisibleBlobs,
     WorkerScale,
 )
 
 if TYPE_CHECKING:
-    WVD = weakref.WeakValueDictionary[str, 'DagHandle']
+    WVD = weakref.WeakValueDictionary[str, 'PipelineHandle']
 else:
     WVD = weakref.WeakValueDictionary
 
 
-API_VERSION = 4
-DEFAULT_NAMESPACE = "default"
+API_VERSION = 3
 
 
 METHOD_DELETE = "DELETE"
@@ -145,6 +141,11 @@ CUSTOM_NODE_TYPES = {
     "custom_json_to_data",
     "custom_json_join_data",
 }
+EMBEDDING_MODEL_NODE_TYPES = {
+    "dyn_embedding_model",
+    "static_embedding_model",
+}
+MODEL_NODE_TYPES = EMBEDDING_MODEL_NODE_TYPES
 
 
 class AccessDenied(Exception):
@@ -154,30 +155,24 @@ class AccessDenied(Exception):
 
 
 class LegacyVersion(Exception):
-    def __init__(self, api_version: int) -> None:
-        super().__init__(f"expected {API_VERSION} got {api_version}")
-        self._api_version = api_version
-
-    def get_api_version(self) -> int:
-        return self._api_version
+    pass
 
 # *** LegacyVersion ***
 
 
-class XYMEClient:
+class XYMEClientV3:
     def __init__(
             self,
             url: str,
-            token: Optional[str],
-            namespace: str) -> None:
+            token: Optional[str]) -> None:
         self._url = url.rstrip("/")
         if token is None:
             token = os.environ.get("XYME_SERVER_TOKEN")
         self._token = token
-        self._namespace = namespace
         self._last_action = time.monotonic()
         self._auto_refresh = True
-        self._dag_cache: WVD = weakref.WeakValueDictionary()
+        self._pipeline_cache: WVD = weakref.WeakValueDictionary()
+        self._permissions: Optional[List[str]] = None
         self._node_defs: Optional[Dict[str, NodeDefInfo]] = None
 
         def get_version() -> int:
@@ -185,15 +180,18 @@ class XYMEClient:
             try:
                 return int(server_version["api_version"])
             except (ValueError, KeyError) as e:
-                raise LegacyVersion(1) from e
+                raise LegacyVersion() from e
 
-        api_version = get_version()
-        if api_version < API_VERSION:
-            raise LegacyVersion(api_version)
-        self._api_version = api_version
+        self._api_version = min(get_version(), API_VERSION)
 
     def get_api_version(self) -> int:
         return self._api_version
+
+    def get_permissions(self) -> List[str]:
+        if self._permissions is None:
+            raise NotImplementedError("permissions are not implemented")
+        assert self._permissions is not None
+        return self._permissions
 
     def set_auto_refresh(self, is_auto_refresh: bool) -> None:
         self._auto_refresh = is_auto_refresh
@@ -224,7 +222,6 @@ class XYMEClient:
             args: Dict[str, Any],
             files: Optional[Dict[str, BytesIO]] = None,
             add_prefix: bool = True,
-            add_namespace: bool = True,
             api_version: Optional[int] = None) -> Tuple[BytesIO, str]:
         file_resets = {}
         can_reset = True
@@ -250,13 +247,7 @@ class XYMEClient:
             try:
                 try:
                     return self._fallible_raw_request_bytes(
-                        method,
-                        path,
-                        args,
-                        files,
-                        add_prefix,
-                        add_namespace,
-                        api_version)
+                        method, path, args, files, add_prefix, api_version)
                 except HTTPError as e:
                     if e.response.status_code in (403, 404, 500):
                         retry = max_retry
@@ -275,7 +266,6 @@ class XYMEClient:
             path: str,
             args: Dict[str, Any],
             add_prefix: bool = True,
-            add_namespace: bool = True,
             api_version: Optional[int] = None) -> TextIO:
         retry = 0
         max_retry = get_max_retry()
@@ -283,12 +273,7 @@ class XYMEClient:
             try:
                 try:
                     return self._fallible_raw_request_str(
-                        method,
-                        path,
-                        args,
-                        add_prefix,
-                        add_namespace,
-                        api_version)
+                        method, path, args, add_prefix, api_version)
                 except HTTPError as e:
                     if e.response.status_code in (403, 404, 500):
                         retry = max_retry
@@ -305,7 +290,6 @@ class XYMEClient:
             path: str,
             args: Dict[str, Any],
             add_prefix: bool = True,
-            add_namespace: bool = True,
             files: Optional[Dict[str, IO[bytes]]] = None,
             api_version: Optional[int] = None) -> Dict[str, Any]:
         file_resets = {}
@@ -332,13 +316,7 @@ class XYMEClient:
             try:
                 try:
                     return self._fallible_raw_request_json(
-                        method,
-                        path,
-                        args,
-                        add_prefix,
-                        add_namespace,
-                        files,
-                        api_version)
+                        method, path, args, add_prefix, files, api_version)
                 except HTTPError as e:
                     if e.response.status_code in (403, 404, 500):
                         retry = max_retry
@@ -358,7 +336,6 @@ class XYMEClient:
             args: Dict[str, Any],
             files: Optional[Dict[str, BytesIO]],
             add_prefix: bool,
-            add_namespace: bool,
             api_version: Optional[int]) -> Tuple[BytesIO, str]:
         prefix = ""
         if add_prefix:
@@ -369,8 +346,6 @@ class XYMEClient:
         headers = {
             "authorization": self._token,
         }
-        if add_namespace:
-            args["namespace"] = self._namespace
 
         def check_error(req: Response) -> None:
             if req.status_code == 403:
@@ -410,7 +385,6 @@ class XYMEClient:
             path: str,
             args: Dict[str, Any],
             add_prefix: bool,
-            add_namespace: bool,
             api_version: Optional[int]) -> TextIO:
         prefix = ""
         if add_prefix:
@@ -421,8 +395,6 @@ class XYMEClient:
         headers = {
             "authorization": self._token,
         }
-        if add_namespace:
-            args["namespace"] = self._namespace
 
         def check_error(req: Response) -> None:
             if req.status_code == 403:
@@ -447,7 +419,6 @@ class XYMEClient:
             path: str,
             args: Dict[str, Any],
             add_prefix: bool,
-            add_namespace: bool,
             files: Optional[Dict[str, IO[bytes]]],
             api_version: Optional[int]) -> Dict[str, Any]:
         prefix = ""
@@ -459,8 +430,6 @@ class XYMEClient:
         headers = {
             "authorization": self._token,
         }
-        if add_namespace:
-            args["namespace"] = self._namespace
         if method != METHOD_FILE and files is not None:
             raise ValueError(
                 f"files are only allow for post (got {method}): {files}")
@@ -530,10 +499,9 @@ class XYMEClient:
             args: Dict[str, Any],
             files: Optional[Dict[str, BytesIO]] = None,
             add_prefix: bool = True,
-            add_namespace: bool = True,
             api_version: Optional[int] = None) -> Tuple[BytesIO, str]:
         return self._raw_request_bytes(
-            method, path, args, files, add_prefix, add_namespace, api_version)
+            method, path, args, files, add_prefix, api_version)
 
     def _request_json(
             self,
@@ -541,60 +509,74 @@ class XYMEClient:
             path: str,
             args: Dict[str, Any],
             add_prefix: bool = True,
-            add_namespace: bool = True,
             files: Optional[Dict[str, IO[bytes]]] = None,
             api_version: Optional[int] = None) -> Dict[str, Any]:
         return self._raw_request_json(
-            method, path, args, add_prefix, add_namespace, files, api_version)
+            method, path, args, add_prefix, files, api_version)
 
     def get_server_version(self) -> VersionResponse:
         return cast(VersionResponse, self._raw_request_json(
             METHOD_GET, f"{PREFIX}/v{API_VERSION}/version", {
-            }, add_prefix=False, add_namespace=False))
+            }, add_prefix=False))
 
-    def get_namespaces(self) -> List[str]:
-        return cast(NamespaceList, self._request_json(
-            METHOD_GET, "/namespaces", {}))["namespaces"]
+    def set_maintenance_mode(
+            self, is_maintenance: bool) -> MaintenanceResponse:
+        """Set the maintenance mode of the server
 
-    def get_dags(self) -> List[str]:
+        Args:
+            is_maintenance (bool): If the server should be in maintenance mode.
+
+        Returns:
+            MaintenanceResponse: MaintenanceResponse object.
+        """
+        return cast(MaintenanceResponse, self._request_json(
+            METHOD_PUT, "/maintenance", {
+                "is_maintenance": is_maintenance,
+            }))
+
+    def get_maintenance_mode(self) -> MaintenanceResponse:
+        return cast(MaintenanceResponse, self._request_json(
+            METHOD_GET, "/maintenance", {}))
+
+    def get_pipelines(self) -> List[str]:
         return [
             res[0]
-            for res in self.get_dag_times(retrieve_times=False)[1]
+            for res in self.get_pipeline_times(retrieve_times=False)[1]
         ]
 
-    def get_dag_ages(self) -> List[Tuple[str, str, str]]:
-        cur_time, dags = self.get_dag_times(retrieve_times=True)
+    def get_pipeline_ages(self) -> List[Tuple[str, str, str]]:
+        cur_time, pipelines = self.get_pipeline_times(retrieve_times=True)
         return [
-            (dag_uri, get_age(cur_time, oldest), get_age(cur_time, latest))
-            for (dag_uri, oldest, latest) in sorted(dags, key=lambda el: (
+            (pipe_id, get_age(cur_time, oldest), get_age(cur_time, latest))
+            for (pipe_id, oldest, latest) in sorted(pipelines, key=lambda el: (
                 safe_opt_num(el[1]), safe_opt_num(el[2]), el[0]))
         ]
 
-    def get_dag_times(self, retrieve_times: bool) -> Tuple[
-            float, List[Tuple[str, Optional[float], Optional[float]]]]:
-        res = cast(DagList, self._request_json(
-            METHOD_GET, "/dags", {
-                "retrieve_times": int(retrieve_times),
-            }))
-        return res["cur_time"], res["dags"]
+    def get_pipeline_times(
+            self,
+            retrieve_times: bool) -> Tuple[
+                float, List[Tuple[str, Optional[float], Optional[float]]]]:
+        obj = {}
+        if retrieve_times:
+            obj["retrieve_times"] = "1"
+        res = cast(PipelineList, self._request_json(
+            METHOD_GET, "/pipelines", obj))
+        return res["cur_time"], res["pipelines"]
 
-    def get_dag(self, dag_uri: str) -> 'DagHandle':
-        res = self._dag_cache.get(dag_uri)
+    def get_pipeline(self, pipe_id: str) -> 'PipelineHandle':
+        res = self._pipeline_cache.get(pipe_id)
         if res is not None:
             return res
-        res = DagHandle(self, dag_uri)
-        self._dag_cache[dag_uri] = res
+        res = PipelineHandle(self, pipe_id)
+        self._pipeline_cache[pipe_id] = res
         return res
-
-    def get_blob_handle(self, uri: str, is_full: bool = False) -> 'BlobHandle':
-        return BlobHandle(self, uri, is_full=is_full)
 
     def get_node_defs(self) -> Dict[str, NodeDefInfo]:
         self._maybe_refresh()
         if self._node_defs is not None:
             return self._node_defs
         res = cast(NodeTypes, self._request_json(
-            METHOD_GET, "/node_types", {}, add_namespace=False))["info"]
+            METHOD_GET, "/node_types", {}))["info"]
         self._node_defs = res
         return res
 
@@ -602,134 +584,177 @@ class XYMEClient:
         return cast(BlobInit, self._request_json(
             METHOD_POST, "/blob_init", {
                 "type": blob_type,
-            }, add_namespace=False))["blob"]
+            }))["blob"]
 
-    def create_new_dag(
+    def create_new_pipeline(
             self,
             username: Optional[str] = None,
-            dagname: Optional[str] = None,
+            pipename: Optional[str] = None,
             index: Optional[int] = None) -> str:
-        return cast(DagInit, self._request_json(
-            METHOD_POST, "/dag_init", {
+        return cast(PipelineInit, self._request_json(
+            METHOD_POST, "/pipeline_init", {
                 "user": username,
-                "name": dagname,
+                "name": pipename,
                 "index": index,
-            }))["dag"]
+            }))["pipeline"]
 
-    def duplicate_dag(
-            self, dag_uri: str, dest_uri: Optional[str] = None) -> str:
+    def duplicate_pipeline(
+            self, pipe_id: str, dest_id: Optional[str] = None) -> str:
         args = {
-            "dag": dag_uri,
+            "pipeline": pipe_id,
         }
-        if dest_uri is not None:
-            args["dest"] = dest_uri
-        return cast(DagDupResponse, self._request_json(
-            METHOD_POST, "/dag_dup", args))["dag"]
+        if dest_id is not None:
+            args["dest"] = dest_id
+        return cast(PipelineDupResponse, self._request_json(
+            METHOD_POST, "/pipeline_dup", args))["pipeline"]
 
-    def set_dag(
+    def set_pipeline(
             self,
-            dag_uri: str,
-            defs: DagDef,
-            warnings_io: Optional[IO[Any]] = sys.stderr) -> 'DagHandle':
-        dag_create = cast(DagCreate, self._request_json(
-            METHOD_POST, "/dag_create", {
-                "dag": dag_uri,
+            pipe_id: str,
+            defs: PipelineDef,
+            warnings_io: Optional[IO[Any]] = sys.stderr) -> 'PipelineHandle':
+        pipe_create = cast(PipelineCreate, self._request_json(
+            METHOD_POST, "/pipeline_create", {
+                "pipeline": pipe_id,
                 "defs": defs,
             }))
-        dag_uri = dag_create["dag"]
+        pipe_id = pipe_create["pipeline"]
         if warnings_io is not None:
-            warnings = dag_create["warnings"]
+            warnings = pipe_create["warnings"]
             if len(warnings) > 1:
                 warnings_io.write(
                     f"{len(warnings)} warnings while "
-                    f"setting dag {dag_uri}:\n")
+                    f"setting pipeline {pipe_id}:\n")
             elif len(warnings) == 1:
                 warnings_io.write(
-                    f"Warning while setting dag {dag_uri}:\n")
+                    f"Warning while setting pipeline {pipe_id}:\n")
             for warn in warnings:
                 warnings_io.write(f"{warn}\n")
             if warnings:
                 warnings_io.flush()
-        return self.get_dag(dag_uri)
+        return self.get_pipeline(pipe_id)
 
-    def set_settings(self, settings: SettingsObj) -> SettingsObj:
-        return cast(NamespaceUpdateSettings, self._request_json(
-            METHOD_POST, "/settings", {
+    def update_settings(
+            self, pipe_id: str, settings: Dict[str, Any]) -> 'PipelineHandle':
+        pipe_id = cast(PipelineCreate, self._request_json(
+            METHOD_POST, "/update_pipeline_settings", {
+                "pipeline": pipe_id,
                 "settings": settings,
-            }))["settings"]
+            }))["pipeline"]
+        return self.get_pipeline(pipe_id)
 
-    def get_settings(self) -> SettingsObj:
-        return cast(NamespaceUpdateSettings, self._request_json(
-            METHOD_GET, "/settings", {}))["settings"]
+    def get_csvs(self) -> List[str]:
+        return cast(CSVList, self._request_json(
+            METHOD_GET, "/csvs", {
+            }))["csvs"]
 
-    def get_allowed_custom_imports(self) -> AllowedCustomImports:
-        return cast(AllowedCustomImports, self._request_json(
-            METHOD_GET, "/allowed_custom_imports", {}, add_namespace=False))
+    def add_csv(self, csv_blob_id: str) -> List[str]:
+        return cast(CSVList, self._request_json(
+            METHOD_PUT, "/csvs", {
+                "blob": csv_blob_id,
+            }))["csvs"]
+
+    def remove_csv(self, csv_blob_id: str) -> List[str]:
+        return cast(CSVList, self._request_json(
+            METHOD_DELETE, "/csvs", {
+                "blob": csv_blob_id,
+            }))["csvs"]
+
+    def get_jobs(self) -> List[str]:
+        return cast(JobList, self._request_json(
+            METHOD_GET, "/jobs", {
+            }))["jobs"]
+
+    def remove_job(self, job_id: str) -> List[str]:
+        return cast(JobList, self._request_json(
+            METHOD_DELETE, "/job", {
+                "job": job_id,
+            }))["jobs"]
+
+    def create_job(self) -> JobInfo:
+        return cast(JobInfo, self._request_json(
+            METHOD_POST, "/job_init", {}))
+
+    def get_job(self, job_id: str) -> JobInfo:
+        return cast(JobInfo, self._request_json(
+            METHOD_GET, "/job", {
+                "job": job_id,
+            }))
+
+    def set_job(self, job: JobInfo) -> JobInfo:
+        return cast(JobInfo, self._request_json(
+            METHOD_PUT, "/job", {
+                "job": job,
+            }))
+
+    def get_allowed_custom_imports(self) -> CustomImportsResponse:
+        return cast(CustomImportsResponse, self._request_json(
+            METHOD_GET, "/allowed_custom_imports", {}))
 
     @overload
     def check_queue_stats(  # pylint: disable=no-self-use
             self,
-            dag: Optional[str],
+            pipeline: Optional[str],
             minimal: Literal[True]) -> MinimalQueueStatsResponse:
         ...
 
     @overload
     def check_queue_stats(  # pylint: disable=no-self-use
             self,
-            dag: Optional[str],
+            pipeline: Optional[str],
             minimal: Literal[False]) -> QueueStatsResponse:
         ...
 
     @overload
     def check_queue_stats(  # pylint: disable=no-self-use
             self,
-            dag: Optional[str],
+            pipeline: Optional[str],
             minimal: bool) -> Union[
                 MinimalQueueStatsResponse, QueueStatsResponse]:
         ...
 
     def check_queue_stats(
             self,
-            dag: Optional[str] = None,
+            pipeline: Optional[str] = None,
             minimal: bool = False) -> Union[
                 MinimalQueueStatsResponse, QueueStatsResponse]:
         if minimal:
             return cast(MinimalQueueStatsResponse, self._request_json(
                 METHOD_GET, "/queue_stats", {
-                    "dag": dag,
+                    "pipeline": pipeline,
                     "minimal": 1,
                 }))
         return cast(QueueStatsResponse, self._request_json(
             METHOD_GET, "/queue_stats", {
-                "dag": dag,
+                "pipeline": pipeline,
                 "minimal": 0,
             }))
 
     def get_instance_status(
             self,
-            dag_uri: Optional[str] = None,
+            pipe_id: Optional[str] = None,
             node_id: Optional[str] = None) -> Dict[InstanceStatus, int]:
         return cast(Dict[InstanceStatus, int], self._request_json(
             METHOD_GET, "/instance_status", {
-                "dag": dag_uri,
+                "pipeline": pipe_id,
                 "node": node_id,
             }))
 
     def get_queue_mode(self) -> str:
         return cast(QueueMode, self._request_json(
-            METHOD_GET, "/queue_mode", {}, add_namespace=False))["mode"]
+            METHOD_GET, "/queue_mode", {}))["mode"]
 
     def set_queue_mode(self, mode: str) -> str:
         return cast(QueueMode, self._request_json(
             METHOD_PUT, "/queue_mode", {
                 "mode": mode,
-            }, add_namespace=False))["mode"]
+            }))["mode"]
 
     def flush_all_queue_data(self) -> None:
 
         def do_flush() -> bool:
             res = cast(FlushAllQueuesResponse, self._request_json(
-                METHOD_POST, "/flush_all_queues", {}, add_namespace=False))
+                METHOD_POST, "/flush_all_queues", {}))
             return bool(res["success"])
 
         while do_flush():  # we flush until there is nothing to flush anymore
@@ -737,11 +762,11 @@ class XYMEClient:
 
     def get_cache_stats(self) -> CacheStats:
         return cast(CacheStats, self._request_json(
-            METHOD_GET, "/cache_stats", {}, add_namespace=False))
+            METHOD_GET, "/cache_stats", {}))
 
     def reset_cache(self) -> CacheStats:
         return cast(CacheStats, self._request_json(
-            METHOD_POST, "/cache_reset", {}, add_namespace=False))
+            METHOD_POST, "/cache_reset", {}))
 
     def create_kafka_error_topic(self) -> KafkaTopics:
         return cast(KafkaTopics, self._request_json(
@@ -761,12 +786,9 @@ class XYMEClient:
                 "offset": offset,
             }))
 
-    def get_named_secrets(
-            self, show_values: bool = False) -> Dict[str, Optional[str]]:
-        return cast(Dict[str, Optional[str]], self._request_json(
-            METHOD_GET, "/named_secrets", {
-                "show": int(bool(show_values)),
-            }))
+    def get_named_secret_keys(self) -> List[str]:
+        return cast(ListNamedSecretKeys, self._request_json(
+            METHOD_GET, "/named_secrets", {}))["keys"]
 
     def set_named_secret(self, key: str, value: str) -> bool:
         return cast(SetNamedSecret, self._request_json(
@@ -775,62 +797,17 @@ class XYMEClient:
                 "value": value,
             }))["replaced"]
 
-    def get_known_blobs(
-            self,
-            blob_type: Optional[str] = None,
-            connector: Optional[str] = None) -> List[str]:
-        return [
-            res[0]
-            for res in self.get_known_blob_times(
-                retrieve_times=False,
-                blob_type=blob_type,
-                connector=connector)[1]
-        ]
 
-    def get_known_blob_ages(
-            self,
-            blob_type: Optional[str] = None,
-            connector: Optional[str] = None) -> List[Tuple[str, str]]:
-        cur_time, blobs = self.get_known_blob_times(
-            retrieve_times=True, blob_type=blob_type, connector=connector)
-        return [
-            (blob_id, get_age(cur_time, blob_time))
-            for (blob_id, blob_time) in sorted(blobs, key=lambda el: (
-                safe_opt_num(el[1]), el[0]))
-        ]
-
-    def get_known_blob_times(
-            self,
-            retrieve_times: bool,
-            blob_type: Optional[str] = None,
-            connector: Optional[str] = None,
-            ) -> Tuple[float, List[Tuple[str, Optional[float]]]]:
-        obj: Dict[str, Union[int, str]] = {
-            "retrieve_times": int(retrieve_times),
-        }
-        if blob_type is not None:
-            obj["blob_type"] = blob_type
-        if connector is not None:
-            obj["connector"] = connector
-        res = cast(KnownBlobs, self._request_json(
-            METHOD_GET, "/known_blobs", obj))
-        return res["cur_time"], res["blobs"]
-
-    def get_triton_models(self) -> List[str]:
-        return cast(TritonModelsResponse, self._request_json(
-            METHOD_GET, "/inference_models", {}))["models"]
+# *** XYMEClientV3 ***
 
 
-# *** XYMEClient ***
-
-
-class DagHandle:
+class PipelineHandle:
     def __init__(
             self,
-            client: XYMEClient,
-            dag_uri: str) -> None:
+            client: XYMEClientV3,
+            pipe_id: str) -> None:
         self._client = client
-        self._dag_uri = dag_uri
+        self._pipe_id = pipe_id
         self._name: Optional[str] = None
         self._company: Optional[str] = None
         self._state: Optional[str] = None
@@ -838,6 +815,7 @@ class DagHandle:
         self._queue_mng: Optional[str] = None
         self._nodes: Dict[str, NodeHandle] = {}
         self._node_lookup: Dict[str, str] = {}
+        self._settings: Optional[Dict[str, Any]] = None
         self._dynamic_error: Optional[str] = None
         self._ins: Optional[List[str]] = None
         self._outs: Optional[List[Tuple[str, str]]] = None
@@ -860,10 +838,10 @@ class DagHandle:
         if self._name is None:
             self._fetch_info()
 
-    def get_info(self) -> DagInfo:
-        return cast(DagInfo, self._client._request_json(
-            METHOD_GET, "/dag_info", {
-                "dag": self.get_uri(),
+    def get_info(self) -> PipelineInfo:
+        return cast(PipelineInfo, self._client._request_json(
+            METHOD_GET, "/pipeline_info", {
+                "pipeline": self._pipe_id,
             }))
 
     def _fetch_info(self) -> None:
@@ -873,6 +851,7 @@ class DagHandle:
         self._state = info["state"]
         self._is_high_priority = info["high_priority"]
         self._queue_mng = info["queue_mng"]
+        self._settings = info["settings"]
         self._ins = info["ins"]
         self._outs = [(el[0], el[1]) for el in info["outs"]]
         old_nodes = {} if self._nodes is None else self._nodes
@@ -898,8 +877,8 @@ class DagHandle:
         node_id = self._node_lookup.get(node_id, node_id)
         return self._nodes[node_id]
 
-    def get_uri(self) -> str:
-        return self._dag_uri
+    def get_id(self) -> str:
+        return self._pipe_id
 
     def get_name(self) -> str:
         self._maybe_refresh()
@@ -919,10 +898,16 @@ class DagHandle:
         assert self._state is not None
         return self._state
 
+    def get_settings(self) -> Dict[str, Any]:
+        self._maybe_refresh()
+        self._maybe_fetch()
+        assert self._settings is not None
+        return self._settings
+
     def get_timing(
-            self,
-            blacklist: Optional[List[str]] = None,
-            ) -> Optional[TimingResult]:
+                self,
+                blacklist: Optional[List[str]] = None,
+                ) -> Optional[TimingResult]:
         blist = [] if blacklist is None else blacklist
         node_timing: Dict[str, NodeTiming] = {}
         nodes = self.get_nodes()
@@ -939,7 +924,7 @@ class DagHandle:
                 return (0, 0, fns)
             return (node_total, node_total / len(fns), fns)
 
-        dag_total = 0.0
+        pipe_total = 0.0
         for node in nodes:
             node_get = self.get_node(node)
             node_time = node_get.get_timing()
@@ -952,13 +937,13 @@ class DagHandle:
                 "node_avg": avg_time,
                 "fns": fns,
             }
-            dag_total += node_total
+            pipe_total += node_total
         node_timing_sorted = sorted(
             node_timing.items(),
             key=lambda x: x[1]["node_total"],
             reverse=True)
         return {
-            "dag_total": dag_total,
+            "pipe_total": pipe_total,
             "nodes": node_timing_sorted,
         }
 
@@ -997,8 +982,11 @@ class DagHandle:
                 self.refresh()
             yield do_refresh
 
-    def set_dag(self, defs: DagDef) -> None:
-        self._client.set_dag(self.get_uri(), defs)
+    def set_pipeline(self, defs: PipelineDef) -> None:
+        self._client.set_pipeline(self.get_id(), defs)
+
+    def update_settings(self, settings: Dict[str, Any]) -> None:
+        self._client.update_settings(self.get_id(), settings)
 
     def dynamic_model(
             self,
@@ -1010,7 +998,7 @@ class DagHandle:
                 "format": format_method,
                 "inputs": inputs,
                 "no_cache": no_cache,
-                "dag": self.get_uri(),
+                "pipeline": self._pipe_id,
             }))
         return res["results"]
 
@@ -1033,10 +1021,9 @@ class DagHandle:
                     "inputs": inputs,
                     "no_cache": no_cache,
                     "output_key": output_key,
-                    "dag": self.get_uri(),
+                    "pipeline": self._pipe_id,
                 }))
             return res["results"]
-        # FIXME: write generic spliterator implementation
         split_num: int = split_th
         assert split_num > 0
         res_arr: List[Any] = [None] * len(inputs)
@@ -1092,7 +1079,7 @@ class DagHandle:
     def dynamic(self, input_data: BytesIO) -> ByteResponse:
         cur_res, ctype = self._client.request_bytes(
             METHOD_FILE, "/dynamic", {
-                "dag": self.get_uri(),
+                "pipeline": self._pipe_id,
             }, files={
                 "file": input_data,
             })
@@ -1111,7 +1098,7 @@ class DagHandle:
         names = [f"file{pos}" for pos in range(len(input_data))]
         res: Dict[str, str] = self._client._request_json(
             METHOD_FILE, "/dynamic_async", {
-                "dag": self.get_uri(),
+                "pipeline": self._pipe_id,
             }, files=dict(zip(names, input_data)))
         return [
             ComputationHandle(
@@ -1138,30 +1125,30 @@ class DagHandle:
             for input_obj in input_data
         ])
 
-    def get_dynamic_result(self, value_id: str) -> ByteResponse:
+    def get_dynamic_result(self, data_id: str) -> ByteResponse:
         try:
             cur_res, ctype = self._client.request_bytes(
                 METHOD_GET, "/dynamic_result", {
-                    "dag": self.get_uri(),
-                    "id": value_id,
+                    "pipeline": self._pipe_id,
+                    "id": data_id,
                 })
         except HTTPError as e:
             if e.response.status_code == 404:
-                raise KeyError(f"value_id {value_id} does not exist") from e
+                raise KeyError(f"data_id {data_id} does not exist") from e
             raise e
         return interpret_ctype(cur_res, ctype)
 
     def get_dynamic_status(
             self,
-            value_ids: List['ComputationHandle']) -> Dict[
-                'ComputationHandle', QueueStatus]:
+            data_ids: List['ComputationHandle'],
+    ) -> Dict['ComputationHandle', QueueStatus]:
         res = cast(DynamicStatusResponse, self._client._request_json(
             METHOD_POST, "/dynamic_status", {
-                "value_ids": [value_id.get_id() for value_id in value_ids],
-                "dag": self.get_uri(),
+                "data_ids": [data_id.get_id() for data_id in data_ids],
+                "pipeline": self._pipe_id,
             }))
         status = res["status"]
-        hnd_map = {value_id.get_id(): value_id for value_id in value_ids}
+        hnd_map = {data_id.get_id(): data_id for data_id in data_ids}
         return {
             hnd_map[key]: cast(QueueStatus, value)
             for key, value in status.items()
@@ -1231,17 +1218,17 @@ class DagHandle:
             NodeHandle,
             List[Tuple[NodeHandle, str, str]],
         ] = collections.defaultdict(list)
-        start_vert = "├" if allow_unicode else "|"
-        end_vert = "├" if allow_unicode else "|"
-        before_vert = "│" if allow_unicode else "|"
-        after_vert = "│" if allow_unicode else "|"
-        vert = "┤" if allow_unicode else "|"
+        start_pipe = "├" if allow_unicode else "|"
+        end_pipe = "├" if allow_unicode else "|"
+        before_pipe = "│" if allow_unicode else "|"
+        after_pipe = "│" if allow_unicode else "|"
+        pipe = "┤" if allow_unicode else "|"
         corner_right = "┐" if allow_unicode else "\\"
         corner_left = "┘" if allow_unicode else "/"
         cont_right = "┬" if allow_unicode else "\\"
         cont_left = "┴" if allow_unicode else "/"
         cont_skip = "─" if allow_unicode else "-"
-        cont_vert = "│" if allow_unicode else "|"
+        cont_pipe = "│" if allow_unicode else "|"
         cont = "┼" if allow_unicode else "-"
         start_left = "└" if allow_unicode else "\\"
         bar = "─" if allow_unicode else "-"
@@ -1295,10 +1282,10 @@ class DagHandle:
                 before_gap = cur_gap
                 if in_node == node:
                     in_state = get_in_state(in_node, in_key)
-                    cur_str = f"{end_vert} {in_key} ({in_state}) "
+                    cur_str = f"{end_pipe} {in_key} ({in_state}) "
                     new_edges.append((None, in_key, cur_gap))
                 else:
-                    cur_str = before_vert if in_node is not None else ""
+                    cur_str = before_pipe if in_node is not None else ""
                     cur_gap += gap
                     gap = 0
                     new_edges.append((in_node, in_key, cur_gap))
@@ -1320,16 +1307,16 @@ class DagHandle:
             prev_gap = 0
             for edge in cur_edges:
                 cur_node, _, cur_gap = edge
-                cur_str = after_vert if cur_node is not None else ""
+                cur_str = after_pipe if cur_node is not None else ""
                 segs.append(f"{space * prev_gap}{cur_str}")
                 new_edges.append(edge)
                 prev_gap = max(0, cur_gap - len(cur_str))
             sout = sorted(
                 outs[node], key=lambda e: order_lookup[e[0]], reverse=True)
             for (in_node, in_key, out_key) in sout:
-                cur_str = f"{start_vert} {out_key} "
+                cur_str = f"{start_pipe} {out_key} "
                 in_state = get_in_state(in_node, in_key)
-                end_str = f"{end_vert} {in_key} ({in_state}) "
+                end_str = f"{end_pipe} {in_key} ({in_state}) "
                 segs.append(f"{space * prev_gap}{cur_str}")
                 cur_gap = max(len(cur_str), len(end_str))
                 new_edges.append((in_node, in_key, cur_gap))
@@ -1381,7 +1368,7 @@ class DagHandle:
                         if started:
                             cur_connect = cont_skip
                         else:
-                            cur_connect = cont_vert
+                            cur_connect = cont_pipe
                     cur_line = cont_skip if started else space
                     gap_size = top_gap - len(cur_connect)
                     line_indents.append(f"{cur_connect}{cur_line * gap_size}")
@@ -1402,9 +1389,9 @@ class DagHandle:
                 top_indents: List[str] = []
                 bottom_indents: List[str] = []
                 for iix in range(highest_iix + 1):
-                    top_connect = space if empty_top[iix] else cont_vert
+                    top_connect = space if empty_top[iix] else cont_pipe
                     has_bottom = iix >= len(empty_bottom) or empty_bottom[iix]
-                    bottom_connect = space if has_bottom else cont_vert
+                    bottom_connect = space if has_bottom else cont_pipe
                     top_gap_size = top_gaps[iix] - len(top_connect)
                     bottom_gap_size = top_gaps[iix] - len(bottom_connect)
                     if not top_indents:
@@ -1448,17 +1435,17 @@ class DagHandle:
                     connector = corner_right
                     more_gaps = bottom_gaps
                     top_conn = space
-                    bottom_conn = cont_vert
+                    bottom_conn = cont_pipe
                 else:
                     connector = corner_left
                     more_gaps = top_gaps
-                    top_conn = cont_vert
+                    top_conn = cont_pipe
                     bottom_conn = space
                 if total_gap_bottom == total_gap_top:
-                    connector = vert
+                    connector = pipe
                     more_gaps = bottom_gaps
-                    top_conn = cont_vert
-                    bottom_conn = cont_vert
+                    top_conn = cont_pipe
+                    bottom_conn = cont_pipe
                 total_gap = max(total_gap_bottom, total_gap_top)
                 if total_gap >= -prefix_len:
                     bar_len = total_gap + prefix_len
@@ -1475,12 +1462,12 @@ class DagHandle:
                         gap_ix = before_gap_ix + 1
                         if gap_ix < len(same_ids) and not same_ids[gap_ix]:
                             mid_connector = cont_skip
-                            mid_top = cont_vert
-                            mid_bottom = cont_vert
+                            mid_top = cont_pipe
+                            mid_bottom = cont_pipe
                         else:
                             mid_connector = cont
-                            mid_top = cont_vert
-                            mid_bottom = cont_vert
+                            mid_top = cont_pipe
+                            mid_bottom = cont_pipe
                         adj_ix = bar_ix - prefix_len
                         if total_gap_bottom >= adj_ix > total_gap_top:
                             mid_connector = cont_right
@@ -1510,17 +1497,53 @@ class DagHandle:
 
         return "\n".join(draw())
 
-    def get_def(self, full: bool = True) -> DagDef:
-        return cast(DagDef, self._client._request_json(
-            METHOD_GET, "/dag_def", {
-                "dag": self.get_uri(),
+    def get_def(
+            self,
+            full: bool = True,
+            warnings_io: Optional[IO[Any]] = sys.stderr) -> PipelineDef:
+        res = cast(PipelineDef, self._client._request_json(
+            METHOD_GET, "/pipeline_def", {
+                "pipeline": self.get_id(),
                 "full": 1 if full else 0,
             }))
+        # look for warnings
 
-    def set_attr(self, attr: str, value: Any) -> None:
-        dag_def = self.get_def()
-        dag_def[attr] = value  # type: ignore
-        self._client.set_dag(self.get_uri(), dag_def)
+        def s3_warnings(
+                kind: str,
+                settings: Dict[str, Dict[str, Any]],
+                warnings: List[str]) -> None:
+            s3_settings = settings.get(kind, {})
+            for (key, s3_setting) in s3_settings.items():
+                warnings.extend((
+                    f"{kind}:{key}: {warn}"
+                    for warn in s3_setting.get("warnings", [])
+                ))
+
+        if warnings_io is not None:
+            settings = res.get("settings", {})
+            warnings: List[str] = []
+            s3_warnings("s3", settings, warnings)
+            s3_warnings("triton", settings, warnings)
+            if len(warnings) > 1:
+                warnings_io.write(
+                    f"{len(warnings)} warnings while "
+                    f"reconstructing settings:\n")
+            elif len(warnings) == 1:
+                warnings_io.write(
+                    "Warning while reconstructing settings:\n")
+            for warn in warnings:
+                warnings_io.write(f"{warn}\n")
+            if warnings:
+                warnings_io.flush()
+        return res
+
+    def set_attr(
+            self,
+            attr: str,
+            value: Any) -> None:
+        pipe_def = self.get_def()
+        pipe_def[attr] = value  # type: ignore
+        self._client.set_pipeline(self.get_id(), pipe_def)
 
     def set_name(self, value: str) -> None:
         self.set_attr("name", value)
@@ -1537,6 +1560,29 @@ class DagHandle:
     def set_queue_mng(self, value: Optional[str]) -> None:
         self.set_attr("queue_mng", value)
 
+    def get_visible_blobs(self) -> List[str]:
+        return [
+            res[0]
+            for res in self.get_visible_blob_times(retrieve_times=False)[1]
+        ]
+
+    def get_visible_blob_ages(self) -> List[Tuple[str, str]]:
+        cur_time, visible = self.get_visible_blob_times(retrieve_times=True)
+        return [
+            (blob_id, get_age(cur_time, blob_time))
+            for (blob_id, blob_time) in sorted(visible, key=lambda el: (
+                safe_opt_num(el[1]), el[0]))
+        ]
+
+    def get_visible_blob_times(self, retrieve_times: bool) -> Tuple[
+            float, List[Tuple[str, Optional[float]]]]:
+        res = cast(VisibleBlobs, self._client._request_json(
+            METHOD_GET, "/visible_blobs", {
+                "pipeline": self.get_id(),
+                "retrieve_times": int(retrieve_times),
+            }))
+        return res["cur_time"], res["visible"]
+
     @overload
     def check_queue_stats(  # pylint: disable=no-self-use
             self, minimal: Literal[True]) -> MinimalQueueStatsResponse:
@@ -1549,27 +1595,29 @@ class DagHandle:
 
     @overload
     def check_queue_stats(  # pylint: disable=no-self-use
-            self, minimal: bool) -> Union[
+            self,
+            minimal: bool) -> Union[
                 MinimalQueueStatsResponse, QueueStatsResponse]:
         ...
 
     def check_queue_stats(self, minimal: bool) -> Union[
             MinimalQueueStatsResponse, QueueStatsResponse]:
-        return self._client.check_queue_stats(self.get_uri(), minimal=minimal)
+        pipe_id: Optional[str] = self.get_id()
+        return self._client.check_queue_stats(pipe_id, minimal=minimal)
 
     def scale_worker(self, replicas: int) -> bool:
         return cast(WorkerScale, self._client._request_json(
             METHOD_PUT, "/worker", {
-                "dag": self.get_uri(),
+                "pipeline": self.get_id(),
                 "replicas": replicas,
                 "task": None,
             }))["success"]
 
     def reload(self, timestamp: Optional[float] = None) -> float:
-        return cast(DagReload, self._client._request_json(
-            METHOD_PUT, "/dag_reload", {
-                "dag": self.get_uri(),
-                "when": timestamp,
+        return cast(PipelineReload, self._client._request_json(
+            METHOD_PUT, "/pipeline_reload", {
+                "pipeline": self.get_id(),
+                "timestamp": timestamp,
             }))["when"]
 
     def set_kafka_topic_partitions(
@@ -1578,7 +1626,7 @@ class DagHandle:
             large_input_retention: bool = False) -> KafkaTopics:
         return cast(KafkaTopics, self._client._request_json(
             METHOD_POST, "/kafka_topics", {
-                "dag": self.get_uri(),
+                "pipeline": self.get_id(),
                 "num_partitions": num_partitions,
                 "large_input_retention": large_input_retention,
             }))
@@ -1598,7 +1646,7 @@ class DagHandle:
         names = [f"file{pos}" for pos in range(len(input_data))]
         res = cast(KafkaMessage, self._client._request_json(
             METHOD_FILE, "/kafka_msg", {
-                "dag": self.get_uri(),
+                "pipeline": self._pipe_id,
             }, files=dict(zip(names, input_data))))
         msgs = res["messages"]
         return [msgs[key] for key in names]
@@ -1612,7 +1660,7 @@ class DagHandle:
         def read_single() -> Tuple[ByteResponse, str]:
             cur, read_ctype = self._client.request_bytes(
                 METHOD_GET, "/kafka_msg", {
-                    "dag": self.get_uri(),
+                    "pipeline": self.get_id(),
                     "offset": offset_str[0],
                 })
             offset_str[0] = "current"
@@ -1642,7 +1690,7 @@ class DagHandle:
     def get_kafka_offsets(self, alive: bool) -> KafkaOffsets:
         return cast(KafkaOffsets, self._client._request_json(
             METHOD_GET, "/kafka_offsets", {
-                "dag": self.get_uri(),
+                "pipeline": self._pipe_id,
                 "alive": int(alive),
             }))
 
@@ -1693,7 +1741,7 @@ class DagHandle:
         inputs = pd.Series(input_segments)
         outputs = pd.Series(output_segments)
         return {
-            "dag": self.get_uri(),
+            "pipeline": self._pipe_id,
             "input": {
                 "throughput": total_input / total,
                 "max": inputs.max(),
@@ -1720,7 +1768,7 @@ class DagHandle:
     def get_kafka_group(self) -> KafkaGroup:
         return cast(KafkaGroup, self._client._request_json(
             METHOD_GET, "/kafka_group", {
-                "dag": self.get_uri(),
+                "pipeline": self._pipe_id,
             }))
 
     def set_kafka_group(
@@ -1730,42 +1778,42 @@ class DagHandle:
             **kwargs: Any) -> KafkaGroup:
         return cast(KafkaGroup, self._client._request_json(
             METHOD_PUT, "/kafka_group", {
-                "dag": self.get_uri(),
+                "pipeline": self._pipe_id,
                 "group_id": group_id,
                 "reset": reset,
                 **kwargs,
             }))
 
     def __hash__(self) -> int:
-        return hash(self.get_uri())
+        return hash(self._pipe_id)
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, self.__class__):
             return False
-        return self.get_uri() == other.get_uri()
+        return self.get_id() == other.get_id()
 
     def __ne__(self, other: object) -> bool:
         return not self.__eq__(other)
 
     def __str__(self) -> str:
-        return self.get_uri()
+        return self._pipe_id
 
     def __repr__(self) -> str:
-        return f"{self.__class__.__name__}[{self.get_uri()}]"
+        return f"{self.__class__.__name__}[{self._pipe_id}]"
 
-# *** DagHandle ***
+# *** PipelineHandle ***
 
 
 class NodeHandle:
     def __init__(
             self,
-            client: XYMEClient,
-            dag: DagHandle,
+            client: XYMEClientV3,
+            pipeline: PipelineHandle,
             node_id: str,
             node_name: str,
             kind: str) -> None:
         self._client = client
-        self._dag = dag
+        self._pipeline = pipeline
         self._node_id = node_id
         self._node_name = node_name
         self._type = kind
@@ -1776,20 +1824,20 @@ class NodeHandle:
 
     @staticmethod
     def from_node_info(
-            client: XYMEClient,
-            dag: DagHandle,
+            client: XYMEClientV3,
+            pipeline: PipelineHandle,
             node_info: NodeInfo,
             prev: Optional['NodeHandle']) -> 'NodeHandle':
         if prev is None:
             res = NodeHandle(
                 client,
-                dag,
+                pipeline,
                 node_info["id"],
                 node_info["name"],
                 node_info["type"])
         else:
-            if prev.get_dag() != dag:
-                raise ValueError(f"{prev.get_dag()} != {dag}")
+            if prev.get_pipeline() != pipeline:
+                raise ValueError(f"{prev.get_pipeline()} != {pipeline}")
             res = prev
         res.update_info(node_info)
         return res
@@ -1800,15 +1848,19 @@ class NodeHandle:
         self._node_name = node_info["name"]
         self._type = node_info["type"]
         self._blobs = {
-            key: BlobHandle(self._client, value, is_full=False)
+            key: BlobHandle(
+                self._client,
+                value,
+                is_full=False,
+                pipeline=self.get_pipeline())
             for (key, value) in node_info["blobs"].items()
         }
         self._inputs = node_info["inputs"]
         self._state = node_info["state"]
         self._config_error = node_info["config_error"]
 
-    def get_dag(self) -> DagHandle:
-        return self._dag
+    def get_pipeline(self) -> PipelineHandle:
+        return self._pipeline
 
     def get_id(self) -> str:
         return self._node_id
@@ -1827,12 +1879,12 @@ class NodeHandle:
 
     def get_input(self, key: str) -> Tuple['NodeHandle', str]:
         node_id, out_key = self._inputs[key]
-        return self.get_dag().get_node(node_id), out_key
+        return self.get_pipeline().get_node(node_id), out_key
 
     def get_status(self) -> TaskStatus:
         return cast(NodeStatus, self._client._request_json(
             METHOD_GET, "/node_status", {
-                "dag": self.get_dag().get_uri(),
+                "pipeline": self.get_pipeline().get_id(),
                 "node": self.get_id(),
             }))["status"]
 
@@ -1854,7 +1906,7 @@ class NodeHandle:
     def set_blob_uri(self, key: str, blob_uri: str) -> str:
         return cast(PutNodeBlob, self._client._request_json(
             METHOD_PUT, "/node_blob", {
-                "dag": self.get_dag().get_uri(),
+                "pipeline": self.get_pipeline().get_id(),
                 "node": self.get_id(),
                 "blob_key": key,
                 "blob_uri": blob_uri,
@@ -1863,14 +1915,14 @@ class NodeHandle:
     def get_in_cursor_states(self) -> Dict[str, int]:
         return cast(InCursors, self._client._request_json(
             METHOD_GET, "/node_in_cursors", {
-                "dag": self.get_dag().get_uri(),
+                "pipeline": self.get_pipeline().get_id(),
                 "node": self.get_id(),
             }))["cursors"]
 
     def get_highest_chunk(self) -> int:
         return cast(NodeChunk, self._client._request_json(
             METHOD_GET, "/node_chunk", {
-                "dag": self.get_dag().get_uri(),
+                "pipeline": self.get_pipeline().get_id(),
                 "node": self.get_id(),
             }))["chunk"]
 
@@ -1892,7 +1944,7 @@ class NodeHandle:
     def get_logs(self) -> str:
         with self._client._raw_request_str(
                 METHOD_GET, "/node_logs", {
-                    "dag": self.get_dag().get_uri(),
+                    "pipeline": self.get_pipeline().get_id(),
                     "node": self.get_id(),
                 }) as fin:
             return fin.read()
@@ -1900,7 +1952,7 @@ class NodeHandle:
     def get_timing(self) -> List[Timing]:
         return cast(Timings, self._client._request_json(
             METHOD_GET, "/node_perf", {
-                "dag": self.get_dag().get_uri(),
+                "pipeline": self.get_pipeline().get_id(),
                 "node": self.get_id(),
             }))["times"]
 
@@ -1909,11 +1961,9 @@ class NodeHandle:
             key: str,
             chunk: Optional[int],
             force_refresh: bool) -> 'BlobHandle':
-        # FIXME: !!!!!! explicitly repeat on timeout
-        dag = self.get_dag()
         res = cast(ReadNode, self._client._request_json(
-            METHOD_POST, "/read_node", {
-                "dag": dag.get_uri(),
+            METHOD_LONGPOST, "/read_node", {
+                "pipeline": self.get_pipeline().get_id(),
                 "node": self.get_id(),
                 "key": key,
                 "chunk": chunk,
@@ -1923,7 +1973,11 @@ class NodeHandle:
         uri = res["result_uri"]
         if uri is None:
             raise ValueError(f"uri is None: {res}")
-        return BlobHandle(self._client, uri, is_full=True)
+        return BlobHandle(
+            self._client,
+            uri,
+            is_full=True,
+            pipeline=self.get_pipeline())
 
     def read(
             self,
@@ -1958,7 +2012,7 @@ class NodeHandle:
     def clear(self) -> NodeState:
         return cast(NodeState, self._client._request_json(
             METHOD_PUT, "/node_state", {
-                "dag": self.get_dag().get_uri(),
+                "pipeline": self.get_pipeline().get_id(),
                 "node": self.get_id(),
                 "action": "reset",
             }))
@@ -1966,7 +2020,7 @@ class NodeHandle:
     def requeue(self) -> NodeState:
         return cast(NodeState, self._client._request_json(
             METHOD_PUT, "/node_state", {
-                "dag": self.get_dag().get_uri(),
+                "pipeline": self.get_pipeline().get_id(),
                 "node": self.get_id(),
                 "action": "requeue",
             }))
@@ -1974,7 +2028,7 @@ class NodeHandle:
     def fix_error(self) -> NodeState:
         return cast(NodeState, self._client._request_json(
             METHOD_PUT, "/node_state", {
-                "dag": self.get_dag().get_uri(),
+                "pipeline": self.get_pipeline().get_id(),
                 "node": self.get_id(),
                 "action": "fix_error",
             }))
@@ -1982,56 +2036,63 @@ class NodeHandle:
     def get_csv_blob(self) -> 'CSVBlobHandle':
         if self.get_type() != "csv_reader":
             raise ValueError("node doesn't have csv blob")
-        dag = self.get_dag()
         res = cast(CSVBlobResponse, self._client._request_json(
             METHOD_GET, "/csv_blob", {
-                "dag": dag.get_uri(),
+                "pipeline": self.get_pipeline().get_id(),
                 "node": self.get_id(),
             }))
         return CSVBlobHandle(
-            self._client, res["csv"], res["count"], res["pos"], res["tmp"])
+            self._client,
+            self.get_pipeline(),
+            res["csv"],
+            res["count"],
+            res["pos"],
+            res["tmp"])
 
     def get_json_blob(self) -> 'JSONBlobHandle':
         if self.get_type() != "jsons_reader":
             raise ValueError(
-                f"can not access JSON of {self}, node is not a 'jsons_reader'")
-        dag = self.get_dag()
+                f"can not append jsons to {self}, expected 'jsons_reader'")
         res = cast(JSONBlobResponse, self._client._request_json(
             METHOD_GET, "/json_blob", {
-                "dag": dag.get_uri(),
+                "pipeline": self.get_pipeline().get_id(),
                 "node": self.get_id(),
             }))
-        return JSONBlobHandle(self._client, res["json"], res["count"])
+        return JSONBlobHandle(
+            self._client,
+            self.get_pipeline(),
+            res["json"],
+            res["count"])
 
     def check_custom_code_node(self) -> None:
         if not self.get_type() in CUSTOM_NODE_TYPES:
             raise ValueError(f"{self} is not a custom code node.")
 
     def set_custom_imports(
-            self, modules: List[List[str]]) -> NodeCustomImports:
+            self, modules: List[List[str]]) -> CustomImportsResponse:
         self.check_custom_code_node()
-        return cast(NodeCustomImports, self._client._request_json(
+        return cast(CustomImportsResponse, self._client._request_json(
             METHOD_PUT, "/custom_imports", {
-                "dag": self.get_dag().get_uri(),
+                "pipeline": self.get_pipeline().get_id(),
                 "node": self.get_id(),
                 "modules": modules,
             }))
 
-    def get_custom_imports(self) -> NodeCustomImports:
+    def get_custom_imports(self) -> CustomImportsResponse:
         self.check_custom_code_node()
-        return cast(NodeCustomImports, self._client._request_json(
+        return cast(CustomImportsResponse, self._client._request_json(
             METHOD_GET, "/custom_imports", {
-                "dag": self.get_dag().get_uri(),
+                "pipeline": self.get_pipeline().get_id(),
                 "node": self.get_id(),
             }))
 
     def set_es_query(self, query: Dict[str, Any]) -> ESQueryResponse:
         if self.get_type() != "es_reader":
-            raise ValueError(f"{self} is not an ES reader node")
+            raise ValueError(f"{self} is not a es reader node")
 
         return cast(ESQueryResponse, self._client._request_json(
             METHOD_POST, "/es_query", {
-                "dag": self.get_dag().get_uri(),
+                "pipeline": self.get_pipeline().get_id(),
                 "blob": self.get_blob_handle("es").get_uri(),
                 "es_query": query,
             },
@@ -2039,16 +2100,16 @@ class NodeHandle:
 
     def get_es_query(self) -> ESQueryResponse:
         if self.get_type() != "es_reader":
-            raise ValueError(f"{self} is not an ES reader node")
+            raise ValueError(f"{self} is not a es reader node")
 
         return cast(ESQueryResponse, self._client._request_json(
             METHOD_GET, "/es_query", {
-                "dag": self.get_dag().get_uri(),
+                "pipeline": self.get_pipeline().get_id(),
                 "blob": self.get_blob_handle("es").get_uri(),
             },
         ))
 
-    def set_custom_code(self, func: FUNC) -> NodeCustomCode:
+    def set_custom_code(self, func: FUNC) -> CustomCodeResponse:
         from RestrictedPython import compile_restricted
 
         self.check_custom_code_node()
@@ -2064,25 +2125,25 @@ class NodeHandle:
             return res
 
         raw_code = fn_as_str(func)
-        return cast(NodeCustomCode, self._client._request_json(
+        return cast(CustomCodeResponse, self._client._request_json(
             METHOD_PUT, "/custom_code", {
-                "dag": self.get_dag().get_uri(),
+                "pipeline": self.get_pipeline().get_id(),
                 "node": self.get_id(),
                 "code": raw_code,
             }))
 
-    def get_custom_code(self) -> NodeCustomCode:
+    def get_custom_code(self) -> CustomCodeResponse:
         self.check_custom_code_node()
-        return cast(NodeCustomCode, self._client._request_json(
+        return cast(CustomCodeResponse, self._client._request_json(
             METHOD_GET, "/custom_code", {
-                "dag": self.get_dag().get_uri(),
+                "pipeline": self.get_pipeline().get_id(),
                 "node": self.get_id(),
             }))
 
-    def get_user_columns(self, key: str) -> NodeUserColumnsResponse:
-        return cast(NodeUserColumnsResponse, self._client._request_json(
+    def get_user_columns(self, key: str) -> UserColumnsResponse:
+        return cast(UserColumnsResponse, self._client._request_json(
             METHOD_GET, "/user_columns", {
-                "dag": self.get_dag().get_uri(),
+                "pipeline": self.get_pipeline().get_id(),
                 "node": self.get_id(),
                 "key": key,
             }))
@@ -2103,35 +2164,40 @@ class NodeHandle:
             res[key] = df
         return res
 
-    def setup_model(self, obj: Dict[str, Any]) -> ModelSetupResponse:
+    def setup_model(self, obj: Dict[str, Any]) -> Any:
+        if self.get_type() not in MODEL_NODE_TYPES:
+            raise ValueError(f"{self} is not a model node")
+        model_type: str
+        if self.get_type() in EMBEDDING_MODEL_NODE_TYPES:
+            model_type = "embedding"
+
         return cast(ModelSetupResponse, self._client._request_json(
             METHOD_PUT, "/model_setup", {
-                "dag": self.get_dag().get_uri(),
+                "pipeline": self.get_pipeline().get_id(),
                 "node": self.get_id(),
                 "config": obj,
+                "model_type": model_type,
             }))
 
-    def get_model_params(self) -> ModelParamsResponse:
+    def get_model_params(self) -> Any:
         return cast(ModelParamsResponse, self._client._request_json(
             METHOD_GET, "/model_params", {
-                "dag": self.get_dag().get_uri(),
+                "pipeline": self.get_pipeline().get_id(),
                 "node": self.get_id(),
             }))
 
     def get_def(self) -> NodeDef:
         return cast(NodeDef, self._client._request_json(
             METHOD_GET, "/node_def", {
-                "dag": self.get_dag().get_uri(),
+                "pipeline": self.get_pipeline().get_id(),
                 "node": self.get_id(),
             }))
 
     def __hash__(self) -> int:
-        return hash((self.get_dag(), self.get_id()))
+        return hash(self._node_id)
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, self.__class__):
-            return False
-        if self.get_dag() != other.get_dag():
             return False
         return self.get_id() == other.get_id()
 
@@ -2139,10 +2205,10 @@ class NodeHandle:
         return not self.__eq__(other)
 
     def __str__(self) -> str:
-        return self.get_id()
+        return self._node_id
 
     def __repr__(self) -> str:
-        return f"{self.__class__.__name__}[{self.get_id()}]"
+        return f"{self.__class__.__name__}[{self._node_id}]"
 
 # *** NodeHandle ***
 
@@ -2153,12 +2219,14 @@ EMPTY_BLOB_PREFIX = "null://"
 class BlobHandle:
     def __init__(
             self,
-            client: XYMEClient,
+            client: XYMEClientV3,
             uri: str,
-            is_full: bool) -> None:
+            is_full: bool,
+            pipeline: PipelineHandle) -> None:
         self._client = client
         self._uri = uri
         self._is_full = is_full
+        self._pipeline = pipeline
         self._ctype: Optional[str] = None
 
     def is_full(self) -> bool:
@@ -2170,6 +2238,9 @@ class BlobHandle:
     def get_uri(self) -> str:
         return self._uri
 
+    def get_pipeline(self) -> PipelineHandle:
+        return self._pipeline
+
     def get_ctype(self) -> Optional[str]:
         return self._ctype
 
@@ -2178,84 +2249,80 @@ class BlobHandle:
             raise ValueError(f"URI must be full: {self}")
         if self.is_empty():
             return None
-        sleep_time = 0.1
-        sleep_mul = 1.1
-        sleep_max = 5.0
-        total_time = 60.0
-        start_time = time.monotonic()
-        while True:
-            try:
-                fin, ctype = self._client._raw_request_bytes(
-                    METHOD_POST, "/uri", {
-                        "uri": self.get_uri(),
-                    })
-                self._ctype = ctype
-                return interpret_ctype(fin, ctype)
-            except HTTPError as e:
-                if e.response.status_code != 404:
-                    raise e
-                if time.monotonic() - start_time >= total_time:
-                    raise e
-                time.sleep(sleep_time)
-                sleep_time = min(sleep_time * sleep_mul, sleep_max)
+        fin, ctype = self._client._raw_request_bytes(METHOD_POST, "/uri", {
+            "uri": self._uri,
+            "pipeline": self.get_pipeline().get_id(),
+        })
+        self._ctype = ctype
+        return interpret_ctype(fin, ctype)
 
     def list_files(self) -> List['BlobHandle']:
         if self.is_full():
             raise ValueError(f"URI must not be full: {self}")
-        resp = cast(BlobFilesResponse, self._client._request_json(
+        resp = self._client._request_json(
             METHOD_GET, "/blob_files", {
-                "blob": self.get_uri(),
-            }))
+                "blob": self._uri,
+                "pipeline": self.get_pipeline().get_id(),
+            })
         return [
-            BlobHandle(self._client, blob_uri, is_full=True)
+            BlobHandle(
+                self._client,
+                blob_uri,
+                is_full=True,
+                pipeline=self._pipeline)
             for blob_uri in resp["files"]
         ]
 
     def as_str(self) -> str:
         return f"{self.get_uri()}"
 
-    def set_owner(self, owner: NodeHandle) -> BlobOwner:
+    def set_owner(self, new_owner: str) -> str:
         if self.is_full():
             raise ValueError(f"URI must not be full: {self}")
-        return cast(BlobOwner, self._client._request_json(
+        pipe = self.get_pipeline()
+        res = cast(BlobOwner, self._client._request_json(
             METHOD_PUT, "/blob_owner", {
-                "blob": self.get_uri(),
-                "owner_dag": owner.get_dag().get_uri(),
-                "owner_node": owner.get_id(),
+                "pipeline": pipe.get_id(),
+                "blob": self._uri,
+                "owner": new_owner,
             }))
+        return res["owner"]
 
-    def get_owner(self) -> BlobOwner:
+    def get_owner(self) -> str:
         if self.is_full():
             raise ValueError(f"URI must not be full: {self}")
-        return cast(BlobOwner, self._client._request_json(
+        pipe = self.get_pipeline()
+        res = cast(BlobOwner, self._client._request_json(
             METHOD_GET, "/blob_owner", {
-                "blob": self.get_uri(),
+                "pipeline": pipe.get_id(),
+                "blob": self._uri,
             }))
+        return res["owner"]
 
     def copy_to(
             self,
             to_uri: str,
-            new_owner: Optional[NodeHandle] = None) -> 'BlobHandle':
+            new_owner: Optional[str] = None) -> 'BlobHandle':
         if self.is_full():
             raise ValueError(f"URI must not be full: {self}")
-        owner_dag = \
-            None if new_owner is None else new_owner.get_dag().get_uri()
-        owner_node = None if new_owner is None else new_owner.get_id()
+        pipe = self.get_pipeline()
         res = cast(CopyBlob, self._client._request_json(
             METHOD_POST, "/copy_blob", {
-                "from_uri": self.get_uri(),
-                "owner_dag": owner_dag,
-                "owner_node": owner_node,
+                "pipeline": pipe.get_id(),
+                "from_uri": self._uri,
+                "owner": new_owner,
                 "to_uri": to_uri,
             }))
-        return BlobHandle(self._client, res["new_uri"], is_full=False)
+        return BlobHandle(
+            self._client, res["new_uri"], is_full=False, pipeline=pipe)
 
     def download_zip(self, to_path: Optional[str]) -> Optional[io.BytesIO]:
         if self.is_full():
             raise ValueError(f"URI must not be full: {self}")
         cur_res, _ = self._client._raw_request_bytes(
             METHOD_GET, "/download_zip", {
-                "blob": self.get_uri(),
+                "blob": self._uri,
+                "pipeline": self.get_pipeline().get_id(),
             })
         if to_path is None:
             return io.BytesIO(cur_res.read())
@@ -2263,99 +2330,35 @@ class BlobHandle:
             file_download.write(cur_res.read())
         return None
 
-    def _perform_upload_action(
-            self,
-            action: str,
-            additional: Dict[str, Union[str, int]],
-            fobj: Optional[IO[bytes]]) -> UploadFilesResponse:
-        args: Dict[str, Union[str, int]] = {
-            "action": action,
-        }
-        args.update(additional)
-        if fobj is not None:
-            method = METHOD_FILE
-            files: Optional[Dict[str, IO[bytes]]] = {
-                "file": fobj,
-            }
-        else:
-            method = METHOD_POST
-            files = None
-        return cast(UploadFilesResponse, self._client._request_json(
-            method, "/upload_zip", args, files=files))
-
-    def _start_upload(self, size: int, hash_str: str) -> str:
-        res = self._perform_upload_action(
-            "start",
-            {
-                "target": self.get_uri(),
-                "hash": hash_str,
-                "size": size,
-            },
-            fobj=None)
-        assert res["uri"] is not None
-        return res["uri"]
-
-    def _append_upload(self, uri: str, fobj: IO[bytes]) -> int:
-        res = self._perform_upload_action("append", {"uri": uri}, fobj=fobj)
-        return res["pos"]
-
-    def _finish_upload(self, uri: str) -> List[str]:
-        res = self._perform_upload_action("finish", {"uri": uri}, fobj=None)
-        return res["files"]
-
-    def _clear_upload(self, uri: str) -> None:
-        self._perform_upload_action("clear", {"uri": uri}, fobj=None)
-
-    def _upload_zip(
-            self,
-            file_content: IO[bytes],
-            progress_bar: Optional[IO[Any]] = sys.stdout) -> List[str]:
-        init_pos = file_content.seek(0, io.SEEK_CUR)
-        file_hash = get_file_hash(file_content)
-        total_size = file_content.seek(0, io.SEEK_END) - init_pos
-        file_content.seek(init_pos, io.SEEK_SET)
-        if progress_bar is not None:
-            progress_bar.write("Uploading file:\n")
-        print_progress = get_progress_bar(out=progress_bar)
-        success = False
-        tmp_uri = self._start_upload(total_size, file_hash)
-        try:
-            cur_size = 0
-            while True:
-                print_progress(cur_size / total_size, False)
-                buff = file_content.read(get_file_upload_chunk_size())
-                if not buff:
-                    break
-                new_size = self._append_upload(tmp_uri, BytesIO(buff))
-                if new_size - cur_size != len(buff):
-                    raise ValueError(
-                        f"incomplete chunk upload n:{new_size} "
-                        f"o:{cur_size} b:{len(buff)}")
-                cur_size = new_size
-            print_progress(cur_size / total_size, True)
-            files = self._finish_upload(tmp_uri)
-            success = True
-        finally:
-            if not success:
-                self._clear_upload(tmp_uri)
-        return files
-
     def upload_zip(
             self, source: Union[str, io.BytesIO]) -> List['BlobHandle']:
         if isinstance(source, str) or not hasattr(source, "read"):
             with open(f"{source}", "rb") as fin:
-                files = self._upload_zip(fin)
+                zip_stream = io.BytesIO(fin.read())
         else:
-            files = self._upload_zip(source)
+            zip_stream = source
+
+        resp = self._client._request_json(
+            METHOD_FILE, "/upload_zip", {
+                "blob": self._uri,
+                "pipeline": self.get_pipeline().get_id(),
+            }, files={
+                "file": zip_stream,
+            })
         return [
-            BlobHandle(self._client, blob_uri, is_full=True)
-            for blob_uri in files
+            BlobHandle(
+                self._client,
+                blob_uri,
+                is_full=True,
+                pipeline=self._pipeline)
+            for blob_uri in resp["files"]
         ]
 
     def convert_model(self) -> ModelReleaseResponse:
         return cast(ModelReleaseResponse, self._client._request_json(
             METHOD_POST, "/convert_model", {
-                "blob": self.get_uri(),
+                "blob": self._uri,
+                "pipeline": self.get_pipeline().get_id(),
             }))
 
     def __hash__(self) -> int:
@@ -2381,15 +2384,22 @@ class BlobHandle:
 class CSVBlobHandle(BlobHandle):
     def __init__(
             self,
-            client: XYMEClient,
+            client: XYMEClientV3,
+            pipe: PipelineHandle,
             uri: str,
             count: int,
             pos: int,
             has_tmp: bool) -> None:
-        super().__init__(client, uri, is_full=False)
+        super().__init__(client, uri, is_full=False, pipeline=pipe)
+        self._client = client
+        self._pipe = pipe
+        self._uri = uri
         self._count = count
         self._pos = pos
         self._has_tmp = has_tmp
+
+    def get_uri(self) -> str:
+        return self._uri
 
     def get_count(self) -> int:
         return self._count
@@ -2404,15 +2414,12 @@ class CSVBlobHandle(BlobHandle):
             self,
             action: str,
             additional: Dict[str, Union[str, int]],
-            fobj: Optional[IO[bytes]],
-            requeue_on_finish: Optional[NodeHandle] = None) -> int:
+            fobj: Optional[IO[bytes]]) -> int:
         args: Dict[str, Union[str, int]] = {
             "blob": self.get_uri(),
             "action": action,
+            "pipeline": self.get_pipeline().get_id(),
         }
-        if requeue_on_finish is not None and action == "finish":
-            args["dag"] = requeue_on_finish.get_dag().get_uri()
-            args["node"] = requeue_on_finish.get_id()
         args.update(additional)
         if fobj is not None:
             method = METHOD_FILE
@@ -2430,34 +2437,25 @@ class CSVBlobHandle(BlobHandle):
         return self._pos
 
     def start_data(self, size: int, hash_str: str, ext: str) -> int:
-        return self.perform_action(
-            "start",
-            {
-                "ext": ext,
-                "hash": hash_str,
-                "size": size,
-            },
-            fobj=None)
+        return self.perform_action("start", {
+            "ext": ext,
+            "hash": hash_str,
+            "size": size,
+        }, None)
 
     def append_data(self, fobj: IO[bytes]) -> int:
-        return self.perform_action("append", {}, fobj=fobj)
+        return self.perform_action("append", {}, fobj)
 
-    def finish_data(
-            self, requeue_on_finish: Optional[NodeHandle] = None) -> None:
-        self.perform_action(
-            "finish",
-            {},
-            fobj=None,
-            requeue_on_finish=requeue_on_finish)
+    def finish_data(self) -> None:
+        self.perform_action("finish", {}, None)
 
     def clear_tmp(self) -> None:
-        self.perform_action("clear", {}, fobj=None)
+        self.perform_action("clear", {}, None)
 
     def upload_data(
             self,
             file_content: IO[bytes],
             file_ext: str,
-            requeue_on_finish: Optional[NodeHandle] = None,
             progress_bar: Optional[IO[Any]] = sys.stdout) -> int:
         init_pos = file_content.seek(0, io.SEEK_CUR)
         file_hash = get_file_hash(file_content)
@@ -2479,13 +2477,12 @@ class CSVBlobHandle(BlobHandle):
                     f"o:{cur_size} b:{len(buff)}")
             cur_size = new_size
         print_progress(cur_size / total_size, True)
-        self.finish_data(requeue_on_finish)
+        self.finish_data()
         return cur_size
 
     def add_from_file(
             self,
             filename: str,
-            requeue_on_finish: Optional[NodeHandle] = None,
             progress_bar: Optional[IO[Any]] = sys.stdout) -> None:
         fname = filename
         if filename.endswith(INPUT_ZIP_EXT):
@@ -2496,17 +2493,16 @@ class CSVBlobHandle(BlobHandle):
         else:
             raise ValueError("could not determine extension")
         with open(filename, "rb") as fbuff:
-            self.upload_data(fbuff, ext, requeue_on_finish, progress_bar)
+            self.upload_data(fbuff, ext, progress_bar)
 
     def add_from_df(
             self,
             df: pd.DataFrame,
-            requeue_on_finish: Optional[NodeHandle] = None,
             progress_bar: Optional[IO[Any]] = sys.stdout) -> None:
         io_in = None
         try:
             io_in = df_to_csv(df)
-            self.upload_data(io_in, "csv", requeue_on_finish, progress_bar)
+            self.upload_data(io_in, "csv", progress_bar)
         finally:
             if io_in is not None:
                 io_in.close()
@@ -2517,29 +2513,29 @@ class CSVBlobHandle(BlobHandle):
 class JSONBlobHandle(BlobHandle):
     def __init__(
             self,
-            client: XYMEClient,
+            client: XYMEClientV3,
+            pipe: PipelineHandle,
             uri: str,
             count: int) -> None:
-        super().__init__(client, uri, is_full=False)
+        super().__init__(client, uri, is_full=False, pipeline=pipe)
+        self._client = client
+        self._pipe = pipe
+        self._uri = uri
         self._count = count
+
+    def get_uri(self) -> str:
+        return self._uri
 
     def get_count(self) -> int:
         return self._count
 
-    def append_jsons(
-            self,
-            jsons: List[Any],
-            requeue_on_finish: Optional[NodeHandle] = None,
-            ) -> 'JSONBlobHandle':
-        obj = {
-            "blob": self.get_uri(),
-            "jsons": jsons,
-        }
-        if requeue_on_finish is not None:
-            obj["dag"] = requeue_on_finish.get_dag().get_uri()
-            obj["node"] = requeue_on_finish.get_id()
-        res = cast(JSONBlobAppendResponse, self._client._request_json(
-            METHOD_PUT, "/json_append", obj))
+    def append_jsons(self, jsons: List[Any]) -> 'JSONBlobHandle':
+        res = self._client._request_json(
+            METHOD_PUT, "/json_append", {
+                "pipeline": self.get_pipeline().get_id(),
+                "blob": self.get_uri(),
+                "jsons": jsons,
+            })
         self._count = res["count"]
         return self
 
@@ -2549,12 +2545,12 @@ class JSONBlobHandle(BlobHandle):
 class ComputationHandle:
     def __init__(
             self,
-            dag: DagHandle,
-            value_id: str,
+            pipeline: PipelineHandle,
+            data_id: str,
             get_dyn_error: Callable[[], Optional[str]],
             set_dyn_error: Callable[[str], None]) -> None:
-        self._dag = dag
-        self._value_id = value_id
+        self._pipeline = pipeline
+        self._data_id = data_id
         self._value: Optional[ByteResponse] = None
         self._get_dyn_error = get_dyn_error
         self._set_dyn_error = set_dyn_error
@@ -2565,7 +2561,7 @@ class ComputationHandle:
     def get(self) -> ByteResponse:
         try:
             if self._value is None:
-                self._value = self._dag.get_dynamic_result(self._value_id)
+                self._value = self._pipeline.get_dynamic_result(self._data_id)
             return self._value
         except ServerSideError as e:
             if self._get_dyn_error() is None:
@@ -2578,12 +2574,12 @@ class ComputationHandle:
             raise e
 
     def get_id(self) -> str:
-        return self._value_id
+        return self._data_id
 
     def __str__(self) -> str:
         value = self._value
         if value is None:
-            return f"value_id={self._value_id}"
+            return f"data_id={self._data_id}"
         return f"value({type(value)})={value}"
 
     def __repr__(self) -> str:
@@ -2604,15 +2600,6 @@ class ComputationHandle:
 # *** ComputationHandle ***
 
 
-def create_xyme_client(
-        url: str,
-        token: Optional[str] = None,
-        namespace: str = DEFAULT_NAMESPACE) -> XYMEClient:
-    try:
-        return XYMEClient(url, token, namespace)
-    except LegacyVersion as lve:
-        api_version = lve.get_api_version()
-        if api_version == 3:
-            from accern_xyme.v3.accern_xyme import create_xyme_client_v3
-            return create_xyme_client_v3(url, token)  # type: ignore
-        raise lve
+def create_xyme_client_v3(
+        url: str, token: Optional[str] = None) -> XYMEClientV3:
+    return XYMEClientV3(url, token)

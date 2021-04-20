@@ -1,8 +1,23 @@
-*.pyc
-.DS_Store
 __pycache__
-/build/
-/dist/
-/accern_xyme.egg-info
-/.mypy_cache
+.DS_Store
+.mypy_cache/
 .vscode
+*.pyc
+accern_xyme.egg-info/
+build/
+dist/
+
+# Typescript
+.yalc/
+*.d.ts
+*.js
+*.js.map
+*.log
+node_modules/
+package-lock.json
+yalc.lock
+
+# ipython
+.ipynb_checkpoints/
+*.csv
+*.ipynb

@@ -35,7 +35,7 @@ jobs:
       # Download and cache dependencies
       - restore_cache:
           keys:
-          - v1-py38-dependencies-{{ checksum "requirements.lint.txt" }}-{{ checksum "requirements.txt" }}
+            - v1-py38-dependencies-{{ checksum "requirements.lint.txt" }}-{{ checksum "requirements.txt" }}
 
       - run:
           name: Install Dependencies
