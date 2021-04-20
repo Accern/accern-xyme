@@ -12,7 +12,6 @@ import {
     CacheStats,
     CopyBlob,
     CSVBlobResponse,
-    CSVOp,
     DagCreate,
     DagDef,
     DagInfo,
@@ -52,6 +51,7 @@ import {
     TimingResult,
     Timings,
     TritonModelsResponse,
+    UploadFilesResponse,
     VersionResponse,
     WorkerScale,
 } from './types';
@@ -91,6 +91,7 @@ const API_VERSION = 4;
 const EMPTY_BLOB_PREFIX = 'null://';
 const PREFIX = 'xyme';
 const DEFAULT_NAMESPACE = 'default';
+const INPUT_ZIP_EXT = '.zip';
 
 export interface XYMEConfig {
     url: string;
@@ -236,9 +237,8 @@ export default class XYMEClient {
                 const formData = new FormData();
                 if (files) {
                     Object.keys(files).map((key) => {
-                        let newBuffer: Buffer;
-                        files[key].copy(newBuffer, 0, 0, files[key].length);
-                        formData.append(key, newBuffer);
+                        const buffCopy = Buffer.from(files[key]);
+                        formData.append(key, buffCopy);
                     });
                     Object.keys(args).map((key) => {
                         formData.append(key, args[key]);
@@ -325,9 +325,8 @@ export default class XYMEClient {
                 const formData = new FormData();
                 if (files) {
                     Object.keys(files).map((key) => {
-                        let newBuffer: Buffer;
-                        files[key].copy(newBuffer, 0, 0, files[key].length);
-                        formData.append(key, newBuffer);
+                        const buffCopy = Buffer.from(files[key]);
+                        formData.append(key, buffCopy);
                     });
                     Object.keys(args).map((key) => {
                         formData.append(key, args[key]);
@@ -1767,13 +1766,11 @@ export class NodeHandle {
                 node: this.getId(),
             },
         });
-        return new CSVBlobHandle(
-            this.client,
-            res.csv,
-            res.count,
-            res.pos,
-            res.tmp
-        );
+        const owner: BlobOwner = {
+            owner_dag: this.getDag().getUri(),
+            owner_node: this.getId(),
+        };
+        return new CSVBlobHandle(this.client, res.csv, owner);
     }
 }
 
@@ -1782,6 +1779,7 @@ export class BlobHandle {
     uri: string;
     isFull: boolean;
     ctype?: string;
+    tmpUri?: string;
 
     constructor(client: XYMEClient, uri: string, isFull: boolean) {
         this.client = client;
@@ -1926,33 +1924,15 @@ export class BlobHandle {
         return;
     }
 
-    public async performAction(
+    public async performUploadAction(
         action: string,
         additional: { [key: string]: string | number },
-        fobj: Buffer | null,
-        requeueOnFinish: NodeHandle | undefined = undefined
-    ): Promise<number> {
-        let args: { [key: string]: string | number } = {
+        fobj: Buffer | null
+    ): Promise<UploadFilesResponse> {
+        const args: { [key: string]: string | number } = {
+            ...additional,
             action,
         };
-        if (action === 'start') {
-            args = {
-                ...args,
-                target: this.getUri(),
-            };
-        } else {
-            args = {
-                ...args,
-                uri: this.getUri(),
-            };
-        }
-        if (requeueOnFinish !== undefined && action == 'finish') {
-            args = {
-                ...args,
-                dag: requeueOnFinish.getDag().getUri(),
-                node: requeueOnFinish.getId(),
-            };
-        }
         let method: string;
         let files: { [key: string]: Buffer } | undefined = undefined;
         if (fobj !== null) {
@@ -1964,60 +1944,82 @@ export class BlobHandle {
             method = METHOD_POST;
             files = undefined;
         }
-        args = {
-            ...args,
-            ...additional,
-        };
-        await this.client.requestJSON<CSVOp>({
+        if (action == 'clear') {
+            this.tmpUri = undefined;
+        }
+        return this.client.requestJSON<UploadFilesResponse>({
             method,
             path: '/upload_file',
-            args: {
-                ...args,
-                file_type: 'csv',
-            },
+            args,
             files,
         });
-        return 0;
     }
 
-    public async startData(size: number, hashStr: string): Promise<number> {
-        return await this.performAction(
+    public async startUpload(
+        size: number,
+        hashStr: string,
+        ext: string
+    ): Promise<string> {
+        const res = await this.performUploadAction(
             'start',
             {
                 target: this.getUri(),
                 hash: hashStr,
                 size,
+                ext,
             },
             null
         );
+        const uri = res.uri;
+        if (isUndefined(uri)) {
+            throw new Error('uri undefined');
+        }
+        return uri;
     }
-    public async appendData(fobj: Buffer): Promise<number> {
-        return this.performAction('append', {}, fobj);
-    }
-
-    public async finishData(
-        requeueOnFinish: NodeHandle | undefined = undefined
-    ) {
-        await this.performAction('finish', {}, null, requeueOnFinish);
-    }
-
-    public async clearTmp() {
-        await this.performAction('clear', {}, null);
+    public async appendUpload(uri: string, fobj: Buffer): Promise<number> {
+        const res = await this.performUploadAction('append', { uri }, fobj);
+        return res.pos;
     }
 
-    public async uploadData(
+    public async finishUploadZip(): Promise<string[]> {
+        const uri = this.tmpUri;
+        if (isUndefined(uri)) {
+            throw new Error('uri undefined');
+        }
+        return await this.client
+            .requestJSON<UploadFilesResponse>({
+                method: METHOD_POST,
+                path: '/finish_zip',
+                args: {
+                    uri,
+                },
+            })
+            .then((res) => res.files);
+    }
+
+    public async clearUpload() {
+        const uri = this.tmpUri;
+        if (!isUndefined(uri)) {
+            await this.performUploadAction('clear', { uri }, null);
+        }
+    }
+
+    public async uploadFile(
         fileContent: FileHandle,
-        requeueOnFinish: NodeHandle | undefined,
-        progressBar: WritableStream | undefined
-    ): Promise<number> {
+        ext: string,
+        progressBar?: WritableStream
+    ): Promise<void> {
         const totalSize = (await fileContent.stat()).size;
         if (progressBar !== undefined) {
             progressBar.getWriter().write('Uploading file:\n');
         }
         const fileHash = await getFileHash(fileContent);
 
-        let curSize = await this.startData(totalSize, fileHash);
+        const tmpUri = await this.startUpload(totalSize, fileHash, ext);
+        this.tmpUri = tmpUri;
         let curPos = 0;
+        let curSize = 0;
+
         async function uploadNextChunk(
             that: BlobHandle,
             chunk: number,
@@ -2037,7 +2039,7 @@ export class BlobHandle {
             } else {
                 data = buffer;
             }
-            const newSize = await that.appendData(data);
+            const newSize = await that.appendUpload(tmpUri, data);
             if (newSize - curSize !== data.length) {
                 throw new Error(`
                     incomplete chunk upload n:${newSize} o:${curSize}
@@ -2047,11 +2049,31 @@ export class BlobHandle {
             curSize = newSize;
             await uploadNextChunk(that, chunk, fileHandle);
         }
+
         await uploadNextChunk(this, getFileUploadChunkSize(), fileContent);
-        await this.finishData(requeueOnFinish);
-        return curSize;
+        // await this.finishData(requeueOnFinish);
+        // return curSize;
     }
 
+    public async uploadZip(
+        source: string | FileHandle
+    ): Promise<BlobHandle[]> {
+        let files: string[] = [];
+        try {
+            if (typeof source === 'string') {
+                const fileHandle = await open(source, 'r');
+                this.uploadFile(fileHandle, 'zip');
+            } else {
+                this.uploadFile(source, 'zip');
+            }
+            files = await this.finishUploadZip();
+        } catch (error) {
+            this.clearUpload();
+        }
+        return files.map(
+            (blobUri) => new BlobHandle(this.client, blobUri, true)
+        );
+    }
     public async convertModel(): Promise<ModelReleaseResponse> {
         return await this.client.requestJSON<ModelReleaseResponse>({
             method: METHOD_POST,
@@ -2064,43 +2086,54 @@ export class BlobHandle {
 }
 
 export class CSVBlobHandle extends BlobHandle {
-    count: number;
-    pos: number;
-    hasTmp: boolean;
+    owner: BlobOwner;
 
-    constructor(
-        client: XYMEClient,
-        uri: string,
-        count: number,
-        pos: number,
-        hasTmp: boolean
-    ) {
+    constructor(client: XYMEClient, uri: string, owner: BlobOwner) {
         super(client, uri, false);
-        this.count = count;
-        this.pos = pos;
-        this.hasTmp = hasTmp;
-    }
-
-    public getCount(): number {
-        return this.count;
-    }
-
-    public getPos(): number {
-        return this.pos;
+        this.owner = owner;
     }
 
     public async addFromFile(
         fileName: string,
-        requeueOnFinish: NodeHandle | undefined = undefined,
         progressBar: WritableStream | undefined = undefined
     ) {
+        let fname = fileName;
+        if (fileName.endsWith(INPUT_ZIP_EXT)) {
+            fname = fileName.slice(0, -INPUT_ZIP_EXT.length);
+        }
+        const extPos = fname.indexOf('.');
+        let ext: string;
+        if (extPos > 0) {
+            ext = fileName.slice(extPos + 1);
+        } else {
+            throw new Error('could not determine extension');
+        }
         const fileHandle = await open(fileName, 'r');
 
         try {
-            await this.uploadData(fileHandle, requeueOnFinish, progressBar);
+            await this.uploadFile(fileHandle, ext, progressBar);
+            return this.finishCSVUpload();
         } finally {
             await fileHandle.close();
+            await this.clearUpload();
         }
+    }
+
+    public async finishCSVUpload(): Promise<UploadFilesResponse> {
+        const tmpUri = this.tmpUri;
+        if (isUndefined(tmpUri)) {
+            throw new Error('uri undefined');
+        }
+        return await this.client.requestJSON({
+            method: METHOD_POST,
+            path: '/finish_csv',
+            args: {
+                tmp_uri: tmpUri,
+                csv_uri: this.getUri(),
+                owner_dag: this.owner.owner_dag,
+                owner_node: this.owner.owner_node,
+            },
+        });
     }
 }
 

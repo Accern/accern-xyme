@@ -331,7 +331,7 @@ export interface BlobFilesResponse {
 export interface UploadFilesResponse {
     uri?: string;
     pos: number;
-    files: string;
+    files: string[];
 }
 
 export interface DagDupResponse {

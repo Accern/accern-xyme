@@ -2347,7 +2347,6 @@ class BlobHandle:
                     f"o:{cur_size} b:{len(buff)}")
             cur_size = new_size
         print_progress(cur_size / total_size, True)
-        self._tmp_uri = tmp_uri
 
     def upload_zip(self, source: Union[str, io.BytesIO]) -> List['BlobHandle']:
         files: List[str] = []
