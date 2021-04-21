@@ -797,6 +797,11 @@ class XYMEClientV3:
                 "value": value,
             }))["replaced"]
 
+    def get_error_logs(self) -> str:
+        with self._client._raw_request_str(
+                METHOD_GET, "/error_logs", {}) as fin:
+            return fin.read()
+
 
 # *** XYMEClientV3 ***
 
