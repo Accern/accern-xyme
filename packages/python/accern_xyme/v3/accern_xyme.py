@@ -2358,11 +2358,12 @@ class BlobHandle:
             for blob_uri in resp["files"]
         ]
 
-    def convert_model(self) -> ModelReleaseResponse:
+    def convert_model(self, reload: bool = True) -> ModelReleaseResponse:
         return cast(ModelReleaseResponse, self._client._request_json(
             METHOD_POST, "/convert_model", {
                 "blob": self._uri,
                 "pipeline": self.get_pipeline().get_id(),
+                "reload": reload,
             }))
 
     def __hash__(self) -> int:
