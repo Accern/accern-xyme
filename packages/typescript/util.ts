@@ -1,4 +1,4 @@
-import { open, FileHandle } from 'fs/promises';
+import { promises as fpm } from 'fs';
 import jsSHA from 'jssha';
 import { DictStrStr } from './types';
 import { KeyError, ServerSideError } from './errors';
@@ -101,13 +101,15 @@ export function getQueryURL(args: DictStrStr, inURL: string): string {
     return url;
 }
 
-export async function getFileHash(fileHandle: FileHandle): Promise<string> {
+export async function getFileHash(
+    fileHandle: fpm.FileHandle
+): Promise<string> {
     const shaObj = new jsSHA('SHA-224', 'BYTES');
     const chunkSize = FILE_HASH_CHUNK_SIZE;
     let curPos = 0;
     async function readNextChunk(
         chunkSize: number,
-        fileHandle: FileHandle
+        fileHandle: fpm.FileHandle
     ): Promise<void> {
         const buffer = Buffer.alloc(chunkSize);
         const response = await fileHandle.read(buffer, 0, chunkSize, curPos);
@@ -144,7 +146,7 @@ export function forceKey(obj: { [key: string]: any }, key: string): any {
 }
 
 export async function openWrite(buffer: Buffer, fileName: string) {
-    const fileHandle = await open(fileName, 'r');
+    const fileHandle = await fpm.open(fileName, 'r');
     await fileHandle.write(buffer);
 }
 

@@ -1,7 +1,7 @@
 /// <reference lib="dom" />
 import { Readable } from 'stream';
 import FormData from 'form-data';
-import { open, FileHandle } from 'fs/promises';
+import { promises as fpm } from 'fs';
 import { HeadersInit, Response, RequestInit } from 'node-fetch';
 import { performance } from 'perf_hooks';
 import {
@@ -2005,7 +2005,7 @@ export class BlobHandle {
     }
 
     public async uploadFile(
-        fileContent: FileHandle,
+        fileContent: fpm.FileHandle,
         ext: string,
         progressBar?: WritableStream
     ): Promise<void> {
@@ -2023,7 +2023,7 @@ export class BlobHandle {
         async function uploadNextChunk(
             that: BlobHandle,
             chunk: number,
-            fileHandle: FileHandle
+            fileHandle: fpm.FileHandle
         ): Promise<void> {
             const buffer = Buffer.alloc(chunk);
             await fileHandle.read(buffer, 0, 0, 0);
@@ -2056,12 +2056,12 @@ export class BlobHandle {
     }
 
     public async uploadZip(
-        source: string | FileHandle
+        source: string | fpm.FileHandle
     ): Promise<BlobHandle[]> {
         let files: string[] = [];
         try {
             if (typeof source === 'string') {
-                const fileHandle = await open(source, 'r');
+                const fileHandle = await fpm.open(source, 'r');
                 this.uploadFile(fileHandle, 'zip');
             } else {
                 this.uploadFile(source, 'zip');
@@ -2108,7 +2108,7 @@ export class CSVBlobHandle extends BlobHandle {
         } else {
             throw new Error('could not determine extension');
         }
-        const fileHandle = await open(fileName, 'r');
+        const fileHandle = await fpm.open(fileName, 'r');
 
         try {
             await this.uploadFile(fileHandle, ext, progressBar);
