@@ -34,6 +34,7 @@ import {
     ModelReleaseResponse,
     NamespaceUpdateSettings,
     NodeChunk,
+    NodeCustomImports,
     NodeDefInfo,
     NodeInfo,
     NodeState,
@@ -92,6 +93,12 @@ const EMPTY_BLOB_PREFIX = 'null://';
 const PREFIX = 'xyme';
 const DEFAULT_NAMESPACE = 'default';
 const INPUT_ZIP_EXT = '.zip';
+const CUSTOM_NODE_TYPES = [
+    'custom_data',
+    'custom_json',
+    'custom_json_to_data',
+    'custom_json_join_data',
+];
 
 export interface XYMEConfig {
     url: string;
@@ -1167,7 +1174,7 @@ export class DagHandle {
         try {
             const [res, ctype] = await this.client.requestBytes({
                 method: METHOD_GET,
-                path: 'dynamic_result',
+                path: '/dynamic_result',
                 args: {
                     dag: this.getUri(),
                     id: valueId,
@@ -1771,6 +1778,39 @@ export class NodeHandle {
             owner_node: this.getId(),
         };
         return new CSVBlobHandle(this.client, res.csv, owner);
+    }
+
+    public checkCustomCodeNode() {
+        if (CUSTOM_NODE_TYPES.indexOf(this.getType()) < 0) {
+            throw new Error(`${this} is not a custom code node`);
+        }
+    }
+
+    public async setCustomImports(
+        modules: string[][]
+    ): Promise<NodeCustomImports> {
+        this.checkCustomCodeNode();
+        return await this.client.requestJSON({
+            method: METHOD_PUT,
+            path: '/custom_imports',
+            args: {
+                dag: this.getDag().getUri(),
+                node: this.getId(),
+                modules,
+            },
+        });
+    }
+
+    public async getCustomImports(): Promise<NodeCustomImports> {
+        this.checkCustomCodeNode();
+        return await this.client.requestJSON({
+            method: METHOD_GET,
+            path: '/custom_imports',
+            args: {
+                dag: this.getDag().getUri(),
+                node: this.getId(),
+            },
+        });
     }
 }
 
