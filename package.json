@@ -1,6 +1,6 @@
 {
     "name": "accern-xyme",
-    "version": "4.0.0-rc.6",
+    "version": "4.0.0-rc.7",
     "description": "accern-xyme is a library for easily accessing XYME via typescript.",
     "repository": "https://github.com/Accern/accern-xyme",
     "main": "dist/index.js",
