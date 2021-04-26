@@ -1226,7 +1226,7 @@ class DagHandle:
             if success:
                 self.set_dynamic_error_message(None)
 
-    def pretty(self) -> None:
+    def pretty(self) -> Optional[str]:
         from graphviz import Source
 
         with self._client._raw_request_str(
@@ -1234,12 +1234,15 @@ class DagHandle:
                     "dag": self.get_uri(),
                 }) as fin:
             graph_str = fin.read()
-        graph = Source(graph_str.encode().decode("unicode_escape").strip('""'))
+            graph_str = graph_str.encode().decode("unicode_escape").strip('""')
+        graph = Source(graph_str)
 
         if is_jupyter():
             from IPython.display import display
             from IPython.display import SVG
             display(SVG(graph.pipe(format="svg")))
+
+        return graph_str
 
     def get_def(self, full: bool = True) -> DagDef:
         return cast(DagDef, self._client.request_json(
