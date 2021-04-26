@@ -31,16 +31,20 @@ import {
     KafkaTopics,
     KnownBlobs,
     MinimalQueueStatsResponse,
+    ModelParamsResponse,
     ModelReleaseResponse,
+    ModelSetupResponse,
     NamespaceUpdateSettings,
     NodeChunk,
     NodeCustomImports,
+    NodeDef,
     NodeDefInfo,
     NodeInfo,
     NodeState,
     NodeStatus,
     NodeTiming,
     NodeTypes,
+    NodeUserColumnsResponse,
     PutNodeBlob,
     QueueMode,
     QueueStatsResponse,
@@ -1806,6 +1810,54 @@ export class NodeHandle {
         return await this.client.requestJSON({
             method: METHOD_GET,
             path: '/custom_imports',
+            args: {
+                dag: this.getDag().getUri(),
+                node: this.getId(),
+            },
+        });
+    }
+
+    public async getUserColumn(key: string): Promise<NodeUserColumnsResponse> {
+        return await this.client.requestJSON<NodeUserColumnsResponse>({
+            method: METHOD_GET,
+            path: '/user_columns',
+            args: {
+                dag: this.getDag().getUri(),
+                node: this.getId(),
+                key,
+            },
+        });
+    }
+
+    public async setupModel(obj: {
+        [key: string]: any;
+    }): Promise<ModelSetupResponse> {
+        return await this.client.requestJSON<ModelSetupResponse>({
+            method: METHOD_PUT,
+            path: '/model_setup',
+            args: {
+                dag: this.getDag().getUri(),
+                node: this.getId(),
+                config: obj,
+            },
+        });
+    }
+
+    public async getModelParams(): Promise<ModelParamsResponse> {
+        return await this.client.requestJSON<ModelParamsResponse>({
+            method: METHOD_GET,
+            path: '/model_params',
+            args: {
+                dag: this.getDag().getUri(),
+                node: this.getId(),
+            },
+        });
+    }
+
+    public async getDef(): Promise<NodeDef> {
+        return await this.client.requestJSON<NodeDef>({
+            method: METHOD_GET,
+            path: '/node_def',
             args: {
                 dag: this.getDag().getUri(),
                 node: this.getId(),
