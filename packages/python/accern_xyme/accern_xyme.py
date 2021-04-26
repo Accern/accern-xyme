@@ -778,6 +778,10 @@ class XYMEClient:
                 "value": value,
             }))["replaced"]
 
+    def get_error_logs(self) -> str:
+        with self._raw_request_str(METHOD_GET, "/error_logs", {}) as fin:
+            return fin.read()
+
     def get_known_blobs(
             self,
             blob_type: Optional[str] = None,
@@ -2088,10 +2092,11 @@ class BlobHandle:
             for blob_uri in files
         ]
 
-    def convert_model(self) -> ModelReleaseResponse:
+    def convert_model(self, reload: bool = True) -> ModelReleaseResponse:
         return cast(ModelReleaseResponse, self._client.request_json(
             METHOD_POST, "/convert_model", {
                 "blob": self.get_uri(),
+                "reload": reload,
             }))
 
     def __hash__(self) -> int:
