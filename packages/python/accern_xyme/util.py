@@ -168,6 +168,17 @@ def is_jupyter() -> bool:
     return IS_JUPYTER
 
 
+def has_graph_easy() -> bool:
+    import subprocess
+
+    try:
+        subprocess.Popen(["graph-easy", "--help"])
+        return True
+    except FileNotFoundError:
+        print({"filenot fiound"})
+        return False
+
+
 def get_progress_bar(out: Optional[IO[Any]]) -> Callable[[float, bool], None]:
     # pylint: disable=unused-argument
 

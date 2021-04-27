@@ -43,6 +43,7 @@ from .util import (
     get_max_retry,
     get_progress_bar,
     get_retry_sleep,
+    has_graph_easy,
     interpret_ctype,
     is_jupyter,
     merge_ctype,
@@ -144,6 +145,7 @@ CUSTOM_NODE_TYPES = {
     "custom_json_to_data",
     "custom_json_join_data",
 }
+SECURE_TMP_POSTFIX = ".tmp~"
 
 
 class AccessDenied(Exception):
@@ -1226,7 +1228,7 @@ class DagHandle:
             if success:
                 self.set_dynamic_error_message(None)
 
-    def pretty(self) -> Optional[str]:
+    def pretty(self, output: Optional[str]) -> Optional[str]:
         from graphviz import Source
 
         with self._client._raw_request_str(
@@ -1237,10 +1239,30 @@ class DagHandle:
             graph_str = graph_str.encode().decode("unicode_escape").strip('""')
         graph = Source(graph_str)
 
-        if is_jupyter():
+        if is_jupyter() and output == "svg":
             from IPython.display import display
             from IPython.display import SVG
             display(SVG(graph.pipe(format="svg")))
+
+        if has_graph_easy() and output == "ascii":
+            import subprocess
+            import tempfile
+            tname = None
+            try:
+                _, tname = tempfile.mkstemp(
+                    suffix=SECURE_TMP_POSTFIX)
+                graph_input = ["echo", graph_str, ">", tname]
+                p1 = subprocess.Popen(graph_input, stdout=subprocess.PIPE)
+                p1.wait()
+                p2 = subprocess.check_output(["graph-easy", tname])
+                out = [f"{val}\n" for val in p2.decode("utf-8").split("\n")]
+                print(*out)
+            finally:
+                if tname is not None:
+                    try:
+                        os.remove(tname)
+                    except FileNotFoundError:
+                        pass
 
         return graph_str
 
