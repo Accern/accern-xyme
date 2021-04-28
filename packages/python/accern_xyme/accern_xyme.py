@@ -1318,12 +1318,18 @@ class DagHandle:
     def set_kafka_topic_partitions(
             self,
             num_partitions: int,
-            large_input_retention: bool = False) -> KafkaTopics:
+            postfix: Optional[str] = None,
+            large_input_retention: bool = False,
+            no_output: bool = False) -> KafkaTopics:
+        if postfix is None:
+            postfix = ""
         return cast(KafkaTopics, self._client.request_json(
             METHOD_POST, "/kafka_topics", {
                 "dag": self.get_uri(),
                 "num_partitions": num_partitions,
+                "postfix": postfix,
                 "large_input_retention": large_input_retention,
+                "no_output": no_output,
             }))
 
     def post_kafka_objs(self, input_objs: List[Any]) -> List[str]:
