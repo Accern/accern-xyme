@@ -1389,20 +1389,25 @@ class DagHandle:
             return None
         return merge_ctype(res, ctype)
 
-    def get_kafka_offsets(self, alive: bool) -> KafkaOffsets:
+    def get_kafka_offsets(
+            self, alive: bool, postfix: Optional[str] = None) -> KafkaOffsets:
+        args = {
+            "dag": self.get_uri(),
+            "alive": int(alive),
+        }
+        if postfix is not None:
+            args["postfix"] = postfix
         return cast(KafkaOffsets, self._client.request_json(
-            METHOD_GET, "/kafka_offsets", {
-                "dag": self.get_uri(),
-                "alive": int(alive),
-            }))
+            METHOD_GET, "/kafka_offsets", args))
 
     def get_kafka_throughput(
             self,
+            postfix: Optional[str] = None,
             segment_interval: float = 120.0,
             segments: int = 5) -> KafkaThroughput:
         assert segments > 0
         assert segment_interval > 0.0
-        offsets = self.get_kafka_offsets(alive=False)
+        offsets = self.get_kafka_offsets(postfix=postfix, alive=False)
         now = time.monotonic()
         measurements: List[Tuple[int, int, int, float]] = [(
             offsets["input"],
@@ -1415,7 +1420,7 @@ class DagHandle:
             while now - prev < segment_interval:
                 time.sleep(max(0.0, segment_interval - (now - prev)))
                 now = time.monotonic()
-            offsets = self.get_kafka_offsets(alive=False)
+            offsets = self.get_kafka_offsets(postfix=postfix, alive=False)
             measurements.append((
                 offsets["input"],
                 offsets["output"],
