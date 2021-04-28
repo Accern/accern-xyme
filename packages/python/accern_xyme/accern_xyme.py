@@ -25,7 +25,6 @@ import inspect
 import textwrap
 import threading
 import contextlib
-import collections
 from io import BytesIO, StringIO
 import pandas as pd
 import requests
