@@ -1228,7 +1228,7 @@ class DagHandle:
             if success:
                 self.set_dynamic_error_message(None)
 
-    def pretty(self, output: Optional[str]) -> Optional[str]:
+    def pretty(self, output: Optional[str] = "svg") -> None:
         from graphviz import Source
 
         with self._client._raw_request_str(
@@ -1239,32 +1239,29 @@ class DagHandle:
             graph_str = graph_str.encode().decode("unicode_escape").strip('""')
         graph = Source(graph_str)
 
-        if is_jupyter() and output == "svg":
-            from IPython.display import display
-            from IPython.display import SVG
-            display(SVG(graph.pipe(format="svg")))
-
-        if has_graph_easy() and output == "ascii":
-            import subprocess
-            import tempfile
-            tname = None
-            try:
-                _, tname = tempfile.mkstemp(
-                    suffix=SECURE_TMP_POSTFIX)
-                graph_input = ["echo", graph_str, ">", tname]
-                p1 = subprocess.Popen(graph_input, stdout=subprocess.PIPE)
-                p1.wait()
-                p2 = subprocess.check_output(["graph-easy", tname])
-                out = [f"{val}\n" for val in p2.decode("utf-8").split("\n")]
-                print(*out)
-            finally:
-                if tname is not None:
-                    try:
-                        os.remove(tname)
-                    except FileNotFoundError:
-                        pass
-
-        return graph_str
+        if output == "svg":
+            if not is_jupyter():
+                print(f"Warning: Ipython instance not found. \n{graph_str}")
+            else:
+                from IPython.display import display
+                from IPython.display import SVG
+                display(SVG(graph.pipe(format="svg")))
+        elif output == "ascii":
+            if not has_graph_easy():
+                # pylint: disable=line-too-long
+                print(
+                    "Warning: Graph:Easy module not found. Use the whalebrew "
+                    "to install graph-easy. \n"
+                    "https://stackoverflow.com/questions/3211801/graphviz-and-ascii-output/55403011#55403011 \n"  # nopep8, line too long
+                    f"{graph_str}")
+            else:
+                import subprocess
+                cmd = ["echo", graph_str]
+                p1 = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+                p2 = subprocess.check_output(["graph-easy"], stdin=p1.stdout)
+                print(p2.decode("utf-8"))
+        else:
+            raise ValueError("invalid output option, use svg or ascii")
 
     def get_def(self, full: bool = True) -> DagDef:
         return cast(DagDef, self._client.request_json(

@@ -21,6 +21,7 @@ import {
     DictStrStr,
     DynamicFormat,
     DynamicResults,
+    DynamicStatusResponse,
     FlushAllQueuesResponse,
     InCursors,
     InstanceStatus,
@@ -48,6 +49,7 @@ import {
     PutNodeBlob,
     QueueMode,
     QueueStatsResponse,
+    QueueStatus,
     ReadNode,
     SetNamedSecret,
     SettingsObj,
@@ -1196,14 +1198,44 @@ export class DagHandle {
         }
     }
 
-    public async pretty() {
-        return await this.client.requestString({
+    public async getDynamicStatus(
+        valueIds: ComputationHandle[]
+    ): Promise<{ [key: string]: QueueStatus }> {
+        const res = await this.client.requestJSON<DynamicStatusResponse>({
+            method: METHOD_POST,
+            path: '/dynamic_status',
+            args: {
+                value_ids: valueIds.map((id) => id.getId()),
+                dag: this.getUri(),
+            },
+        });
+        const status = res.status;
+        let hndMap: { [key: string]: ComputationHandle } = {};
+        valueIds.map((id) => {
+            hndMap = {
+                ...hndMap,
+                [id.getId()]: id,
+            };
+        });
+        let hndStatus: { [key: string]: QueueStatus } = {};
+        Object.keys(status).map((key) => {
+            hndStatus = {
+                ...hndStatus,
+                [hndMap[key].valueId]: status[key],
+            };
+        });
+        return hndStatus;
+    }
+
+    public async pretty(): Promise<string> {
+        const graphStream = await this.client.requestString({
             method: METHOD_GET,
             path: '/dag_pretty',
             args: {
                 dag: this.getUri(),
             },
         });
+        return graphStream.read();
     }
 
     public async getDef(full = true): Promise<DagDef> {
