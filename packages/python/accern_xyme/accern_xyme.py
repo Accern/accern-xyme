@@ -1317,11 +1317,9 @@ class DagHandle:
     def set_kafka_topic_partitions(
             self,
             num_partitions: int,
-            postfix: Optional[str] = None,
+            postfix: str = "",
             large_input_retention: bool = False,
             no_output: bool = False) -> KafkaTopics:
-        if postfix is None:
-            postfix = ""
         return cast(KafkaTopics, self._client.request_json(
             METHOD_POST, "/kafka_topics", {
                 "dag": self.get_uri(),
@@ -1342,11 +1340,15 @@ class DagHandle:
         ]
         return self.post_kafka_msgs(bios)
 
-    def post_kafka_msgs(self, input_data: List[BytesIO]) -> List[str]:
+    def post_kafka_msgs(
+            self,
+            input_data: List[BytesIO],
+            postfix: str = "") -> List[str]:
         names = [f"file{pos}" for pos in range(len(input_data))]
         res = cast(KafkaMessage, self._client.request_json(
             METHOD_FILE, "/kafka_msg", {
                 "dag": self.get_uri(),
+                "postfix": postfix,
             }, files=dict(zip(names, input_data))))
         msgs = res["messages"]
         return [msgs[key] for key in names]
