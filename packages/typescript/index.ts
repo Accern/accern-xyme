@@ -1,7 +1,7 @@
 /// <reference lib="dom" />
 import { Readable } from 'stream';
 import FormData from 'form-data';
-import { open, FileHandle } from 'fs/promises';
+import { promises as fpm } from 'fs';
 import { HeadersInit, Response, RequestInit } from 'node-fetch';
 import { performance } from 'perf_hooks';
 import {
@@ -21,6 +21,7 @@ import {
     DictStrStr,
     DynamicFormat,
     DynamicResults,
+    DynamicStatusResponse,
     FlushAllQueuesResponse,
     InCursors,
     InstanceStatus,
@@ -36,15 +37,19 @@ import {
     ModelSetupResponse,
     NamespaceUpdateSettings,
     NodeChunk,
+    NodeCustomImports,
+    NodeDef,
     NodeDefInfo,
     NodeInfo,
     NodeState,
     NodeStatus,
     NodeTiming,
     NodeTypes,
+    NodeUserColumnsResponse,
     PutNodeBlob,
     QueueMode,
     QueueStatsResponse,
+    QueueStatus,
     ReadNode,
     SetNamedSecret,
     SettingsObj,
@@ -94,6 +99,12 @@ const EMPTY_BLOB_PREFIX = 'null://';
 const PREFIX = 'xyme';
 const DEFAULT_NAMESPACE = 'default';
 const INPUT_ZIP_EXT = '.zip';
+const CUSTOM_NODE_TYPES = [
+    'custom_data',
+    'custom_json',
+    'custom_json_to_data',
+    'custom_json_join_data',
+];
 
 export interface XYMEConfig {
     url: string;
@@ -1171,7 +1182,7 @@ export class DagHandle {
         try {
             const [res, ctype] = await this.client.requestBytes({
                 method: METHOD_GET,
-                path: 'dynamic_result',
+                path: '/dynamic_result',
                 args: {
                     dag: this.getUri(),
                     id: valueId,
@@ -1189,14 +1200,44 @@ export class DagHandle {
         }
     }
 
-    public async pretty() {
-        return await this.client.requestString({
+    public async getDynamicStatus(
+        valueIds: ComputationHandle[]
+    ): Promise<{ [key: string]: QueueStatus }> {
+        const res = await this.client.requestJSON<DynamicStatusResponse>({
+            method: METHOD_POST,
+            path: '/dynamic_status',
+            args: {
+                value_ids: valueIds.map((id) => id.getId()),
+                dag: this.getUri(),
+            },
+        });
+        const status = res.status;
+        let hndMap: { [key: string]: ComputationHandle } = {};
+        valueIds.map((id) => {
+            hndMap = {
+                ...hndMap,
+                [id.getId()]: id,
+            };
+        });
+        let hndStatus: { [key: string]: QueueStatus } = {};
+        Object.keys(status).map((key) => {
+            hndStatus = {
+                ...hndStatus,
+                [hndMap[key].valueId]: status[key],
+            };
+        });
+        return hndStatus;
+    }
+
+    public async pretty(): Promise<string> {
+        const graphStream = await this.client.requestString({
             method: METHOD_GET,
             path: '/dag_pretty',
             args: {
                 dag: this.getUri(),
             },
         });
+        return graphStream.read();
     }
 
     public async getDef(full = true): Promise<DagDef> {
@@ -1777,6 +1818,51 @@ export class NodeHandle {
         return new CSVBlobHandle(this.client, res.csv, owner);
     }
 
+    public checkCustomCodeNode() {
+        if (CUSTOM_NODE_TYPES.indexOf(this.getType()) < 0) {
+            throw new Error(`${this} is not a custom code node`);
+        }
+    }
+
+    public async setCustomImports(
+        modules: string[][]
+    ): Promise<NodeCustomImports> {
+        this.checkCustomCodeNode();
+        return await this.client.requestJSON({
+            method: METHOD_PUT,
+            path: '/custom_imports',
+            args: {
+                dag: this.getDag().getUri(),
+                node: this.getId(),
+                modules,
+            },
+        });
+    }
+
+    public async getCustomImports(): Promise<NodeCustomImports> {
+        this.checkCustomCodeNode();
+        return await this.client.requestJSON({
+            method: METHOD_GET,
+            path: '/custom_imports',
+            args: {
+                dag: this.getDag().getUri(),
+                node: this.getId(),
+            },
+        });
+    }
+
+    public async getUserColumn(key: string): Promise<NodeUserColumnsResponse> {
+        return await this.client.requestJSON<NodeUserColumnsResponse>({
+            method: METHOD_GET,
+            path: '/user_columns',
+            args: {
+                dag: this.getDag().getUri(),
+                node: this.getId(),
+                key,
+            },
+        });
+    }
+
     public async setupModel(obj: {
         [key: string]: any;
     }): Promise<ModelSetupResponse> {
@@ -1802,10 +1888,10 @@ export class NodeHandle {
         });
     }
 
-    public async getDef(): Promise<ModelParamsResponse> {
-        return await this.client.requestJSON<ModelParamsResponse>({
+    public async getDef(): Promise<NodeDef> {
+        return await this.client.requestJSON<NodeDef>({
             method: METHOD_GET,
-            path: '/model_params',
+            path: '/node_def',
             args: {
                 dag: this.getDag().getUri(),
                 node: this.getId(),
@@ -2045,7 +2131,7 @@ export class BlobHandle {
     }
 
     public async uploadFile(
-        fileContent: FileHandle,
+        fileContent: fpm.FileHandle,
         ext: string,
         progressBar?: WritableStream
     ): Promise<void> {
@@ -2063,7 +2149,7 @@ export class BlobHandle {
         async function uploadNextChunk(
             that: BlobHandle,
             chunk: number,
-            fileHandle: FileHandle
+            fileHandle: fpm.FileHandle
         ): Promise<void> {
             const buffer = Buffer.alloc(chunk);
             await fileHandle.read(buffer, 0, 0, 0);
@@ -2096,12 +2182,12 @@ export class BlobHandle {
     }
 
     public async uploadZip(
-        source: string | FileHandle
+        source: string | fpm.FileHandle
     ): Promise<BlobHandle[]> {
         let files: string[] = [];
         try {
             if (typeof source === 'string') {
-                const fileHandle = await open(source, 'r');
+                const fileHandle = await fpm.open(source, 'r');
                 this.uploadFile(fileHandle, 'zip');
             } else {
                 this.uploadFile(source, 'zip');
@@ -2148,7 +2234,7 @@ export class CSVBlobHandle extends BlobHandle {
         } else {
             throw new Error('could not determine extension');
         }
-        const fileHandle = await open(fileName, 'r');
+        const fileHandle = await fpm.open(fileName, 'r');
 
         try {
             await this.uploadFile(fileHandle, ext, progressBar);

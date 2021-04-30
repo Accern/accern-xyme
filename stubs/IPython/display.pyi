@@ -1,4 +1,5 @@
 # pylint: disable=unused-argument,no-self-use
+from typing import Any, Optional, List, Dict
 
 
 class ProgressBar:
@@ -18,3 +19,24 @@ class ProgressBar:
         ...
 
     progress = property(_get_progress, _set_progress)
+
+
+class SVG:
+    def __init__(
+            self,
+            data: Optional[Any] = None,
+            url: Optional[str] = None,
+            filename: Optional[str] = None,
+            metadata: Optional[Dict[str, Any]] = None) -> None:
+        ...
+
+
+def display(
+        *objs: Any,
+        include: Optional[List[Any]] = None,
+        exclude: Optional[List[Any]] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+        transient: Optional[Dict[str, Any]] = None,
+        display_id: Optional[List[Any]] = None,
+        **kwargs: Any) -> None:
+    ...

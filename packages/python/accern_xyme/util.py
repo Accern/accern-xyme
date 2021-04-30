@@ -168,6 +168,21 @@ def is_jupyter() -> bool:
     return IS_JUPYTER
 
 
+def has_graph_easy() -> bool:
+    import subprocess
+
+    try:
+        subprocess.Popen(["graph-easy", "--help"])
+        return True
+    except FileNotFoundError:
+        # pylint: disable=line-too-long
+        print(
+            "Warning: Graph:Easy module not found. Use the "
+            "whalebrew to install graph-easy. \n"
+            "https://stackoverflow.com/questions/3211801/graphviz-and-ascii-output/55403011#55403011")  # nopep8, line too long
+        return False
+
+
 def get_progress_bar(out: Optional[IO[Any]]) -> Callable[[float, bool], None]:
     # pylint: disable=unused-argument
 

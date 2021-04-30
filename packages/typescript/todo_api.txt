@@ -44,10 +44,6 @@ class NodeHandle
 
 - get json_blob
 
-- set_custom_imports
-
-- get_custom_imports
-
 - set_es_query
 
 - get_es_query
@@ -56,13 +52,13 @@ class NodeHandle
 
 - get_custom_code
 
-- get_user_columns
-
 - get_input_example
 
 - get_def
 
 - pretty_obj
+
+- pretty^
 
 class CSVBlobHandle
 
