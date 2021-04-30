@@ -1,0 +1,5 @@
+TODO APIs:
+
+APIs added in other languages but not available in typescript yet.
+
+- get_error_logs
