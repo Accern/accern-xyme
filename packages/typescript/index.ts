@@ -587,13 +587,15 @@ export default class XYMEClient {
 
     public async duplicateDag(
         dagUri: string,
-        destUri?: string
+        destUri?: string,
+        copyNonownedBlob = true
     ): Promise<string> {
         return await this.requestJSON<DagCreate>({
             method: METHOD_POST,
             path: '/dag_dup',
             args: {
                 dag: dagUri,
+                copy_nonowned_blob: copyNonownedBlob,
                 ...(destUri ? { dest: destUri } : {}),
             },
         }).then((response) => response.dag);
