@@ -624,10 +624,10 @@ class XYMEClient:
             self,
             dag_uri: str,
             dest_uri: Optional[str] = None,
-            copy_nonowned_blob: bool = True) -> str:
+            copy_nonowned_blobs: bool = True) -> str:
         args = {
             "dag": dag_uri,
-            "copy_nonowned_blob": copy_nonowned_blob,
+            "copy_nonowned_blobs": copy_nonowned_blobs,
         }
         if dest_uri is not None:
             args["dest"] = dest_uri
