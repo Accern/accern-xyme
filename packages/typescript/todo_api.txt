@@ -58,6 +58,8 @@ class NodeHandle
 
 - pretty_obj
 
+- pretty^
+
 class CSVBlobHandle
 
 - add_from_df?

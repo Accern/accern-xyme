@@ -437,11 +437,11 @@ class XYMEClient:
         if method == METHOD_GET:
             req = requests.get(url, params=args, headers=headers)
             check_error(req)
-            return StringIO(f"{req.text}")
+            return StringIO(req.text)
         if method == METHOD_POST:
             req = requests.post(url, json=args, headers=headers)
             check_error(req)
-            return StringIO(f"{req.text}")
+            return StringIO(req.text)
         raise ValueError(f"unknown method {method}")
 
     def _fallible_raw_request_json(
@@ -1251,45 +1251,55 @@ class DagHandle:
             nodes_only: bool = False,
             allow_unicode: bool = True,
             pretty_method: Optional[str] = "accern",
-            dot_output: Optional[str] = "svg") -> Optional[str]:
+            dot_output: Optional[str] = "svg",
+            display: bool = True) -> Optional[str]:
+
+        def render(value: str) -> Optional[str]:
+            if display:
+                print(value)
+                return None
+            return value
+
         graph_str = self._pretty(
             nodes_only=nodes_only,
             allow_unicode=allow_unicode,
             pretty_method=pretty_method)["pretty"]
         if pretty_method == "accern":
-            print(graph_str)
-        else:
+            return render(graph_str)
+        if pretty_method == "dot":
             from graphviz import Source
 
             graph = Source(graph_str)
             if dot_output == "dot":
-                return graph_str
+                return render(graph_str)
             if dot_output == "svg":
-                if not is_jupyter():
-                    print(
-                        f"Warning: Ipython instance not found. \n{graph_str}")
+                svg_str = graph.pipe(format="svg")
+                if display:
+                    if not is_jupyter():
+                        print("Warning: Ipython instance not found.")
+                        print(svg_str)
+                    else:
+                        from IPython.display import display as idisplay
+                        from IPython.display import SVG
+                        idisplay(SVG(svg_str))
                 else:
-                    from IPython.display import display
-                    from IPython.display import SVG
-                    display(SVG(graph.pipe(format="svg")))
-            elif dot_output == "ascii":
+                    return svg_str
+            if dot_output == "ascii":
                 if not has_graph_easy():
-                    # pylint: disable=line-too-long
-                    print(
-                        "Warning: Graph:Easy module not found. Use the "
-                        "whalebrew to install graph-easy. \n"
-                        "https://stackoverflow.com/questions/3211801/graphviz-and-ascii-output/55403011#55403011 \n"  # nopep8, line too long
-                        f"{graph_str}")
-                else:
-                    import subprocess
-                    cmd = ["echo", graph_str]
-                    p1 = subprocess.Popen(cmd, stdout=subprocess.PIPE)
-                    p2 = subprocess.check_output(
-                        ["graph-easy"], stdin=p1.stdout)
-                    print(p2.decode("utf-8"))
+                    return render(graph_str)
+
+                import subprocess
+                cmd = ["echo", graph_str]
+                p1 = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+                p2 = subprocess.check_output(
+                    ["graph-easy"], stdin=p1.stdout)
+                res = p2.decode("utf-8")
+                return render(res)
             else:
-                raise ValueError("invalid dot output option, use svg or ascii")
-        return None
+                raise ValueError(
+                    "invalid dot output option, use svg, ascii or dot")
+        else:
+            raise ValueError("invalid dot pretty_method, use accern or dot")
 
     def pretty_obj(
             self,
