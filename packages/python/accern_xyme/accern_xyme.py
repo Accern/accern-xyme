@@ -64,6 +64,7 @@ from .types import (
     DagInfo,
     DagInit,
     DagList,
+    DagPrettyNode,
     DagReload,
     DynamicResults,
     DynamicStatusResponse,
@@ -96,6 +97,7 @@ from .types import (
     NodeTiming,
     NodeTypes,
     NodeUserColumnsResponse,
+    PrettyResponse,
     PutNodeBlob,
     QueueMode,
     QueueStatsResponse,
@@ -622,9 +624,13 @@ class XYMEClient:
             }))["dag"]
 
     def duplicate_dag(
-            self, dag_uri: str, dest_uri: Optional[str] = None) -> str:
+            self,
+            dag_uri: str,
+            dest_uri: Optional[str] = None,
+            copy_nonowned_blobs: bool = True) -> str:
         args = {
             "dag": dag_uri,
+            "copy_nonowned_blobs": copy_nonowned_blobs,
         }
         if dest_uri is not None:
             args["dest"] = dest_uri
@@ -1228,40 +1234,70 @@ class DagHandle:
             if success:
                 self.set_dynamic_error_message(None)
 
-    def pretty(self, output: Optional[str] = "svg") -> None:
-        from graphviz import Source
+    def _pretty(
+            self,
+            nodes_only: bool,
+            allow_unicode: bool,
+            pretty_method: Optional[str] = "accern") -> PrettyResponse:
+        return cast(PrettyResponse, self._client.request_json(
+            METHOD_GET, "/pretty", {
+                "dag": self.get_uri(),
+                "nodes_only": nodes_only,
+                "allow_unicode": allow_unicode,
+                "method": pretty_method,
+            }))
 
-        with self._client._raw_request_str(
-                METHOD_GET, "/dag_pretty", {
-                    "dag": self.get_uri(),
-                }) as fin:
-            graph_str = fin.read()
-            graph_str = graph_str.encode().decode("unicode_escape").strip('""')
-        graph = Source(graph_str)
-
-        if output == "svg":
-            if not is_jupyter():
-                print(f"Warning: Ipython instance not found. \n{graph_str}")
-            else:
-                from IPython.display import display
-                from IPython.display import SVG
-                display(SVG(graph.pipe(format="svg")))
-        elif output == "ascii":
-            if not has_graph_easy():
-                # pylint: disable=line-too-long
-                print(
-                    "Warning: Graph:Easy module not found. Use the whalebrew "
-                    "to install graph-easy. \n"
-                    "https://stackoverflow.com/questions/3211801/graphviz-and-ascii-output/55403011#55403011 \n"  # nopep8, line too long
-                    f"{graph_str}")
-            else:
-                import subprocess
-                cmd = ["echo", graph_str]
-                p1 = subprocess.Popen(cmd, stdout=subprocess.PIPE)
-                p2 = subprocess.check_output(["graph-easy"], stdin=p1.stdout)
-                print(p2.decode("utf-8"))
+    def pretty(
+            self,
+            nodes_only: bool = False,
+            allow_unicode: bool = True,
+            pretty_method: Optional[str] = "accern",
+            dot_output: Optional[str] = "svg") -> Optional[str]:
+        graph_str = self._pretty(
+            nodes_only=nodes_only,
+            allow_unicode=allow_unicode,
+            pretty_method=pretty_method)["pretty"]
+        if pretty_method == "accern":
+            print(graph_str)
         else:
-            raise ValueError("invalid output option, use svg or ascii")
+            from graphviz import Source
+
+            graph = Source(graph_str)
+            if dot_output == "dot":
+                return graph_str
+            if dot_output == "svg":
+                if not is_jupyter():
+                    print(
+                        f"Warning: Ipython instance not found. \n{graph_str}")
+                else:
+                    from IPython.display import display
+                    from IPython.display import SVG
+                    display(SVG(graph.pipe(format="svg")))
+            elif dot_output == "ascii":
+                if not has_graph_easy():
+                    # pylint: disable=line-too-long
+                    print(
+                        "Warning: Graph:Easy module not found. Use the "
+                        "whalebrew to install graph-easy. \n"
+                        "https://stackoverflow.com/questions/3211801/graphviz-and-ascii-output/55403011#55403011 \n"  # nopep8, line too long
+                        f"{graph_str}")
+                else:
+                    import subprocess
+                    cmd = ["echo", graph_str]
+                    p1 = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+                    p2 = subprocess.check_output(
+                        ["graph-easy"], stdin=p1.stdout)
+                    print(p2.decode("utf-8"))
+            else:
+                raise ValueError("invalid dot output option, use svg or ascii")
+        return None
+
+    def pretty_obj(
+            self,
+            nodes_only: bool = False,
+            allow_unicode: bool = True) -> List[DagPrettyNode]:
+        return self._pretty(
+            nodes_only=nodes_only, allow_unicode=allow_unicode)["nodes"]
 
     def get_def(self, full: bool = True) -> DagDef:
         return cast(DagDef, self._client.request_json(
@@ -1328,12 +1364,16 @@ class DagHandle:
     def set_kafka_topic_partitions(
             self,
             num_partitions: int,
-            large_input_retention: bool = False) -> KafkaTopics:
+            postfix: str = "",
+            large_input_retention: bool = False,
+            no_output: bool = False) -> KafkaTopics:
         return cast(KafkaTopics, self._client.request_json(
             METHOD_POST, "/kafka_topics", {
                 "dag": self.get_uri(),
                 "num_partitions": num_partitions,
+                "postfix": postfix,
                 "large_input_retention": large_input_retention,
+                "no_output": no_output,
             }))
 
     def post_kafka_objs(self, input_objs: List[Any]) -> List[str]:
@@ -1347,11 +1387,15 @@ class DagHandle:
         ]
         return self.post_kafka_msgs(bios)
 
-    def post_kafka_msgs(self, input_data: List[BytesIO]) -> List[str]:
+    def post_kafka_msgs(
+            self,
+            input_data: List[BytesIO],
+            postfix: str = "") -> List[str]:
         names = [f"file{pos}" for pos in range(len(input_data))]
         res = cast(KafkaMessage, self._client.request_json(
             METHOD_FILE, "/kafka_msg", {
                 "dag": self.get_uri(),
+                "postfix": postfix,
             }, files=dict(zip(names, input_data))))
         msgs = res["messages"]
         return [msgs[key] for key in names]
@@ -1392,20 +1436,25 @@ class DagHandle:
             return None
         return merge_ctype(res, ctype)
 
-    def get_kafka_offsets(self, alive: bool) -> KafkaOffsets:
+    def get_kafka_offsets(
+            self, alive: bool, postfix: Optional[str] = None) -> KafkaOffsets:
+        args = {
+            "dag": self.get_uri(),
+            "alive": int(alive),
+        }
+        if postfix is not None:
+            args["postfix"] = postfix
         return cast(KafkaOffsets, self._client.request_json(
-            METHOD_GET, "/kafka_offsets", {
-                "dag": self.get_uri(),
-                "alive": int(alive),
-            }))
+            METHOD_GET, "/kafka_offsets", args))
 
     def get_kafka_throughput(
             self,
+            postfix: Optional[str] = None,
             segment_interval: float = 120.0,
             segments: int = 5) -> KafkaThroughput:
         assert segments > 0
         assert segment_interval > 0.0
-        offsets = self.get_kafka_offsets(alive=False)
+        offsets = self.get_kafka_offsets(postfix=postfix, alive=False)
         now = time.monotonic()
         measurements: List[Tuple[int, int, int, float]] = [(
             offsets["input"],
@@ -1418,7 +1467,7 @@ class DagHandle:
             while now - prev < segment_interval:
                 time.sleep(max(0.0, segment_interval - (now - prev)))
                 now = time.monotonic()
-            offsets = self.get_kafka_offsets(alive=False)
+            offsets = self.get_kafka_offsets(postfix=postfix, alive=False)
             measurements.append((
                 offsets["input"],
                 offsets["output"],

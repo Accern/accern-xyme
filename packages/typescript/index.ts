@@ -600,13 +600,15 @@ export default class XYMEClient {
 
     public async duplicateDag(
         dagUri: string,
-        destUri?: string
+        destUri?: string,
+        copyNonownedBlobs = true
     ): Promise<string> {
         return await this.requestJSON<DagCreate>({
             method: METHOD_POST,
             path: '/dag_dup',
             args: {
                 dag: dagUri,
+                copy_nonowned_blobs: copyNonownedBlobs,
                 ...(destUri ? { dest: destUri } : {}),
             },
         }).then((response) => response.dag);
@@ -757,7 +759,7 @@ export default class XYMEClient {
         });
     }
 
-    public async resetCacheStats(): Promise<CacheStats> {
+    public async resetCache(): Promise<CacheStats> {
         return await this.requestJSON<CacheStats>({
             method: METHOD_POST,
             path: '/cache_reset',

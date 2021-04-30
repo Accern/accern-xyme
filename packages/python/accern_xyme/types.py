@@ -370,3 +370,25 @@ ModelReleaseResponse = TypedDict('ModelReleaseResponse', {
 ESQueryResponse = TypedDict('ESQueryResponse', {
     "query": Dict[str, Any],
 })
+DagPrettyEdge = TypedDict('DagPrettyEdge', {
+    "out_name": str,
+    "in_node": str,
+    "in_name": str,
+    "in_state": int,
+    "move_right": int,
+    "move_down": int,
+})
+DagPrettyNode = TypedDict('DagPrettyNode', {
+    "id": str,
+    "name": str,
+    "kind": str,
+    "chunk": int,
+    "high_ixs": Dict[str, int],
+    "status": 'TaskStatus',
+    "out_edges": List[DagPrettyEdge],
+    "indent": int,
+})
+PrettyResponse = TypedDict('PrettyResponse', {
+    "pretty": str,
+    "nodes": List[DagPrettyNode],
+})
