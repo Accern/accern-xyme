@@ -621,9 +621,13 @@ class XYMEClient:
             }))["dag"]
 
     def duplicate_dag(
-            self, dag_uri: str, dest_uri: Optional[str] = None) -> str:
+            self,
+            dag_uri: str,
+            dest_uri: Optional[str] = None,
+            copy_blob: bool = True) -> str:
         args = {
             "dag": dag_uri,
+            "copy_blob": copy_blob,
         }
         if dest_uri is not None:
             args["dest"] = dest_uri
