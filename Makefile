@@ -11,7 +11,9 @@ help:
 	@echo "lint-requirements	run requirements check"
 	@echo "lint-stringformat	run string format check"
 	@echo "lint-type-check	run type check"
+	@echo "git-check	run git check"
 	@echo "publish	publish the library on pypi"
+	@echo "publish-ts	publish the library on npm"
 
 lint-comment:
 	! find . \( -name '*.py' -o -name '*.pyi' \) -and -not -path './venv/*' \
@@ -65,14 +67,22 @@ lint-all: \
 
 VERSION=`echo "import accern_xyme;print(accern_xyme.__version__)" | python3 2>/dev/null`
 
-publish:
+git-check:
 	@git diff --exit-code 2>&1 >/dev/null && git diff --cached --exit-code 2>&1 >/dev/null || (echo "working copy is not clean" && exit 1)
 	@test -z `git ls-files --other --exclude-standard --directory` || (echo "there are untracked files" && exit 1)
 	@test `git rev-parse --abbrev-ref HEAD` = "master" || (echo "not on master" && exit 1)
+
+publish:
+	make git-check
 	rm -r dist build accern_xyme.egg-info || echo "no files to delete"
 	python3 -m pip install -U setuptools twine wheel
 	python3 setup.py sdist bdist_wheel
 	python3 -m twine upload dist/accern_xyme-$(VERSION)-py3-none-any.whl dist/accern_xyme-$(VERSION).tar.gz
 	git tag "v$(VERSION)"
 	git push origin "v$(VERSION)"
+	@echo "succesfully deployed $(VERSION)"
+
+publish-ts:
+	make git-check
+	yarn publish
 	@echo "succesfully deployed $(VERSION)"
