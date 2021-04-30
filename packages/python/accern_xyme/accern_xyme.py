@@ -1297,8 +1297,7 @@ class DagHandle:
                 return render(res)
             raise ValueError(
                 "invalid dot output option, use svg, ascii or dot")
-        else:
-            raise ValueError("invalid dot pretty_method, use accern or dot")
+        raise ValueError("invalid dot pretty_method, use accern or dot")
 
     def pretty_obj(
             self,
