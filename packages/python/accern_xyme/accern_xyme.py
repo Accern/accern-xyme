@@ -1295,9 +1295,8 @@ class DagHandle:
                     ["graph-easy"], stdin=p1.stdout)
                 res = p2.decode("utf-8")
                 return render(res)
-            else:
-                raise ValueError(
-                    "invalid dot output option, use svg, ascii or dot")
+            raise ValueError(
+                "invalid dot output option, use svg, ascii or dot")
         else:
             raise ValueError("invalid dot pretty_method, use accern or dot")
 
