@@ -31,7 +31,9 @@ import {
     KafkaTopics,
     KnownBlobs,
     MinimalQueueStatsResponse,
+    ModelParamsResponse,
     ModelReleaseResponse,
+    ModelSetupResponse,
     NamespaceUpdateSettings,
     NodeChunk,
     NodeDefInfo,
@@ -746,7 +748,7 @@ export default class XYMEClient {
         });
     }
 
-    public async resetCacheStats(): Promise<CacheStats> {
+    public async resetCache(): Promise<CacheStats> {
         return await this.requestJSON<CacheStats>({
             method: METHOD_POST,
             path: '/cache_reset',
@@ -1773,6 +1775,31 @@ export class NodeHandle {
             owner_node: this.getId(),
         };
         return new CSVBlobHandle(this.client, res.csv, owner);
+    }
+
+    public async setupModel(obj: {
+        [key: string]: any;
+    }): Promise<ModelSetupResponse> {
+        return await this.client.requestJSON<ModelSetupResponse>({
+            method: METHOD_PUT,
+            path: '/model_setup',
+            args: {
+                dag: this.getDag().getUri(),
+                node: this.getId(),
+                config: obj,
+            },
+        });
+    }
+
+    public async getModelParams(): Promise<ModelParamsResponse> {
+        return await this.client.requestJSON<ModelParamsResponse>({
+            method: METHOD_GET,
+            path: '/model_params',
+            args: {
+                dag: this.getDag().getUri(),
+                node: this.getId(),
+            },
+        });
     }
 }
 
