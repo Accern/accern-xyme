@@ -1801,6 +1801,17 @@ export class NodeHandle {
             },
         });
     }
+
+    public async getDef(): Promise<ModelParamsResponse> {
+        return await this.client.requestJSON<ModelParamsResponse>({
+            method: METHOD_GET,
+            path: '/model_params',
+            args: {
+                dag: this.getDag().getUri(),
+                node: this.getId(),
+            },
+        });
+    }
 }
 
 export class BlobHandle {

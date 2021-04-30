@@ -2,6 +2,9 @@ TODO APIs:
 
 APIs added in other languages but not available in typescript yet.
 
+^ need update
+? questionable
+
 class XYMEClient
 
 - bulk_operation? (might remove from python)
@@ -9,6 +12,15 @@ class XYMEClient
 - get_error_logs
 
 - get_known_blobs
+
+- get_kafka_throughput^
+
+- get_kafka_offsets^
+
+- post_kafka_msgs^
+
+- set_kafka_topic_partitions^
+
 
 class DagHandle
 
@@ -49,6 +61,8 @@ class NodeHandle
 - get_input_example
 
 - get_def
+
+- pretty_obj
 
 class CSVBlobHandle
 
