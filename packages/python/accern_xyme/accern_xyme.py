@@ -147,7 +147,6 @@ CUSTOM_NODE_TYPES = {
     "custom_json_to_data",
     "custom_json_join_data",
 }
-SECURE_TMP_POSTFIX = ".tmp~"
 
 
 class AccessDenied(Exception):
