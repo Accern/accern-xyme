@@ -1,0 +1,71 @@
+TODO APIs:
+
+APIs added in other languages but not available in typescript yet.
+
+^ need update
+? questionable
+
+class XYMEClient
+
+- bulk_operation? (might remove from python)
+
+- get_error_logs
+
+- get_known_blobs
+
+- get_kafka_throughput^
+
+- get_kafka_offsets^
+
+- post_kafka_msgs^
+
+- set_kafka_topic_partitions^
+
+
+class DagHandle
+
+- bulk_operation? (might remove from python)
+
+- dynamic_list
+
+- get_dynamic_status
+
+- get_dynamic_bulk
+
+- get_dynamic_bulk_obj
+
+class NodeHandle
+
+- get_config_error
+
+- requeue
+
+- fix_error
+
+- get json_blob
+
+- set_custom_imports
+
+- get_custom_imports
+
+- set_es_query
+
+- get_es_query
+
+- set_custom_code
+
+- get_custom_code
+
+- get_user_columns
+
+- get_input_example
+
+- get_def
+
+- pretty_obj
+
+class CSVBlobHandle
+
+- add_from_df?
+
+* class JSONBlobHandle (* Missing class)
