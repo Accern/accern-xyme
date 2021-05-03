@@ -12,6 +12,7 @@ help:
 	@echo "lint-stringformat	run string format check"
 	@echo "lint-type-check	run type check"
 	@echo "git-check	run git check"
+	@echo "version-sync	check package versions are same"
 	@echo "publish	publish the library on pypi"
 	@echo "publish-ts	publish the library on npm"
 
@@ -90,6 +91,6 @@ publish:
 
 publish-ts:
 	make git-check
-	@test $(CUR_TAG) = 'v$(VERSION)' || (echo "local tag $(CUR_TAG) != v$(VERSION)" && exit 1)
+	@test $(CUR_TAG) = 'v$(VERSION)' || (echo "HEAD tag $(CUR_TAG) != v$(VERSION)" && exit 1)
 	yarn publish --new-version $(VERSION)
 	@echo "succesfully deployed $(VERSION)"
