@@ -1133,8 +1133,8 @@ export class DagHandle {
             if (cur.length <= splitNum) {
                 const curRes = await this.dynamicList(
                     cur,
-                    isUndefined(inputKey) ? null : inputKey,
-                    isUndefined(outputKey) ? null : outputKey,
+                    inputKey,
+                    outputKey,
                     null,
                     formatMethod,
                     forceKeys,
@@ -1145,9 +1145,13 @@ export class DagHandle {
                 });
                 return;
             }
-            const halfIx = (cur.length / 2) >> 0;
-            await computeHalf(cur.slice(0, halfIx), offset);
-            await computeHalf(cur.slice(halfIx), offset + halfIx);
+            const halfIx = Math.floor(cur.length / 2);
+            await Promise.all([
+                computeHalf(cur.slice(0, halfIx), offset),
+                computeHalf(cur.slice(halfIx), offset + halfIx),
+            ]).catch((err) => {
+                console.error('Failed to get dynamic list', err);
+            });
         };
         await computeHalf(inputs, 0);
         return resArray;

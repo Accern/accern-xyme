@@ -1282,9 +1282,8 @@ class DagHandle:
                         from IPython.display import display as idisplay
                         from IPython.display import SVG
                         idisplay(SVG(svg_str))
-                        return None
-                else:
-                    return svg_str
+                    return None
+                return svg_str
             if dot_output == "ascii":
                 if not has_graph_easy():
                     return render(graph_str)

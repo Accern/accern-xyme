@@ -26,8 +26,6 @@ class DagHandle
 
 - bulk_operation? (might remove from python)
 
-- dynamic_list
-
 - get_dynamic_status
 
 - get_dynamic_bulk
