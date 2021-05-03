@@ -26,8 +26,6 @@ class DagHandle
 
 - bulk_operation? (might remove from python)
 
-- dynamic_list
-
 - get_dynamic_status
 
 - get_dynamic_bulk
@@ -54,11 +52,7 @@ class NodeHandle
 
 - get_input_example
 
-- get_def
 
-- pretty_obj
-
-- pretty^
 
 class CSVBlobHandle
 

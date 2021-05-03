@@ -450,6 +450,31 @@ export interface ESQueryResponse {
     query: { [key: string]: any };
 }
 
+export interface DagPrettyEdge {
+    out_name: string;
+    in_node: string;
+    in_name: string;
+    in_state: number;
+    move_right: number;
+    move_down: number;
+}
+
+export interface DagPrettyNode {
+    id: string;
+    name: string;
+    kind: string;
+    chunk: number;
+    high_ixs: { [key: string]: number };
+    status: TaskStatus;
+    out_edges: DagPrettyEdge[];
+    indent: number;
+}
+
+export interface PrettyResponse {
+    pretty: string;
+    nodes: DagPrettyNode[];
+}
+
 // =====================
 
 export type DictStrStr = { [key: string]: string };
