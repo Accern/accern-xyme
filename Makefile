@@ -76,7 +76,7 @@ git-check:
 	@test `git rev-parse --abbrev-ref HEAD` = "master" || (echo "not on master" && exit 1)
 
 version-sync:
-	@test $(VERSION) = $(TS_VERSION) || (echo "version not matching. VERSION=$(VERSION), TS_VERSION=$(TS_VERSION)" && exit 1)
+	@test "${VERSION}" = "$(TS_VERSION)" || (echo "version not matching. VERSION=$(VERSION), TS_VERSION=$(TS_VERSION)" && exit 1)
 
 publish:
 	make git-check
@@ -91,6 +91,6 @@ publish:
 
 publish-ts:
 	make git-check
-	@test $(CUR_TAG) = 'v$(VERSION)' || (echo "local tag $(CUR_TAG) != v$(VERSION)" && exit 1)
+	@test "${CUR_TAG}" = "v${VERSION}" || (echo "local tag $(CUR_TAG) != v$(VERSION)" && exit 1)
 	yarn publish --new-version $(VERSION)
 	@echo "succesfully deployed $(VERSION)"
