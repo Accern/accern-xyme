@@ -66,6 +66,7 @@ lint-all: \
 	lint-flake8
 
 VERSION=`echo "import accern_xyme;print(accern_xyme.__version__)" | python3 2>/dev/null`
+CUR_TAG=`git describe --abbrev=10 --tags HEAD`
 
 git-check:
 	@git diff --exit-code 2>&1 >/dev/null && git diff --cached --exit-code 2>&1 >/dev/null || (echo "working copy is not clean" && exit 1)
@@ -84,5 +85,6 @@ publish:
 
 publish-ts:
 	make git-check
-	yarn publish
+	@test $(CUR_TAG) = 'v$(VERSION)' || (echo "local tag $(CUR_TAG) != v$(VERSION)" && exit 1)
+	yarn publish --new-version $(VERSION)
 	@echo "succesfully deployed $(VERSION)"
