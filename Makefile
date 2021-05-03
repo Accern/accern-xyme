@@ -66,7 +66,7 @@ lint-all: \
 	lint-type-check \
 	lint-flake8
 
-VERSION=`echo "from packages.python.accern_xyme import __version__;print(__version__)" | python3 2>/dev/null`
+VERSION=`echo "from packages.python.accern_xyme import __version__;import sys;out = sys.stdout;out.write(__version__);out.flush();" | python3 2>/dev/null`
 TS_VERSION=`echo "import json;fin=open('package.json', 'r');version=json.loads(fin.read())['version'];fin.close();print(version)" | python3 2>/dev/null`
 CUR_TAG=`git describe --abbrev=10 --tags HEAD`
 
@@ -76,7 +76,7 @@ git-check:
 	@test `git rev-parse --abbrev-ref HEAD` = "master" || (echo "not on master" && exit 1)
 
 version-sync:
-	@test $(VERSION) = '$(TS_VERSION)' || (echo "version not matching. VERSION=$(VERSION), TS_VERSION=$(TS_VERSION)" && exit 1)
+	@test $(VERSION) = $(TS_VERSION) || (echo "version not matching. VERSION=$(VERSION), TS_VERSION=$(TS_VERSION)" && exit 1)
 
 publish:
 	make git-check
