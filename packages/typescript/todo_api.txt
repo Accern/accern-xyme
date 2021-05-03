@@ -54,11 +54,7 @@ class NodeHandle
 
 - get_input_example
 
-- get_def
 
-- pretty_obj
-
-- pretty^
 
 class CSVBlobHandle
 

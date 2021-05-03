@@ -17,6 +17,7 @@ import {
     DagInfo,
     DagInit,
     DagList,
+    DagPrettyNode,
     DagReload,
     DictStrStr,
     DynamicFormat,
@@ -46,6 +47,7 @@ import {
     NodeTiming,
     NodeTypes,
     NodeUserColumnsResponse,
+    PrettyResponse,
     PutNodeBlob,
     QueueMode,
     QueueStatsResponse,
@@ -1099,18 +1101,57 @@ export class DagHandle {
             .then((response) => response.results);
     }
 
-    // public async dynamicList(
-    //     inputs: any[],
-    //     inputKey: string | undefined,
-    //     outputKey: string | undefined,
-    //     splitTh = 1000,
-    //     maxThreads = 50,
-    //     formatMethod: DynamicFormat.simple,
-    //     forceKeys = false,
-    //     noCache = false,
-    // ): Promise<any[]> {
-
-    // }
+    public async dynamicList(
+        inputs: any[],
+        inputKey: string = undefined,
+        outputKey: string = undefined,
+        splitTh: number | null = 1000,
+        formatMethod: DynamicFormat = 'simple',
+        forceKeys = false,
+        noCache = false
+    ): Promise<any[]> {
+        if (splitTh === null || inputs.length <= splitTh) {
+            return await this.client
+                .requestJSON<DynamicResults>({
+                    method: METHOD_POST,
+                    path: '/dynamic_list',
+                    args: {
+                        force_keys: forceKeys,
+                        format: formatMethod,
+                        input_key: inputKey,
+                        inputs: inputs,
+                        no_cache: noCache,
+                        output_key: outputKey,
+                        dag: this.getUri(),
+                    },
+                })
+                .then((res) => res.results);
+        }
+        const resArray: any[] = new Array(inputs.length).fill(null);
+        const splitNum = splitTh;
+        const computeHalf = async (cur: any[], offset: number) => {
+            if (cur.length <= splitNum) {
+                const curRes = await this.dynamicList(
+                    cur,
+                    isUndefined(inputKey) ? null : inputKey,
+                    isUndefined(outputKey) ? null : outputKey,
+                    null,
+                    formatMethod,
+                    forceKeys,
+                    noCache
+                );
+                Array.from(Array(curRes.length).keys()).forEach((ix) => {
+                    resArray[offset + ix] = curRes[ix];
+                });
+                return;
+            }
+            const halfIx = (cur.length / 2) >> 0;
+            await computeHalf(cur.slice(0, halfIx), offset);
+            await computeHalf(cur.slice(halfIx), offset + halfIx);
+        };
+        await computeHalf(inputs, 0);
+        return resArray;
+    }
 
     public async dynamic(inputData: Buffer): Promise<ByteResponse> {
         const [res, ctype] = await this.client.requestBytes({
@@ -1229,15 +1270,52 @@ export class DagHandle {
         return hndStatus;
     }
 
-    public async pretty(): Promise<string> {
-        const graphStream = await this.client.requestString({
+    private async _pretty(
+        nodesOnly: boolean,
+        allowUnicode: boolean,
+        prettyMethod = 'accern'
+    ): Promise<PrettyResponse> {
+        return await this.client.requestJSON<PrettyResponse>({
             method: METHOD_GET,
-            path: '/dag_pretty',
+            path: '/pretty',
             args: {
                 dag: this.getUri(),
+                nodes_only: nodesOnly,
+                allow_unicode: allowUnicode,
+                method: prettyMethod,
             },
         });
-        return graphStream.read();
+    }
+
+    public async pretty(
+        nodesOnly = false,
+        allowUnicode = true,
+        prettyMethod = 'accern',
+        display = true
+    ): Promise<string | undefined> {
+        const render = (value: string) => {
+            if (display) {
+                console.log(value);
+                return undefined;
+            } else {
+                return value;
+            }
+        };
+        const graphStr = await this._pretty(
+            nodesOnly,
+            allowUnicode,
+            prettyMethod
+        ).then((res) => res.pretty);
+        return render(graphStr);
+    }
+
+    public async prettyObj(
+        nodesOnly = false,
+        allowUnicode = true
+    ): Promise<DagPrettyNode[]> {
+        return await this._pretty(nodesOnly, allowUnicode).then(
+            (res) => res.nodes
+        );
     }
 
     public async getDef(full = true): Promise<DagDef> {
