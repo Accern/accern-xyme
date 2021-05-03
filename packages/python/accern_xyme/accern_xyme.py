@@ -1995,6 +1995,7 @@ class BlobHandle:
         self._is_full = is_full
         self._ctype: Optional[str] = None
         self._tmp_uri: Optional[str] = None
+        self._info: Optional[Dict[str, Any]] = None
 
     def is_full(self) -> bool:
         return self._is_full
@@ -2005,8 +2006,26 @@ class BlobHandle:
     def get_uri(self) -> str:
         return self._uri
 
+    def get_path(self, *path: str) -> 'BlobHandle':
+        if self.is_full():
+            raise ValueError(f"URI must not be full: {self}")
+        return BlobHandle(
+            self._client, f"{self._uri}/{'/'.join(path)}", is_full=True)
+
     def get_ctype(self) -> Optional[str]:
         return self._ctype
+
+    def clear_info_cache(self) -> None:
+        self._info = None
+
+    def get_info(self) -> Dict[str, Any]:
+        if self.is_full():
+            raise ValueError(f"URI must not be full: {self}")
+        if self._info is None:
+            info = self.get_path("info.json").get_content()
+            assert info is not None
+            self._info = cast(Dict[str, Any], info)
+        return self._info
 
     def get_content(self) -> Optional[ByteResponse]:
         if not self.is_full():
