@@ -78,6 +78,7 @@ from .types import (
     KafkaMessage,
     KafkaOffsets,
     KafkaThroughput,
+    KafkaTopicNames,
     KafkaTopics,
     KnownBlobs,
     MinimalQueueStatsResponse,
@@ -759,6 +760,12 @@ class XYMEClient:
                 "num_partitions": 1,
             }))
 
+    def get_kafka_error_topic(self) -> str:
+        res = cast(KafkaTopicNames, self.request_json(
+            METHOD_GET, "/kafka_topic_names", {}))["error"]
+        assert res is not None
+        return res
+
     def delete_kafka_error_topic(self) -> KafkaTopics:
         return cast(KafkaTopics, self.request_json(
             METHOD_POST, "/kafka_topics", {
@@ -1367,6 +1374,24 @@ class DagHandle:
                 "dag": self.get_uri(),
                 "when": timestamp,
             }))["when"]
+
+    def get_kafka_input_topic(self, postfix: str = "") -> str:
+        res = cast(KafkaTopicNames, self._client.request_json(
+            METHOD_GET, "/kafka_topic_names", {
+                "dag": self.get_uri(),
+                "postfix": postfix,
+                "no_output": True,
+            }))["input"]
+        assert res is not None
+        return res
+
+    def get_kafka_output_topic(self) -> str:
+        res = cast(KafkaTopicNames, self._client.request_json(
+            METHOD_GET, "/kafka_topic_names", {
+                "dag": self.get_uri(),
+            }))["output"]
+        assert res is not None
+        return res
 
     def set_kafka_topic_partitions(
             self,
