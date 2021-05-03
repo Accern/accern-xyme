@@ -65,7 +65,8 @@ lint-all: \
 	lint-type-check \
 	lint-flake8
 
-VERSION=`echo "import accern_xyme;print(accern_xyme.__version__)" | python3 2>/dev/null`
+VERSION=`echo "from packages.python.accern_xyme import __version__;print(__version__)" | python3 2>/dev/null`
+TS_VERSION=`echo "import json;fin=open('package.json', 'r');version=json.loads(fin.read())['version'];fin.close();print(version)" | python3 2>/dev/null`
 CUR_TAG=`git describe --abbrev=10 --tags HEAD`
 
 git-check:
@@ -73,8 +74,12 @@ git-check:
 	@test -z `git ls-files --other --exclude-standard --directory` || (echo "there are untracked files" && exit 1)
 	@test `git rev-parse --abbrev-ref HEAD` = "master" || (echo "not on master" && exit 1)
 
+version-sync:
+	@test $(VERSION) = '$(TS_VERSION)' || (echo "version not matching. VERSION=$(VERSION), TS_VERSION=$(TS_VERSION)" && exit 1)
+
 publish:
 	make git-check
+	make version-sync
 	rm -r dist build accern_xyme.egg-info || echo "no files to delete"
 	python3 -m pip install -U setuptools twine wheel
 	python3 setup.py sdist bdist_wheel
