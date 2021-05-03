@@ -91,6 +91,6 @@ publish:
 
 publish-ts:
 	make git-check
-	@test $(CUR_TAG) = 'v$(VERSION)' || (echo "HEAD tag $(CUR_TAG) != v$(VERSION)" && exit 1)
+	@test $(CUR_TAG) = 'v$(VERSION)' || (echo "local tag $(CUR_TAG) != v$(VERSION)" && exit 1)
 	yarn publish --new-version $(VERSION)
 	@echo "succesfully deployed $(VERSION)"
