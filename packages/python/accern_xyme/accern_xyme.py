@@ -46,6 +46,7 @@ from .util import (
     has_graph_easy,
     interpret_ctype,
     is_jupyter,
+    json_loads,
     merge_ctype,
     safe_opt_num,
     ServerSideError,
@@ -833,6 +834,30 @@ class XYMEClient:
     def get_triton_models(self) -> List[str]:
         return cast(TritonModelsResponse, self.request_json(
             METHOD_GET, "/inference_models", {}))["models"]
+
+    @staticmethod
+    def read_dvc(path: str, repo: str, rev: Optional[str] = "HEAD") -> Any:
+        """
+
+        Args:
+            path (str):
+                File path to read, relative to the root of the repo.
+            repo (str):
+                specifies the location of the DVC project. It can be a
+                github URL or a file system path.
+            rev (str):
+                Git commit (any revision such as a branch or tag name, or a
+                commit hash). If repo is not a Git repo, this option is
+                ignored. Default: HEAD.
+        """
+        import dvc.api
+
+        res = dvc.api.read(path, repo=repo, rev=rev, mode="r")
+        try:
+            return json_loads(res)
+        except json.JSONDecodeError:
+            pass
+        return res
 
 
 # *** XYMEClient ***

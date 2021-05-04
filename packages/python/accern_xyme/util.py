@@ -495,3 +495,19 @@ class ServerSideError(Exception):
 
     def __str__(self) -> str:
         return f"Error from xyme backend: \n{self._message}"
+
+
+def escape_str(value: str) -> str:
+    return value.encode().decode("unicode-escape").strip('""')
+
+
+def report_json_error(err: json.JSONDecodeError) -> None:
+    print(f"JSON parse error ({err.lineno}:{err.colno}): {repr(err.doc)}")
+
+
+def json_loads(value: str) -> Any:
+    try:
+        return json.loads(escape_str(value))
+    except json.JSONDecodeError as e:
+        report_json_error(e)
+        raise e

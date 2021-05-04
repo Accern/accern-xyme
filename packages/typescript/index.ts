@@ -2259,8 +2259,6 @@ export class BlobHandle {
         }
 
         await uploadNextChunk(this, getFileUploadChunkSize(), fileContent);
-        // await this.finishData(requeueOnFinish);
-        // return curSize;
     }
 
     public async uploadZip(
