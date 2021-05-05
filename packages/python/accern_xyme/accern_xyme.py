@@ -858,7 +858,7 @@ class XYMEClient:
 
     @staticmethod
     def read_dvc(path: str, repo: str, rev: Optional[str] = "HEAD") -> Any:
-        """
+        """Reading dvc file content from git tracked DVC project.
 
         Args:
             path (str):
@@ -870,8 +870,9 @@ class XYMEClient:
                 Git commit (any revision such as a branch or tag name, or a
                 commit hash). If repo is not a Git repo, this option is
                 ignored. Default: HEAD.
+
         Returns:
-            returns the content of the file.
+            the content of the file.
         """
         import dvc.api
 
