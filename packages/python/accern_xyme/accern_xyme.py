@@ -28,6 +28,7 @@ import contextlib
 import collections
 from io import BytesIO, StringIO
 import pandas as pd
+from pandas.core.frame import DataFrame
 import requests
 from requests import Response
 from requests.exceptions import HTTPError, RequestException
@@ -1936,8 +1937,9 @@ class NodeHandle:
             self,
             key: str,
             chunk: Optional[int],
-            force_refresh: bool = False) -> Optional[ByteResponse]:
-        return self.read_blob(key, chunk, force_refresh).get_content()
+            force_refresh: bool = False,
+            filter_id: bool = True) -> Optional[ByteResponse]:
+        return self.read_blob(key, chunk, force_refresh).get_content(filter_id)
 
     def read_all(
             self,
@@ -2181,7 +2183,7 @@ class BlobHandle:
     def get_ctype(self) -> Optional[str]:
         return self._ctype
 
-    def get_content(self) -> Optional[ByteResponse]:
+    def get_content(self, filter_id: bool = True) -> Optional[ByteResponse]:
         if not self.is_full():
             raise ValueError(f"URI must be full: {self}")
         if self.is_empty():
@@ -2198,7 +2200,12 @@ class BlobHandle:
                         "uri": self.get_uri(),
                     })
                 self._ctype = ctype
-                return interpret_ctype(fin, ctype)
+                content = interpret_ctype(fin, ctype)
+                if filter_id and isinstance(content, DataFrame):
+                    # row_id = self.get_info()["row_id"]
+                    index = content[content["row_id"] == -1].index
+                    content.drop(index, inplace=True)
+                    return content
             except HTTPError as e:
                 if e.response.status_code != 404:
                     raise e
