@@ -1244,61 +1244,63 @@ class DagHandle:
             self,
             nodes_only: bool,
             allow_unicode: bool,
-            pretty_method: Optional[str] = "accern") -> PrettyResponse:
+            method: Optional[str] = "accern") -> PrettyResponse:
         return cast(PrettyResponse, self._client.request_json(
             METHOD_GET, "/pretty", {
                 "dag": self.get_uri(),
                 "nodes_only": nodes_only,
                 "allow_unicode": allow_unicode,
-                "method": pretty_method,
+                "method": method,
             }))
 
     def pretty(
             self,
             nodes_only: bool = False,
             allow_unicode: bool = True,
-            pretty_method: Optional[str] = "accern",
-            dot_output: Optional[str] = "svg",
-            display: bool = True) -> Optional[str]:
+            method: Optional[str] = "dot",
+            format: Optional[str] = "png",
+            display: Optional[IO[Any]] = sys.stdout) -> Optional[str]:
 
         def render(value: str) -> Optional[str]:
-            if display:
-                print(value)
+            if display is not None:
+                display.write(value)
+                display.flush()
                 return None
             return value
 
         graph_str = self._pretty(
             nodes_only=nodes_only,
             allow_unicode=allow_unicode,
-            pretty_method=pretty_method)["pretty"]
-        if pretty_method == "accern":
+            method=method)["pretty"]
+        if method == "accern":
             return render(graph_str)
-        if pretty_method == "dot":
+        if method == "dot":
             from graphviz import Source
 
             graph = Source(graph_str)
-            if dot_output == "dot":
+            if format == "dot":
                 return render(graph_str)
-            if dot_output == "svg":
+            if format == "svg":
                 svg_str = graph.pipe(format="svg")
-                if display:
+                if display is not None:
                     if not is_jupyter():
-                        # FIXME: replace print with sys.stdout
-                        print("Warning: Ipython instance not found.")
-                        print(svg_str)
+                        display.write("Warning: Ipython instance not found.\n")
+                        display.write(svg_str)
+                        display.flush()
                     else:
                         from IPython.display import display as idisplay
                         from IPython.display import SVG
                         idisplay(SVG(svg_str))
                     return None
                 return svg_str
-            if dot_output == "png":
+            if format == "png":
                 graph = Source(graph_str)
                 png_str = graph.pipe(format="png")
-                if display:
+                if display is not None:
                     if not is_jupyter():
-                        print("Warning: Ipython instance not found.")
-                        print(png_str)
+                        display.write("Warning: Ipython instance not found.\n")
+                        display.write(png_str)
+                        display.flush()
                     else:
                         from IPython.display import display as idisplay
                         from IPython.display import Image
@@ -1306,7 +1308,7 @@ class DagHandle:
                         idisplay(Image(png_str))
                     return None
                 return png_str
-            if dot_output == "ascii":
+            if format == "ascii":
                 if not has_graph_easy():
                     return render(graph_str)
 
@@ -1317,9 +1319,8 @@ class DagHandle:
                     ["graph-easy"], stdin=p1.stdout)
                 res = p2.decode("utf-8")
                 return render(res)
-            raise ValueError(
-                "invalid dot output option, use svg, png, ascii, or dot")
-        raise ValueError("invalid dot pretty_method, use accern or dot")
+            raise ValueError("invalid format, use svg, png, ascii, or dot")
+        raise ValueError("invalid method, use accern or dot")
 
     def pretty_obj(
             self,
