@@ -26,6 +26,8 @@ import {
     FlushAllQueuesResponse,
     InCursors,
     InstanceStatus,
+    JSONBlobAppendResponse,
+    JSONBlobResponse,
     KafkaGroup,
     KafkaMessage,
     KafkaOffsets,
@@ -583,6 +585,35 @@ export default class XYMEClient {
         }).then((response) => response.blob);
     }
 
+    public async getCSVBlob(blobURI: string): Promise<CSVBlobHandle> {
+        const owner = await this.requestJSON<BlobOwner>({
+            method: METHOD_GET,
+            path: '/blob_owner',
+            args: {
+                blob: blobURI,
+            },
+        });
+        return new CSVBlobHandle(this, blobURI, owner);
+    }
+
+    public async setBlobOwner(
+        blobURI: string,
+        dagId: string = undefined,
+        nodeId: string = undefined,
+        externalOwner = false
+    ): Promise<BlobOwner> {
+        return await this.requestJSON<BlobOwner>({
+            method: METHOD_PUT,
+            path: '/blob_owner',
+            args: {
+                blob: blobURI,
+                owner_dag: dagId,
+                owner_node: nodeId,
+                external_owner: externalOwner,
+            },
+        });
+    }
+
     public async createNewDag(
         userName?: string,
         dagName?: string,
@@ -824,6 +855,15 @@ export default class XYMEClient {
                 value,
             },
         }).then((response) => response.replaced);
+    }
+
+    public async getErrorLogs(): Promise<string> {
+        const stream = await this.requestString({
+            method: METHOD_GET,
+            path: '/error_logs',
+            args: {},
+        });
+        return await stream.read();
     }
 
     public async getKnownBlobAges(
@@ -1900,6 +1940,21 @@ export class NodeHandle {
         return new CSVBlobHandle(this.client, res.csv, owner);
     }
 
+    public async getJSONBlob(): Promise<JSONBlobHandle> {
+        if (this.getType() !== 'jsons_reader') {
+            throw new Error('node has no json blob');
+        }
+        const res = await this.client.requestJSON<JSONBlobResponse>({
+            method: METHOD_GET,
+            path: '/json_blob',
+            args: {
+                dag: this.getDag().getUri(),
+                node: this.getId(),
+            },
+        });
+        return new JSONBlobHandle(this.client, res['json'], res['count']);
+    }
+
     public checkCustomCodeNode() {
         if (CUSTOM_NODE_TYPES.indexOf(this.getType()) < 0) {
             throw new Error(`${this} is not a custom code node`);
@@ -2340,6 +2395,42 @@ export class CSVBlobHandle extends BlobHandle {
                 owner_node: this.owner.owner_node,
             },
         });
+    }
+}
+
+export class JSONBlobHandle extends BlobHandle {
+    count: number;
+    constructor(client: XYMEClient, uri: string, count: number) {
+        super(client, uri, false);
+        this.count = count;
+    }
+
+    public getCount() {
+        return this.count;
+    }
+
+    public async appendJSONS(
+        jsons: any[],
+        requeueOnFinish: NodeHandle = undefined
+    ): Promise<JSONBlobHandle> {
+        let obj: { [key: string]: any } = {
+            blob: this.getUri(),
+            jsons: jsons,
+        };
+        if (!isUndefined(requeueOnFinish)) {
+            obj = {
+                ...obj,
+                dag: requeueOnFinish.getDag().getUri(),
+                node: requeueOnFinish.getId(),
+            };
+        }
+        const res = await this.client.requestJSON<JSONBlobAppendResponse>({
+            method: METHOD_PUT,
+            path: '/json_append',
+            args: obj,
+        });
+        this.count = res.count;
+        return this;
     }
 }
 

@@ -611,7 +611,7 @@ class XYMEClient:
                 "type": blob_type,
             }, add_namespace=False))["blob"]
 
-    def get_csv_blob(self, blob_uri: str) -> 'BlobHandle':
+    def get_csv_blob(self, blob_uri: str) -> 'CSVBlobHandle':
         res = cast(BlobOwner, self.request_json(
             METHOD_GET, '/blob_owner', {
                 "blob": blob_uri,

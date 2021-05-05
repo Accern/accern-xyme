@@ -24,6 +24,8 @@ class XYMEClient
 
 - read_dvc*
 
+No js/ts package for dvc api
+
 
 class DagHandle
 
@@ -43,8 +45,6 @@ class NodeHandle
 
 - fix_error
 
-- get json_blob
-
 - set_es_query
 
 - get_es_query
@@ -60,5 +60,3 @@ class NodeHandle
 class CSVBlobHandle
 
 - add_from_df?
-
-* class JSONBlobHandle (* Missing class)
