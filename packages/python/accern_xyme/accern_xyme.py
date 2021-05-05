@@ -1283,6 +1283,7 @@ class DagHandle:
                 svg_str = graph.pipe(format="svg")
                 if display:
                     if not is_jupyter():
+                        # FIXME: replace print with sys.stdout
                         print("Warning: Ipython instance not found.")
                         print(svg_str)
                     else:
@@ -1291,6 +1292,20 @@ class DagHandle:
                         idisplay(SVG(svg_str))
                     return None
                 return svg_str
+            if dot_output == "png":
+                graph = Source(graph_str)
+                png_str = graph.pipe(format="png")
+                if display:
+                    if not is_jupyter():
+                        print("Warning: Ipython instance not found.")
+                        print(png_str)
+                    else:
+                        from IPython.display import display as idisplay
+                        from IPython.display import Image
+
+                        idisplay(Image(png_str))
+                    return None
+                return png_str
             if dot_output == "ascii":
                 if not has_graph_easy():
                     return render(graph_str)
@@ -1303,7 +1318,7 @@ class DagHandle:
                 res = p2.decode("utf-8")
                 return render(res)
             raise ValueError(
-                "invalid dot output option, use svg, ascii or dot")
+                "invalid dot output option, use svg, png, ascii, or dot")
         raise ValueError("invalid dot pretty_method, use accern or dot")
 
     def pretty_obj(
