@@ -611,6 +611,27 @@ class XYMEClient:
                 "type": blob_type,
             }, add_namespace=False))["blob"]
 
+    def get_csv_blob(self, blob_uri: str) -> 'BlobHandle':
+        res = cast(BlobOwner, self.request_json(
+            METHOD_GET, '/blob_owner', {
+                "blob": blob_uri,
+            }))
+        return CSVBlobHandle(self, blob_uri, res)
+
+    def set_blob_owner(
+            self,
+            blob_uri: str,
+            dag_id: Optional[str] = None,
+            node_id: Optional[str] = None,
+            external_owner: bool = False) -> BlobOwner:
+        return cast(BlobOwner, self.request_json(
+            METHOD_PUT, "/blob_owner", {
+                "blob": blob_uri,
+                "owner_dag": dag_id,
+                "owner_node": node_id,
+                "external_owner": external_owner,
+            }))
+
     def create_new_dag(
             self,
             username: Optional[str] = None,
@@ -849,6 +870,8 @@ class XYMEClient:
                 Git commit (any revision such as a branch or tag name, or a
                 commit hash). If repo is not a Git repo, this option is
                 ignored. Default: HEAD.
+        Returns:
+            returns the content of the file.
         """
         import dvc.api
 

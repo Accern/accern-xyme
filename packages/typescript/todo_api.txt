@@ -4,6 +4,7 @@ APIs added in other languages but not available in typescript yet.
 
 ^ need update
 ? questionable
+* not available
 
 class XYMEClient
 
@@ -20,6 +21,8 @@ class XYMEClient
 - post_kafka_msgs^
 
 - set_kafka_topic_partitions^
+
+- read_dvc*
 
 
 class DagHandle
