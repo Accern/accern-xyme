@@ -2215,7 +2215,7 @@ export class BlobHandle {
     /**
      * This is the helper method being used by uploadFile
      * and uploadFileUsingContent
-     * @param curSize : Size of the updated buffer so far
+     * @param curSize: Size of the updated buffer so far
      * @param buffer: the buffer chunk being uploaded
      * @param nread: number of bytes from the in the buffer
      * @param chunk: chunk size
@@ -2288,9 +2288,9 @@ export class BlobHandle {
 
     /**
      * This prototype method allows you to upload the file using content Buffer
-     * @param contentBuffer :file content as Buffer object
-     * @param ext : The file extension (e.g .csv)
-     * @param progressBar : stream where we show the upload progress
+     * @param contentBuffer: file content as Buffer object
+     * @param ext: The file extension (e.g .csv)
+     * @param progressBar: stream where we show the upload progress
      */
     public async uploadFileUsingContent(
         contentBuffer: Buffer,
@@ -2394,7 +2394,7 @@ export class CSVBlobHandle extends BlobHandle {
 
         try {
             await this.uploadFile(fileHandle, ext, progressBar);
-            return this.finishCSVUpload();
+            return await this.finishCSVUpload();
         } finally {
             await fileHandle.close();
             await this.clearUpload();
@@ -2420,7 +2420,7 @@ export class CSVBlobHandle extends BlobHandle {
 
         try {
             await this.uploadFileUsingContent(content, ext, progressBar);
-            return this.finishCSVUpload();
+            return await this.finishCSVUpload();
         } finally {
             await this.clearUpload();
         }
