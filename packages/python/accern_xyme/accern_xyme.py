@@ -1258,7 +1258,7 @@ class DagHandle:
             nodes_only: bool = False,
             allow_unicode: bool = True,
             method: Optional[str] = "dot",
-            format: Optional[str] = "png",
+            output_format: Optional[str] = "png",
             display: Optional[IO[Any]] = sys.stdout) -> Optional[str]:
 
         def render(value: str) -> Optional[str]:
@@ -1278,9 +1278,9 @@ class DagHandle:
             from graphviz import Source
 
             graph = Source(graph_str)
-            if format == "dot":
+            if output_format == "dot":
                 return render(graph_str)
-            if format == "svg":
+            if output_format == "svg":
                 svg_str = graph.pipe(format="svg")
                 if display is not None:
                     if not is_jupyter():
@@ -1293,7 +1293,7 @@ class DagHandle:
                         idisplay(SVG(svg_str))
                     return None
                 return svg_str
-            if format == "png":
+            if output_format == "png":
                 graph = Source(graph_str)
                 png_str = graph.pipe(format="png")
                 if display is not None:
@@ -1308,7 +1308,7 @@ class DagHandle:
                         idisplay(Image(png_str))
                     return None
                 return png_str
-            if format == "ascii":
+            if output_format == "ascii":
                 if not has_graph_easy():
                     return render(graph_str)
 
@@ -1319,8 +1319,11 @@ class DagHandle:
                     ["graph-easy"], stdin=p1.stdout)
                 res = p2.decode("utf-8")
                 return render(res)
-            raise ValueError("invalid format, use svg, png, ascii, or dot")
-        raise ValueError("invalid method, use accern or dot")
+            raise ValueError(
+                f"invalid format {output_format}, "
+                "use svg, png, ascii, or dot")
+        raise ValueError(
+            f"invalid method {method}, use accern or dot")
 
     def pretty_obj(
             self,
