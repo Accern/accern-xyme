@@ -4,6 +4,7 @@ import FormData from 'form-data';
 import { promises as fpm } from 'fs';
 import { HeadersInit, Response, RequestInit } from 'node-fetch';
 import { performance } from 'perf_hooks';
+import jsSHA from 'jssha';
 import {
     AllowedCustomImports,
     BlobFilesResponse,
@@ -2211,7 +2212,37 @@ export class BlobHandle {
             await this.performUploadAction('clear', { uri }, null);
         }
     }
-
+    /**
+     * This is the helper method being used by uploadFile and uploadFileUsingContent
+     * @param curSize : Size of the updated buffer so far
+     * @param buffer: the buffer chunk being uploaded
+     * @param nread: number of bytes from the in the buffer
+     * @param chunk: chunk size
+     * @param that: the parent this being passed here
+     * @returns
+     */
+    public async updateBuffer(
+        curSize,
+        buffer,
+        nread,
+        chunk,
+        that: BlobHandle
+    ) {
+        let data: Buffer;
+        if (nread < chunk) {
+            data = buffer.slice(0, nread);
+        } else {
+            data = buffer;
+        }
+        const newSize = await that.appendUpload(this.tmpUri, data);
+        if (newSize - curSize !== data.length) {
+            throw new Error(`
+                incomplete chunk upload n:${newSize} o:${curSize}
+                b: ${data.length}
+            `);
+        }
+        return newSize;
+    }
     public async uploadFile(
         fileContent: fpm.FileHandle,
         ext: string,
@@ -2238,22 +2269,13 @@ export class BlobHandle {
             const response = await fileHandle.read(buffer, 0, chunk, curPos);
             const nread = response.bytesRead;
             curPos += nread;
-            if (nread === 0) {
-                return;
-            }
-            let data: Buffer;
-            if (nread < chunk) {
-                data = buffer.slice(0, nread);
-            } else {
-                data = buffer;
-            }
-            const newSize = await that.appendUpload(tmpUri, data);
-            if (newSize - curSize !== data.length) {
-                throw new Error(`
-                    incomplete chunk upload n:${newSize} o:${curSize}
-                    b: ${data.length}
-                `);
-            }
+            const newSize = await this.updateBuffer(
+                curSize,
+                buffer,
+                nread,
+                chunk,
+                that
+            );
             curSize = newSize;
             await uploadNextChunk(that, chunk, fileHandle);
         }
@@ -2261,6 +2283,57 @@ export class BlobHandle {
         await uploadNextChunk(this, getFileUploadChunkSize(), fileContent);
         // await this.finishData(requeueOnFinish);
         // return curSize;
+    }
+
+    /**
+     * This prototype method allows you to upload the file using content Buffer
+     * @param contentBuffer :file content as Buffer object
+     * @param ext : The file extension (e.g .csv)
+     * @param progressBar : stream where we show the upload progress
+     */
+    public async uploadFileUsingContent(
+        contentBuffer: Buffer,
+        ext: string,
+        progressBar?: WritableStream
+    ): Promise<void> {
+        if (progressBar !== undefined) {
+            progressBar.getWriter().write('Uploading file:\n');
+        }
+        const totalSize = contentBuffer.byteLength;
+        const shaObj = new jsSHA('SHA-224', 'BYTES');
+        shaObj.update(contentBuffer.toString());
+        const fileHash = shaObj.getHash('HEX');
+        const tmpUri = await this.startUpload(totalSize, fileHash, ext);
+        this.tmpUri = tmpUri;
+        let curPos = 0;
+        let curSize = 0;
+        async function uploadNextBufferChunk(
+            that: BlobHandle,
+            chunk: number,
+            contentBuffer: Buffer
+        ): Promise<void> {
+            const buffer = contentBuffer.slice(curPos, chunk);
+            const nread = buffer.byteLength;
+            if (!nread) {
+                return;
+            }
+            curPos += nread;
+            const newSize = await that.updateBuffer(
+                curSize,
+                buffer,
+                nread,
+                chunk,
+                that
+            );
+            curSize = newSize;
+            await uploadNextBufferChunk(that, chunk, contentBuffer);
+        }
+
+        await uploadNextBufferChunk(
+            this,
+            getFileUploadChunkSize(),
+            contentBuffer
+        );
     }
 
     public async uploadZip(
@@ -2323,6 +2396,31 @@ export class CSVBlobHandle extends BlobHandle {
             return this.finishCSVUpload();
         } finally {
             await fileHandle.close();
+            await this.clearUpload();
+        }
+    }
+
+    public async addFromContent(
+        fileName: string,
+        content: Buffer,
+        progressBar: WritableStream | undefined = undefined
+    ) {
+        let fname = fileName;
+        if (fileName.endsWith(INPUT_ZIP_EXT)) {
+            fname = fileName.slice(0, -INPUT_ZIP_EXT.length);
+        }
+        const extPos = fname.indexOf('.');
+        let ext: string;
+        if (extPos > 0) {
+            ext = fileName.slice(extPos + 1);
+        } else {
+            throw new Error('could not determine extension');
+        }
+
+        try {
+            await this.uploadFileUsingContent(content, ext, progressBar);
+            return this.finishCSVUpload();
+        } finally {
             await this.clearUpload();
         }
     }
