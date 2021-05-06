@@ -2213,7 +2213,8 @@ export class BlobHandle {
         }
     }
     /**
-     * This is the helper method being used by uploadFile and uploadFileUsingContent
+     * This is the helper method being used by uploadFile
+     * and uploadFileUsingContent
      * @param curSize : Size of the updated buffer so far
      * @param buffer: the buffer chunk being uploaded
      * @param nread: number of bytes from the in the buffer
