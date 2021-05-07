@@ -74,7 +74,7 @@ from .types import (
     InCursors,
     InstanceStatus,
     JSONBlobAppendResponse,
-    JSONBlobResponse,
+    # JSONBlobResponse,
     KafkaGroup,
     KafkaMessage,
     KafkaOffsets,
@@ -593,9 +593,6 @@ class XYMEClient:
         self._dag_cache[dag_uri] = res
         return res
 
-    def get_blob_handle(self, uri: str, is_full: bool = False) -> 'BlobHandle':
-        return BlobHandle(self, uri, is_full=is_full)
-
     def get_node_defs(self) -> Dict[str, NodeDefInfo]:
         self._maybe_refresh()
         if self._node_defs is not None:
@@ -611,19 +608,24 @@ class XYMEClient:
                 "type": blob_type,
             }, add_namespace=False))["blob"]
 
-    def get_csv_blob_handle(self, blob_uri: str) -> 'CSVBlobHandle':
-        owner = cast(BlobOwner, self.request_json(
-            METHOD_GET, '/csv_blob_info', {
-                "blob": blob_uri,
+    def get_blob_owner(self, blob_uri: str) -> BlobOwner:
+        return cast(BlobOwner, self.request_json(
+            METHOD_GET, "/blob_owner", {
+                "blob": self.get_uri(),
             }))
-        return CSVBlobHandle(self, blob_uri, owner)
 
-    def get_json_blob_handle(self, blob_uri: str) -> 'JSONBlobHandle':
-        count = cast(JSONBlobResponse, self.request_json(
-            METHOD_GET, '/json_blob_info', {
-                "blob": blob_uri,
-            }))["count"]
-        return JSONBlobHandle(self, blob_uri, count)
+    def get_csv_blob_handle(self, blob_uri: str) -> 'CSVBlobHandle':
+        return CSVBlobHandle(self, blob_uri, self.get_blob_owner(blob_uri))
+
+    def get_model_blob_handle(self, blob_uri: str) -> 'ModelBlobHandle':
+        return ModelBlobHandle(self, blob_uri, self.get_blob_owner(blob_uri))
+
+    # def get_json_blob_handle(self, blob_uri: str) -> 'JSONBlobHandle':
+    #     count = cast(JSONBlobResponse, self.request_json(
+    #         METHOD_GET, '/json_blob_info', {
+    #             "blob": blob_uri,
+    #         }))["count"]
+    #     return JSONBlobHandle(self, blob_uri, count)
 
     def set_blob_owner(
             self,
@@ -1639,6 +1641,12 @@ class NodeHandle:
         self._state: Optional[int] = None
         self._config_error: Optional[str] = None
 
+    def as_owner(self) -> BlobOwner:
+        return cast(BlobOwner, {
+            "owner_blob": self.get_dag().get_uri(),
+            "owner_node": self.get_id(),
+        })
+
     @staticmethod
     def from_node_info(
             client: XYMEClient,
@@ -1660,12 +1668,13 @@ class NodeHandle:
         return res
 
     def update_info(self, node_info: NodeInfo) -> None:
-        if self._node_id != node_info["id"]:
+        if self.get_id() != node_info["id"]:
             raise ValueError(f"{self._node_id} != {node_info['id']}")
         self._node_name = node_info["name"]
         self._type = node_info["type"]
+        owner = self.as_owner()
         self._blobs = {
-            key: BlobHandle(self._client, value, is_full=False)
+            key: BlobHandle(self._client, value, is_full=False, owner=owner)
             for (key, value) in node_info["blobs"].items()
         }
         self._inputs = node_info["inputs"]
@@ -1788,7 +1797,8 @@ class NodeHandle:
         uri = res["result_uri"]
         if uri is None:
             raise ValueError(f"uri is None: {res}")
-        return BlobHandle(self._client, uri, is_full=True)
+        return BlobHandle(
+            self._client, uri, is_full=True, owner=self.as_owner())
 
     def read(
             self,
@@ -1844,25 +1854,22 @@ class NodeHandle:
                 "action": "fix_error",
             }))
 
-    # def get_csv_blob(self) -> 'CSVBlobHandle':
-    #     if self.get_type() != "csv_reader":
-    #         raise ValueError("node doesn't have csv blob")
-    #     dag = self.get_dag()
-    #     res = cast(CSVBlobResponse, self._client.request_json(
-    #         METHOD_GET, "/csv_blob", {
-    #             "dag": dag.get_uri(),
-    #             "node": self.get_id(),
-    #         }))
-    #     owner: BlobOwner = {
-    #         "owner_dag": self.get_dag().get_uri(),
-    #         "owner_node": self.get_id(),
-    #     }
-    #     return CSVBlobHandle(self._client, res["csv"], owner)
+    def get_csv_blob(self) -> 'CSVBlobHandle':
+        if self.get_type() != "csv_reader":
+            raise ValueError("node doesn't have csv blob")
+        dag = self.get_dag()
+        res = cast(CSVBlobResponse, self._client.request_json(
+            METHOD_GET, "/csv_blob", {
+                "dag": dag.get_uri(),
+                "node": self.get_id(),
+            }))
+        owner: BlobOwner = {
+            "owner_dag": self.get_dag().get_uri(),
+            "owner_node": self.get_id(),
+        }
+        return CSVBlobHandle(self._client, res["csv"], owner)
 
     # def get_json_blob(self) -> 'JSONBlobHandle':
-    #     if self.get_type() != "jsons_reader":
-    #         raise ValueError(
-    #             f"can not access JSON of {self}, node is not a 'jsons_reader'")
     #     dag = self.get_dag()
     #     res = cast(JSONBlobResponse, self._client.request_json(
     #         METHOD_GET, "/json_blob", {
@@ -1915,8 +1922,6 @@ class NodeHandle:
                 "blob": self.get_blob_handle("es").get_uri(),
             },
         ))
-
-
 
     def get_user_columns(self, key: str) -> NodeUserColumnsResponse:
         return cast(NodeUserColumnsResponse, self._client.request_json(
@@ -1976,12 +1981,20 @@ class BlobHandle:
             self,
             client: XYMEClient,
             uri: str,
-            is_full: bool) -> None:
+            is_full: bool,
+            owner: BlobOwner) -> None:
         self._client = client
         self._uri = uri
         self._is_full = is_full
         self._ctype: Optional[str] = None
         self._tmp_uri: Optional[str] = None
+        self._owner = owner
+
+    def get_owner_dag(self) -> Optional[str]:
+        return self._owner["owner_dag"]
+
+    def get_owner_node(self) -> str:
+        return self._owner["owner_node"]
 
     def is_full(self) -> bool:
         return self._is_full
@@ -2029,7 +2042,7 @@ class BlobHandle:
                 "blob": self.get_uri(),
             }))
         return [
-            BlobHandle(self._client, blob_uri, is_full=True)
+            BlobHandle(self._client, blob_uri, is_full=True, owner=self._owner)
             for blob_uri in resp["files"]
         ]
 
@@ -2047,12 +2060,7 @@ class BlobHandle:
             }))
 
     def get_owner(self) -> BlobOwner:
-        if self.is_full():
-            raise ValueError(f"URI must not be full: {self}")
-        return cast(BlobOwner, self._client.request_json(
-            METHOD_GET, "/blob_owner", {
-                "blob": self.get_uri(),
-            }))
+        return self._owner
 
     def copy_to(
             self,
@@ -2070,7 +2078,12 @@ class BlobHandle:
                 "owner_node": owner_node,
                 "to_uri": to_uri,
             }))
-        return BlobHandle(self._client, res["new_uri"], is_full=False)
+        owner = cast(BlobOwner, {
+            "owner_dag": owner_dag,
+            "owner_node": owner_node,
+        })
+        return BlobHandle(
+            self._client, res["new_uri"], is_full=False, owner=owner)
 
     def download_zip(self, to_path: Optional[str]) -> Optional[io.BytesIO]:
         if self.is_full():
@@ -2177,8 +2190,9 @@ class BlobHandle:
             files = self._finish_upload_zip()
         finally:
             self._clear_upload()
+        owner = self.get_owner()
         return [
-            BlobHandle(self._client, blob_uri, is_full=True)
+            BlobHandle(self._client, blob_uri, is_full=True, owner=owner)
             for blob_uri in files
         ]
 
@@ -2215,8 +2229,7 @@ class CSVBlobHandle(BlobHandle):
             client: XYMEClient,
             uri: str,
             owner: BlobOwner) -> None:
-        super().__init__(client, uri, is_full=False)
-        self._owner = owner
+        super().__init__(client, uri, is_full=False, owner=owner)
 
     def finish_csv_upload(self) -> UploadFilesResponse:
         tmp_uri = self._tmp_uri
@@ -2280,8 +2293,9 @@ class JSONBlobHandle(BlobHandle):
             self,
             client: XYMEClient,
             uri: str,
-            count: int) -> None:
-        super().__init__(client, uri, is_full=False)
+            count: int,
+            owener: BlobOwner) -> None:
+        super().__init__(client, uri, is_full=False, owner=owener)
         self._count = count
 
     def get_count(self) -> int:
@@ -2305,6 +2319,69 @@ class JSONBlobHandle(BlobHandle):
         return self
 
 # *** JSONBlobHandle ***
+
+
+class CustomCodeBlobHandle(BlobHandle):
+    def set_custom_imports(
+            self, modules: List[List[str]]) -> NodeCustomImports:
+        return cast(NodeCustomImports, self._client.request_json(
+            METHOD_PUT, "/custom_imports", {
+                "dag": self.get_owner_dag(),
+                "node": self.get_owner_node(),
+                "modules": modules,
+            }))
+
+    def get_custom_imports(self) -> NodeCustomImports:
+        return cast(NodeCustomImports, self._client.request_json(
+            METHOD_GET, "/custom_imports", {
+                "dag": self.get_owner_dag(),
+                "node": self.get_owner_node(),
+            }))
+
+    def set_custom_code(self, func: FUNC) -> NodeCustomCode:
+        from RestrictedPython import compile_restricted
+
+        def fn_as_str(fun: FUNC) -> str:
+            body = textwrap.dedent(inspect.getsource(fun))
+            res = body + textwrap.dedent(f"""
+            result = {fun.__name__}(*data)
+            if result is None:
+                raise ValueError("{fun.__name__} must return a value")
+            """)
+            compile_restricted(res, "inline", "exec")
+            return res
+
+        raw_code = fn_as_str(func)
+        return cast(NodeCustomCode, self._client.request_json(
+            METHOD_PUT, "/custom_code", {
+                "dag": self.get_owner_dag(),
+                "node": self.get_owner_node(),
+                "code": raw_code,
+            }))
+
+    def get_custom_code(self) -> NodeCustomCode:
+        return cast(NodeCustomCode, self._client.request_json(
+            METHOD_GET, "/custom_code", {
+                "dag": self.get_owner_dag(),
+                "node": self.get_owner_node(),
+            }))
+
+
+class ModelBlobHandle(BlobHandle):
+    def setup_model(self, obj: Dict[str, Any]) -> ModelSetupResponse:
+        return cast(ModelSetupResponse, self._client.request_json(
+            METHOD_PUT, "/model_setup", {
+                "dag": self.get_owner_dag(),
+                "node": self.get_owner_node(),
+                "config": obj,
+            }))
+
+    def get_model_params(self) -> ModelParamsResponse:
+        return cast(ModelParamsResponse, self._client.request_json(
+            METHOD_GET, "/model_params", {
+                "dag": self.get_owner_dag(),
+                "node": self.get_owner_node(),
+            }))
 
 
 class ComputationHandle:
@@ -2363,70 +2440,6 @@ class ComputationHandle:
 
 
 # *** ComputationHandle ***
-
-
-class CustomCodeHandle(BlobHandle):
-    def set_custom_imports(
-            self, modules: List[List[str]]) -> NodeCustomImports:
-        return cast(NodeCustomImports, self._client.request_json(
-            METHOD_PUT, "/custom_imports", {
-                "dag": self.get_dag().get_uri(),
-                "node": self.get_id(),
-                "modules": modules,
-            }))
-
-    def get_custom_imports(self) -> NodeCustomImports:
-        return cast(NodeCustomImports, self._client.request_json(
-            METHOD_GET, "/custom_imports", {
-                "dag": self.get_dag().get_uri(),
-                "node": self.get_id(),
-            }))
-
-    def set_custom_code(self, func: FUNC) -> NodeCustomCode:
-        from RestrictedPython import compile_restricted
-
-        def fn_as_str(fun: FUNC) -> str:
-            body = textwrap.dedent(inspect.getsource(fun))
-            res = body + textwrap.dedent(f"""
-            result = {fun.__name__}(*data)
-            if result is None:
-                raise ValueError("{fun.__name__} must return a value")
-            """)
-            compile_restricted(res, "inline", "exec")
-            return res
-
-        raw_code = fn_as_str(func)
-        return cast(NodeCustomCode, self._client.request_json(
-            METHOD_PUT, "/custom_code", {
-                "dag": self.get_dag().get_uri(),
-                "node": self.get_id(),
-                "code": raw_code,
-            }))
-
-    def get_custom_code(self) -> NodeCustomCode:
-        return cast(NodeCustomCode, self._client.request_json(
-            METHOD_GET, "/custom_code", {
-                "dag": self.get_dag().get_uri(),
-                "node": self.get_id(),
-            }))
-
-
-class ModelHandle(BlobHandle):
-    def setup_model(self, obj: Dict[str, Any]) -> ModelSetupResponse:
-        return cast(ModelSetupResponse, self._client.request_json(
-            METHOD_PUT, "/model_setup", {
-                "dag": self.get_dag().get_uri(),
-                "node": self.get_id(),
-                "config": obj,
-            }))
-
-    def get_model_params(self) -> ModelParamsResponse:
-        return cast(ModelParamsResponse, self._client.request_json(
-            METHOD_GET, "/model_params", {
-                "dag": self.get_dag().get_uri(),
-                "node": self.get_id(),
-            }))
-
 
 def create_xyme_client(
         url: str,

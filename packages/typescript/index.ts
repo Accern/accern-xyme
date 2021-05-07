@@ -27,7 +27,7 @@ import {
     InCursors,
     InstanceStatus,
     JSONBlobAppendResponse,
-    JSONBlobResponse,
+    // JSONBlobResponse,
     KafkaGroup,
     KafkaMessage,
     KafkaOffsets,
@@ -555,10 +555,6 @@ export default class XYMEClient {
         return dag;
     }
 
-    public getBlobHandle(uri: string, isFull = false): BlobHandle {
-        return new BlobHandle(this, uri, isFull);
-    }
-
     public async getNodeDefs(): Promise<NodeTypes['info']> {
         this.maybeRefresh();
         if (this.nodeDefs) {
@@ -585,7 +581,11 @@ export default class XYMEClient {
         }).then((response) => response.blob);
     }
 
-    public async getCSVBlob(blobURI: string): Promise<CSVBlobHandle> {
+    // public getBlobHandle(uri: string, isFull = false): BlobHandle {
+    //     return new BlobHandle(this, uri, isFull);
+    // }
+
+    public async getCSVBlobHandle(blobURI: string): Promise<CSVBlobHandle> {
         const owner = await this.requestJSON<BlobOwner>({
             method: METHOD_GET,
             path: '/blob_owner',
@@ -1669,7 +1669,7 @@ export class NodeHandle {
     client: XYMEClient;
     configError?: string;
     dag: DagHandle;
-    id: string;
+    nodeId: string;
     inputs: { [key: string]: [string, string] } = {};
     name: string;
     state?: number;
@@ -1678,15 +1678,22 @@ export class NodeHandle {
     constructor(
         client: XYMEClient,
         dag: DagHandle,
-        id: string,
+        nodeId: string,
         name: string,
         kind: string
     ) {
         this.client = client;
         this.dag = dag;
-        this.id = id;
+        this.nodeId = nodeId;
         this.name = name;
         this.type = kind;
+    }
+
+    private asOwner(): BlobOwner {
+        return {
+            owner_dag: this.getDag().getUri(),
+            owner_node: this.getId(),
+        } as BlobOwner;
     }
 
     static fromNodeInfo(
@@ -1715,8 +1722,8 @@ export class NodeHandle {
     }
 
     private updateInfo(nodeInfo: NodeInfo) {
-        if (this.id !== nodeInfo.id) {
-            throw new Error(`${this.id} != ${nodeInfo.id}`);
+        if (this.getId() !== nodeInfo.id) {
+            throw new Error(`${this.getId()} != ${nodeInfo.id}`);
         }
         this.name = nodeInfo.name;
         this.type = nodeInfo.type;
@@ -1724,10 +1731,11 @@ export class NodeHandle {
         this.state = nodeInfo.state;
         this.configError = nodeInfo.config_error;
         const blobs = nodeInfo.blobs;
+        const owner = this.asOwner();
         this.blobs = Object.keys(blobs).reduce(
             (o, key) => ({
                 ...o,
-                [key]: new BlobHandle(this.client, blobs[key], false),
+                [key]: new BlobHandle(this.client, blobs[key], false, owner),
             }),
             {}
         );
@@ -1738,7 +1746,7 @@ export class NodeHandle {
     }
 
     public getId(): string {
-        return this.id;
+        return this.nodeId;
     }
 
     public getName(): string {
@@ -1875,6 +1883,7 @@ export class NodeHandle {
             })
             .then((response) => response.times);
     }
+
     public async readBlob(
         key: string,
         chunk: number | undefined,
@@ -1897,7 +1906,7 @@ export class NodeHandle {
         if (uri === undefined) {
             throw new Error('uri is undefined');
         }
-        return new BlobHandle(this.client, uri, true);
+        return new BlobHandle(this.client, uri, true, this.asOwner());
     }
 
     public async read(
@@ -1940,52 +1949,25 @@ export class NodeHandle {
         return new CSVBlobHandle(this.client, res.csv, owner);
     }
 
-    public async getJSONBlob(): Promise<JSONBlobHandle> {
-        if (this.getType() !== 'jsons_reader') {
-            throw new Error('node has no json blob');
-        }
-        const res = await this.client.requestJSON<JSONBlobResponse>({
-            method: METHOD_GET,
-            path: '/json_blob',
-            args: {
-                dag: this.getDag().getUri(),
-                node: this.getId(),
-            },
-        });
-        return new JSONBlobHandle(this.client, res['json'], res['count']);
-    }
+    // public async getJSONBlob(): Promise<JSONBlobHandle> {
+    //     if (this.getType() !== 'jsons_reader') {
+    //         throw new Error('node has no json blob');
+    //     }
+    //     const res = await this.client.requestJSON<JSONBlobResponse>({
+    //         method: METHOD_GET,
+    //         path: '/json_blob',
+    //         args: {
+    //             dag: this.getDag().getUri(),
+    //             node: this.getId(),
+    //         },
+    //     });
+    //     return new JSONBlobHandle(this.client, res['json'], res['count']);
+    // }
 
     public checkCustomCodeNode() {
         if (CUSTOM_NODE_TYPES.indexOf(this.getType()) < 0) {
             throw new Error(`${this} is not a custom code node`);
         }
-    }
-
-    public async setCustomImports(
-        modules: string[][]
-    ): Promise<NodeCustomImports> {
-        this.checkCustomCodeNode();
-        return await this.client.requestJSON({
-            method: METHOD_PUT,
-            path: '/custom_imports',
-            args: {
-                dag: this.getDag().getUri(),
-                node: this.getId(),
-                modules,
-            },
-        });
-    }
-
-    public async getCustomImports(): Promise<NodeCustomImports> {
-        this.checkCustomCodeNode();
-        return await this.client.requestJSON({
-            method: METHOD_GET,
-            path: '/custom_imports',
-            args: {
-                dag: this.getDag().getUri(),
-                node: this.getId(),
-            },
-        });
     }
 
     public async getUserColumn(key: string): Promise<NodeUserColumnsResponse> {
@@ -1996,31 +1978,6 @@ export class NodeHandle {
                 dag: this.getDag().getUri(),
                 node: this.getId(),
                 key,
-            },
-        });
-    }
-
-    public async setupModel(obj: {
-        [key: string]: any;
-    }): Promise<ModelSetupResponse> {
-        return await this.client.requestJSON<ModelSetupResponse>({
-            method: METHOD_PUT,
-            path: '/model_setup',
-            args: {
-                dag: this.getDag().getUri(),
-                node: this.getId(),
-                config: obj,
-            },
-        });
-    }
-
-    public async getModelParams(): Promise<ModelParamsResponse> {
-        return await this.client.requestJSON<ModelParamsResponse>({
-            method: METHOD_GET,
-            path: '/model_params',
-            args: {
-                dag: this.getDag().getUri(),
-                node: this.getId(),
             },
         });
     }
@@ -2043,11 +2000,26 @@ export class BlobHandle {
     isFull: boolean;
     ctype?: string;
     tmpUri?: string;
+    owner: BlobOwner;
 
-    constructor(client: XYMEClient, uri: string, isFull: boolean) {
+    constructor(
+        client: XYMEClient,
+        uri: string,
+        isFull: boolean,
+        owner: BlobOwner
+    ) {
         this.client = client;
         this.uri = uri;
         this.isFull = isFull;
+        this.owner = owner;
+    }
+
+    public getOwnerDag(): string {
+        return this.owner.owner_dag;
+    }
+
+    public getOwnerNode(): string {
+        return this.owner.owner_node;
     }
 
     private isEmpty(): boolean {
@@ -2088,7 +2060,10 @@ export class BlobHandle {
                 });
                 return interpretCtype(res, ctype);
             } catch (error) {
-                if (error.response.status === 404) {
+                if (
+                    error instanceof HTTPResponseError &&
+                    error.response.status === 404
+                ) {
                     throw error;
                 }
                 sleepTime = Math.min(sleepTime * sleepMul, sleepMax);
@@ -2119,7 +2094,7 @@ export class BlobHandle {
             },
         });
         return response.files.map((blob) => {
-            return new BlobHandle(this.client, blob, true);
+            return new BlobHandle(this.client, blob, true, this.owner);
         });
     }
 
@@ -2166,7 +2141,11 @@ export class BlobHandle {
                 to_uri: toUri,
             },
         });
-        return new BlobHandle(this.client, response.new_uri, false);
+        const owner = {
+            owner_dag: ownerDag,
+            owner_node: ownerNode,
+        } as BlobOwner;
+        return new BlobHandle(this.client, response.new_uri, false, owner);
     }
 
     public async downloadZip(toPath?: string): Promise<Buffer | undefined> {
@@ -2332,26 +2311,14 @@ export class BlobHandle {
             this.clearUpload();
         }
         return files.map(
-            (blobUri) => new BlobHandle(this.client, blobUri, true)
+            (blobUri) => new BlobHandle(this.client, blobUri, true, this.owner)
         );
-    }
-    public async convertModel(): Promise<ModelReleaseResponse> {
-        return await this.client.requestJSON<ModelReleaseResponse>({
-            method: METHOD_POST,
-            path: '/convert_model',
-            args: {
-                blob: this.getUri(),
-            },
-        });
     }
 }
 
 export class CSVBlobHandle extends BlobHandle {
-    owner: BlobOwner;
-
     constructor(client: XYMEClient, uri: string, owner: BlobOwner) {
-        super(client, uri, false);
-        this.owner = owner;
+        super(client, uri, false, owner);
     }
 
     public async addFromFile(
@@ -2398,10 +2365,86 @@ export class CSVBlobHandle extends BlobHandle {
     }
 }
 
+export class CustomCodeBlobHandle extends BlobHandle {
+    constructor(client: XYMEClient, uri: string, owner: BlobOwner) {
+        super(client, uri, false, owner);
+    }
+
+    public async setCustomImports(
+        modules: string[][]
+    ): Promise<NodeCustomImports> {
+        return await this.client.requestJSON({
+            method: METHOD_PUT,
+            path: '/custom_imports',
+            args: {
+                dag: this.getOwnerDag(),
+                node: this.getOwnerNode(),
+                modules,
+            },
+        });
+    }
+
+    public async getCustomImports(): Promise<NodeCustomImports> {
+        return await this.client.requestJSON({
+            method: METHOD_GET,
+            path: '/custom_imports',
+            args: {
+                dag: this.getOwnerDag(),
+                node: this.getOwnerNode(),
+            },
+        });
+    }
+}
+
+export class ModelBlobHandle extends BlobHandle {
+    constructor(client: XYMEClient, uri: string, owner: BlobOwner) {
+        super(client, uri, false, owner);
+    }
+    public async setupModel(obj: {
+        [key: string]: any;
+    }): Promise<ModelSetupResponse> {
+        return await this.client.requestJSON<ModelSetupResponse>({
+            method: METHOD_PUT,
+            path: '/model_setup',
+            args: {
+                dag: this.getOwnerDag(),
+                node: this.getOwnerNode(),
+                config: obj,
+            },
+        });
+    }
+
+    public async getModelParams(): Promise<ModelParamsResponse> {
+        return await this.client.requestJSON<ModelParamsResponse>({
+            method: METHOD_GET,
+            path: '/model_params',
+            args: {
+                dag: this.getOwnerDag(),
+                node: this.getOwnerNode(),
+            },
+        });
+    }
+
+    public async convertModel(): Promise<ModelReleaseResponse> {
+        return await this.client.requestJSON<ModelReleaseResponse>({
+            method: METHOD_POST,
+            path: '/convert_model',
+            args: {
+                blob: this.getUri(),
+            },
+        });
+    }
+}
+
 export class JSONBlobHandle extends BlobHandle {
     count: number;
-    constructor(client: XYMEClient, uri: string, count: number) {
-        super(client, uri, false);
+    constructor(
+        client: XYMEClient,
+        uri: string,
+        count: number,
+        owner: BlobOwner
+    ) {
+        super(client, uri, false, owner);
         this.count = count;
     }
 
