@@ -2223,10 +2223,10 @@ export class BlobHandle {
      * @returns
      */
     public async updateBuffer(
-        curSize,
-        buffer,
-        nread,
-        chunk,
+        curSize: number,
+        buffer: Buffer,
+        nread: number,
+        chunk: number,
         that: BlobHandle
     ) {
         let data: Buffer;
