@@ -1,4 +1,11 @@
 TODO APIs:
+APIs added in typescript but not available in other languages yet.
+
+class BlobHandle
+ - uploadFileUsingContent
+ 
+class CSVBlobHandle
+ - addFromContent
 
 APIs added in other languages but not available in typescript yet.
 
