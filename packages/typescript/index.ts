@@ -2269,6 +2269,9 @@ export class BlobHandle {
             await fileHandle.read(buffer, 0, 0, 0);
             const response = await fileHandle.read(buffer, 0, chunk, curPos);
             const nread = response.bytesRead;
+            if (!nread) {
+                return;
+            }
             curPos += nread;
             const newSize = await this.updateBuffer(
                 curSize,
