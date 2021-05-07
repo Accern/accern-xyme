@@ -276,7 +276,10 @@ export default class XYMEClient {
         }
         if (response) {
             handleError(response);
-            return [await response.buffer(), response.headers['content-type']];
+            return [
+                await response.buffer(),
+                response.headers.get('content-type'),
+            ];
         } else {
             throw new Error('no server response');
         }
@@ -1033,7 +1036,7 @@ export class DagHandle {
             dagTotal += nodeTotal;
         });
         const nodeTimingSorted = Object.entries(nodeTiming).sort(
-            ([, a], [, b]) => a['node_total'] - b['node_total']
+            ([, a], [, b]) => a['nodeTotal'] - b['nodeTotal']
         );
         return {
             dagTotal,
@@ -2285,8 +2288,6 @@ export class BlobHandle {
         }
 
         await uploadNextChunk(this, getFileUploadChunkSize(), fileContent);
-        // await this.finishData(requeueOnFinish);
-        // return curSize;
     }
 
     /**
