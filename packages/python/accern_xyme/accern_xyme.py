@@ -56,9 +56,9 @@ from .types import (
     BlobFilesResponse,
     BlobInit,
     BlobOwner,
+    BlobUriResponse,
     CacheStats,
     CopyBlob,
-    CSVBlobResponse,
     DagCreate,
     DagDef,
     DagDupResponse,
@@ -73,8 +73,6 @@ from .types import (
     FlushAllQueuesResponse,
     InCursors,
     InstanceStatus,
-    JSONBlobAppendResponse,
-    # JSONBlobResponse,
     KafkaGroup,
     KafkaMessage,
     KafkaOffsets,
@@ -611,21 +609,8 @@ class XYMEClient:
     def get_blob_owner(self, blob_uri: str) -> BlobOwner:
         return cast(BlobOwner, self.request_json(
             METHOD_GET, "/blob_owner", {
-                "blob": self.get_uri(),
+                "blob": blob_uri,
             }))
-
-    def get_csv_blob_handle(self, blob_uri: str) -> 'CSVBlobHandle':
-        return CSVBlobHandle(self, blob_uri, self.get_blob_owner(blob_uri))
-
-    def get_model_blob_handle(self, blob_uri: str) -> 'ModelBlobHandle':
-        return ModelBlobHandle(self, blob_uri, self.get_blob_owner(blob_uri))
-
-    # def get_json_blob_handle(self, blob_uri: str) -> 'JSONBlobHandle':
-    #     count = cast(JSONBlobResponse, self.request_json(
-    #         METHOD_GET, '/json_blob_info', {
-    #             "blob": blob_uri,
-    #         }))["count"]
-    #     return JSONBlobHandle(self, blob_uri, count)
 
     def set_blob_owner(
             self,
@@ -652,6 +637,22 @@ class XYMEClient:
                 "name": dagname,
                 "index": index,
             }))["dag"]
+
+    def get_csv_blob(self, blob_uri: str) -> 'CSVBlobHandle':
+        return CSVBlobHandle(
+            self, blob_uri, owner=self.get_blob_owner(blob_uri))
+
+    def get_model_blob(self, blob_uri: str) -> 'ModelBlobHandle':
+        return ModelBlobHandle(
+            self, blob_uri, owner=self.get_blob_owner(blob_uri))
+
+    def get_custom_code_blob(self, blob_uri: str) -> 'CustomCodeBlobHandle':
+        return CustomCodeBlobHandle(
+            self, blob_uri, owner=self.get_blob_owner(blob_uri))
+
+    def get_json_blob(self, blob_uri: str) -> 'JSONBlobHandle':
+        return JSONBlobHandle(
+            self, blob_uri, owner=self.get_blob_owner(blob_uri))
 
     def duplicate_dag(
             self,
@@ -1854,29 +1855,43 @@ class NodeHandle:
                 "action": "fix_error",
             }))
 
-    def get_csv_blob(self) -> 'CSVBlobHandle':
-        if self.get_type() != "csv_reader":
-            raise ValueError("node doesn't have csv blob")
+    def get_blob_uri(self, blob_key: str, blob_type: str) -> str:
         dag = self.get_dag()
-        res = cast(CSVBlobResponse, self._client.request_json(
-            METHOD_GET, "/csv_blob", {
+        return cast(BlobUriResponse, self._client.request_json(
+            METHOD_GET, "/blob_uri", {
                 "dag": dag.get_uri(),
                 "node": self.get_id(),
-            }))
-        owner: BlobOwner = {
-            "owner_dag": self.get_dag().get_uri(),
-            "owner_node": self.get_id(),
-        }
-        return CSVBlobHandle(self._client, res["csv"], owner)
+                "key": blob_key,
+                "type": blob_type,
+            }))["uri"]
 
-    # def get_json_blob(self) -> 'JSONBlobHandle':
-    #     dag = self.get_dag()
-    #     res = cast(JSONBlobResponse, self._client.request_json(
-    #         METHOD_GET, "/json_blob", {
-    #             "dag": dag.get_uri(),
-    #             "node": self.get_id(),
-    #         }))
-    #     return JSONBlobHandle(self._client, res["json"], res["count"])
+    def get_csv_blob(self, key: str = "orig") -> 'CSVBlobHandle':
+        return CSVBlobHandle(
+            self._client,
+            self.get_blob_uri(key, "csv"),
+            self.as_owner())
+
+    def get_json_blob(self, key: str = "jsons_in") -> 'JSONBlobHandle':
+        return JSONBlobHandle(
+            self._client,
+            self.get_blob_uri(key, "json"),
+            self.as_owner())
+
+    def get_model_blob(
+            self, blob_type: str, key: str = "model") -> 'ModelBlobHandle':
+        return ModelBlobHandle(
+            self._client,
+            self.get_blob_uri(key, blob_type),
+            self.as_owner())
+
+    def get_custom_code_blob(
+            self,
+            blob_type: str,
+            key: str = "custom_code") -> 'CustomCodeBlobHandle':
+        return CustomCodeBlobHandle(
+            self._client,
+            self.get_blob_uri(key, blob_type),
+            self.as_owner())
 
     def check_custom_code_node(self) -> None:
         if not self.get_type() in CUSTOM_NODE_TYPES:
@@ -1990,12 +2005,6 @@ class BlobHandle:
         self._tmp_uri: Optional[str] = None
         self._owner = owner
 
-    def get_owner_dag(self) -> Optional[str]:
-        return self._owner["owner_dag"]
-
-    def get_owner_node(self) -> str:
-        return self._owner["owner_node"]
-
     def is_full(self) -> bool:
         return self._is_full
 
@@ -2061,6 +2070,12 @@ class BlobHandle:
 
     def get_owner(self) -> BlobOwner:
         return self._owner
+
+    def get_owner_dag(self) -> Optional[str]:
+        return self._owner["owner_dag"]
+
+    def get_owner_node(self) -> str:
+        return self._owner["owner_node"]
 
     def copy_to(
             self,
@@ -2293,19 +2308,14 @@ class JSONBlobHandle(BlobHandle):
             self,
             client: XYMEClient,
             uri: str,
-            count: int,
-            owener: BlobOwner) -> None:
-        super().__init__(client, uri, is_full=False, owner=owener)
-        self._count = count
-
-    def get_count(self) -> int:
-        return self._count
+            owner: BlobOwner) -> None:
+        super().__init__(client, uri, is_full=False, owner=owner)
 
     def append_jsons(
             self,
             jsons: List[Any],
             requeue_on_finish: Optional[NodeHandle] = None,
-            ) -> 'JSONBlobHandle':
+            ) -> None:
         obj = {
             "blob": self.get_uri(),
             "jsons": jsons,
@@ -2313,15 +2323,20 @@ class JSONBlobHandle(BlobHandle):
         if requeue_on_finish is not None:
             obj["dag"] = requeue_on_finish.get_dag().get_uri()
             obj["node"] = requeue_on_finish.get_id()
-        res = cast(JSONBlobAppendResponse, self._client.request_json(
-            METHOD_PUT, "/json_append", obj))
-        self._count = res["count"]
-        return self
+        self._client.request_json(METHOD_PUT, "/json_append", obj)
+
 
 # *** JSONBlobHandle ***
 
 
 class CustomCodeBlobHandle(BlobHandle):
+    def __init__(
+            self,
+            client: XYMEClient,
+            uri: str,
+            owner: BlobOwner) -> None:
+        super().__init__(client, uri, is_full=False, owner=owner)
+
     def set_custom_imports(
             self, modules: List[List[str]]) -> NodeCustomImports:
         return cast(NodeCustomImports, self._client.request_json(
@@ -2368,6 +2383,13 @@ class CustomCodeBlobHandle(BlobHandle):
 
 
 class ModelBlobHandle(BlobHandle):
+    def __init__(
+            self,
+            client: XYMEClient,
+            uri: str,
+            owner: BlobOwner) -> None:
+        super().__init__(client, uri, is_full=False, owner=owner)
+
     def setup_model(self, obj: Dict[str, Any]) -> ModelSetupResponse:
         return cast(ModelSetupResponse, self._client.request_json(
             METHOD_PUT, "/model_setup", {
