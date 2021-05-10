@@ -199,31 +199,32 @@ export default class XYMEClient {
         rargs: XYMERequestArgument
     ): Promise<[Buffer, string]> {
         const {
+            addNamespace,
+            addPrefix,
+            apiVersion,
+            args,
+            files,
             method,
             path,
-            args,
-            addPrefix,
-            addNamespace,
-            apiVersion,
-            files,
             retry,
             ...rest
         } = rargs;
         const prefix = await this.getPrefix(addPrefix, apiVersion);
         const url = `${this.url}${prefix}${path}`;
-        let headers: HeadersInit = {
+        const headers: HeadersInit = {
             Authorization: this.token,
         };
+        let argsNew = { ...args };
         if (addNamespace) {
-            headers = {
-                ...headers,
+            argsNew = {
+                ...argsNew,
                 namespace: this.namespace,
             };
         }
         const options: RequestInit = {
             method,
             headers,
-            body: JSON.stringify(args),
+            body: JSON.stringify(argsNew),
             ...(rest as RequestInit),
         };
         if (method !== 'FILE' && files !== undefined) {
@@ -289,32 +290,33 @@ export default class XYMEClient {
 
     private async rawRequestJSON<T>(rargs: XYMERequestArgument): Promise<T> {
         const {
+            addNamespace,
+            addPrefix,
+            apiVersion,
+            args,
+            files,
             method,
             path,
-            args,
-            addPrefix,
-            addNamespace,
-            apiVersion,
-            files,
             retry,
             ...rest
         } = rargs;
         const prefix = await this.getPrefix(addPrefix, apiVersion);
         const url = `${this.url}${prefix}${path}`;
-        let headers: HeadersInit = {
+        const headers: HeadersInit = {
             'Authorization': this.token,
             'content-type': 'application/json',
         };
+        let argsNew = { ...args };
         if (addNamespace) {
-            headers = {
-                ...headers,
+            argsNew = {
+                ...argsNew,
                 namespace: this.namespace,
             };
         }
         const options: RequestInit = {
             method,
             headers,
-            body: JSON.stringify(args),
+            body: JSON.stringify(argsNew),
             ...(rest as RequestInit),
         };
         if (method !== 'FILE' && files !== undefined) {
@@ -379,25 +381,26 @@ export default class XYMEClient {
         rargs: XYMERequestArgument
     ): Promise<Readable> {
         const {
+            addNamespace,
+            addPrefix,
+            apiVersion,
+            args,
             method,
             path,
-            args,
-            addPrefix,
-            addNamespace,
-            apiVersion,
             retry,
             ...rest
         } = rargs;
         const prefix = await this.getPrefix(addPrefix, apiVersion);
         const url = `${this.url}${prefix}${path}`;
         let response: Response = undefined;
-        let headers: HeadersInit = {
+        const headers: HeadersInit = {
             'Authorization': this.token,
             'content-type': 'application/text',
         };
+        let argsNew = { ...args };
         if (addNamespace) {
-            headers = {
-                ...headers,
+            argsNew = {
+                ...argsNew,
                 namespace: this.namespace,
             };
         }
@@ -405,7 +408,7 @@ export default class XYMEClient {
             ...rest,
             method,
             headers,
-            body: JSON.stringify(args),
+            body: JSON.stringify(argsNew),
         };
 
         switch (method) {
@@ -1915,11 +1918,42 @@ export class NodeHandle {
 
     public async read(
         key: string,
-        chunk: number | undefined,
+        chunk: number | null,
         forceRefresh?: boolean
     ): Promise<ByteResponse | null> {
         const blob = await this.readBlob(key, chunk, forceRefresh || false);
+        console.log(blob);
         return await blob.getContent();
+    }
+
+    public async readAll(
+        key: string,
+        forceRefresh = false
+    ): Promise<ByteResponse | null> {
+        await this.read(key, null, forceRefresh);
+        let res: ByteResponse[] = [];
+        let ctype: string | undefined;
+        // eslint-disable-next-line no-constant-condition
+        while (true) {
+            const blob = await this.readBlob(key, res.length, false);
+            if (!blob) break;
+
+            const cur = await blob.getContent();
+            if (!cur) break;
+            const curCtype = blob.getCtype();
+            if (curCtype === null) {
+                ctype = curCtype;
+            } else if (ctype !== curCtype) {
+                throw new Error(
+                    `inconsistent return types ${ctype} != ${curCtype}`
+                );
+            }
+            res = [...res, cur];
+        }
+        if (res.length === 0 || isUndefined(ctype)) {
+            return null;
+        }
+        return mergeCtype(res, ctype);
     }
 
     public async clear(): Promise<NodeState> {
@@ -2043,6 +2077,7 @@ export class BlobHandle {
         if (this.isEmpty()) {
             return null;
         }
+
         const totalTime = 60.0;
         let sleepTime = 0.1;
         const sleepMul = 1.1;
@@ -2298,7 +2333,7 @@ export class BlobHandle {
         let curSize = 0;
 
         async function uploadNextChunk(
-            that: BlobHandle,
+            blobHandle: BlobHandle,
             chunk: number,
             fileHandle: fpm.FileHandle
         ): Promise<void> {
@@ -2310,15 +2345,15 @@ export class BlobHandle {
                 return;
             }
             curPos += nread;
-            const newSize = await this.updateBuffer(
+            const newSize = await blobHandle.updateBuffer(
                 curSize,
                 buffer,
                 nread,
                 chunk,
-                that
+                blobHandle
             );
             curSize = newSize;
-            await uploadNextChunk(that, chunk, fileHandle);
+            await uploadNextChunk(blobHandle, chunk, fileHandle);
         }
 
         await uploadNextChunk(this, getFileUploadChunkSize(), fileContent);
