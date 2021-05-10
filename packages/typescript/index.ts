@@ -212,7 +212,8 @@ export default class XYMEClient {
         const prefix = await this.getPrefix(addPrefix, apiVersion);
         const url = `${this.url}${prefix}${path}`;
         const headers: HeadersInit = {
-            Authorization: this.token,
+            'Authorization': this.token,
+            'content-type': 'application/octet-stream',
         };
         let argsNew = { ...args };
         if (addNamespace) {
@@ -1922,7 +1923,6 @@ export class NodeHandle {
         forceRefresh?: boolean
     ): Promise<ByteResponse | null> {
         const blob = await this.readBlob(key, chunk, forceRefresh || false);
-        console.log(blob);
         return await blob.getContent();
     }
 
@@ -2284,6 +2284,7 @@ export class BlobHandle {
             await this.performUploadAction('clear', { uri }, null);
         }
     }
+
     /**
      * This is the helper method being used by uploadFile
      * and uploadFileUsingContent
@@ -2291,15 +2292,16 @@ export class BlobHandle {
      * @param buffer: the buffer chunk being uploaded
      * @param nread: number of bytes from the in the buffer
      * @param chunk: chunk size
-     * @param that: the parent this being passed here
+     * @param blobHandle: the parent this being passed here
      * @returns
      */
+
     public async updateBuffer(
         curSize: number,
         buffer: Buffer,
         nread: number,
         chunk: number,
-        that: BlobHandle
+        blobHandle: BlobHandle
     ) {
         let data: Buffer;
         if (nread < chunk) {
@@ -2307,7 +2309,7 @@ export class BlobHandle {
         } else {
             data = buffer;
         }
-        const newSize = await that.appendUpload(this.tmpUri, data);
+        const newSize = await blobHandle.appendUpload(this.tmpUri, data);
         if (newSize - curSize !== data.length) {
             throw new Error(`
                 incomplete chunk upload n:${newSize} o:${curSize}
@@ -2316,6 +2318,7 @@ export class BlobHandle {
         }
         return newSize;
     }
+
     public async uploadFile(
         fileContent: fpm.FileHandle,
         ext: string,
