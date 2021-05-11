@@ -67,7 +67,7 @@ function isString(s: unknown): s is string {
 }
 
 function isDict(s: unknown): s is { [key: string]: any } {
-    return typeof s == 'object';
+    return s.constructor == Object;
 }
 
 function isIterable(obj: any) {

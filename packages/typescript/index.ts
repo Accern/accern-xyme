@@ -2070,7 +2070,7 @@ export class BlobHandle {
         if (!this.info) {
             this.info = this.getPath(['info.json'])
                 .getContent()
-                .then((response) => assertDict(response));
+                .then(assertDict);
         }
         return this.info;
     }
