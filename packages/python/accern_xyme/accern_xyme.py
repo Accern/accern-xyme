@@ -32,6 +32,7 @@ from requests import Response
 from requests.exceptions import HTTPError, RequestException
 from typing_extensions import Literal
 import quick_server
+from urllib import parse
 
 from .util import (
     async_compute,
@@ -78,6 +79,7 @@ from .types import (
     KafkaMessage,
     KafkaOffsets,
     KafkaThroughput,
+    KafkaTopicNames,
     KafkaTopics,
     KnownBlobs,
     MinimalQueueStatsResponse,
@@ -759,6 +761,12 @@ class XYMEClient:
                 "num_partitions": 1,
             }))
 
+    def get_kafka_error_topic(self) -> str:
+        res = cast(KafkaTopicNames, self.request_json(
+            METHOD_GET, "/kafka_topic_names", {}))["error"]
+        assert res is not None
+        return res
+
     def delete_kafka_error_topic(self) -> KafkaTopics:
         return cast(KafkaTopics, self.request_json(
             METHOD_POST, "/kafka_topics", {
@@ -1237,54 +1245,71 @@ class DagHandle:
             self,
             nodes_only: bool,
             allow_unicode: bool,
-            pretty_method: Optional[str] = "accern") -> PrettyResponse:
+            method: Optional[str] = "accern") -> PrettyResponse:
         return cast(PrettyResponse, self._client.request_json(
             METHOD_GET, "/pretty", {
                 "dag": self.get_uri(),
                 "nodes_only": nodes_only,
                 "allow_unicode": allow_unicode,
-                "method": pretty_method,
+                "method": method,
             }))
 
     def pretty(
             self,
             nodes_only: bool = False,
             allow_unicode: bool = True,
-            pretty_method: Optional[str] = "accern",
-            dot_output: Optional[str] = "svg",
-            display: bool = True) -> Optional[str]:
+            method: Optional[str] = "dot",
+            format: Optional[str] = "png",
+            display: Optional[IO[Any]] = sys.stdout) -> Optional[str]:
 
         def render(value: str) -> Optional[str]:
-            if display:
-                print(value)
+            if display is not None:
+                display.write(value)
+                display.flush()
                 return None
             return value
 
         graph_str = self._pretty(
             nodes_only=nodes_only,
             allow_unicode=allow_unicode,
-            pretty_method=pretty_method)["pretty"]
-        if pretty_method == "accern":
+            method=method)["pretty"]
+        if method == "accern":
             return render(graph_str)
-        if pretty_method == "dot":
+        if method == "dot":
             from graphviz import Source
 
             graph = Source(graph_str)
-            if dot_output == "dot":
+            if format == "dot":
                 return render(graph_str)
-            if dot_output == "svg":
+            if format == "svg":
                 svg_str = graph.pipe(format="svg")
-                if display:
+                if display is not None:
                     if not is_jupyter():
-                        print("Warning: Ipython instance not found.")
-                        print(svg_str)
+                        display.write("Warning: Ipython instance not found.\n")
+                        display.write(svg_str)
+                        display.flush()
                     else:
                         from IPython.display import display as idisplay
                         from IPython.display import SVG
                         idisplay(SVG(svg_str))
                     return None
                 return svg_str
-            if dot_output == "ascii":
+            if format == "png":
+                graph = Source(graph_str)
+                png_str = graph.pipe(format="png")
+                if display is not None:
+                    if not is_jupyter():
+                        display.write("Warning: Ipython instance not found.\n")
+                        display.write(png_str)
+                        display.flush()
+                    else:
+                        from IPython.display import display as idisplay
+                        from IPython.display import Image
+
+                        idisplay(Image(png_str))
+                    return None
+                return png_str
+            if format == "ascii":
                 if not has_graph_easy():
                     return render(graph_str)
 
@@ -1295,9 +1320,8 @@ class DagHandle:
                     ["graph-easy"], stdin=p1.stdout)
                 res = p2.decode("utf-8")
                 return render(res)
-            raise ValueError(
-                "invalid dot output option, use svg, ascii or dot")
-        raise ValueError("invalid dot pretty_method, use accern or dot")
+            raise ValueError("invalid format, use svg, png, ascii, or dot")
+        raise ValueError("invalid method, use accern or dot")
 
     def pretty_obj(
             self,
@@ -1367,6 +1391,24 @@ class DagHandle:
                 "dag": self.get_uri(),
                 "when": timestamp,
             }))["when"]
+
+    def get_kafka_input_topic(self, postfix: str = "") -> str:
+        res = cast(KafkaTopicNames, self._client.request_json(
+            METHOD_GET, "/kafka_topic_names", {
+                "dag": self.get_uri(),
+                "postfix": postfix,
+                "no_output": True,
+            }))["input"]
+        assert res is not None
+        return res
+
+    def get_kafka_output_topic(self) -> str:
+        res = cast(KafkaTopicNames, self._client.request_json(
+            METHOD_GET, "/kafka_topic_names", {
+                "dag": self.get_uri(),
+            }))["output"]
+        assert res is not None
+        return res
 
     def set_kafka_topic_partitions(
             self,
@@ -1738,8 +1780,9 @@ class NodeHandle:
             self,
             key: str,
             chunk: Optional[int],
-            force_refresh: bool = False) -> Optional[ByteResponse]:
-        return self.read_blob(key, chunk, force_refresh).get_content()
+            force_refresh: bool = False,
+            filter_id: bool = True) -> Optional[ByteResponse]:
+        return self.read_blob(key, chunk, force_refresh).get_content(filter_id)
 
     def read_all(
             self,
@@ -1970,6 +2013,8 @@ class BlobHandle:
         self._is_full = is_full
         self._ctype: Optional[str] = None
         self._tmp_uri: Optional[str] = None
+        self._info: Optional[Dict[str, Any]] = None
+        self._parent: Optional[BlobHandle] = None
 
     def is_full(self) -> bool:
         return self._is_full
@@ -1980,10 +2025,39 @@ class BlobHandle:
     def get_uri(self) -> str:
         return self._uri
 
+    def get_path(self, *path: str) -> 'BlobHandle':
+        if self.is_full():
+            raise ValueError(f"URI must not be full: {self}")
+        return BlobHandle(
+            self._client, f"{self._uri}/{'/'.join(path)}", is_full=True)
+
+    def get_parent(self) -> 'BlobHandle':
+        if self._parent is None:
+            parsed = parse.urlparse(self._uri)
+            path = "/".join(parsed.path.split("/")[1:3])
+            parsed = parsed._replace(path=path)
+            uri = parsed.geturl()
+            res = BlobHandle(
+                self._client, uri, is_full=False)
+            self._parent = res
+        return self._parent
+
     def get_ctype(self) -> Optional[str]:
         return self._ctype
 
-    def get_content(self) -> Optional[ByteResponse]:
+    def clear_info_cache(self) -> None:
+        self._info = None
+
+    def get_info(self) -> Dict[str, Any]:
+        if self.is_full():
+            raise ValueError(f"URI must not be full: {self}")
+        if self._info is None:
+            info = self.get_path("info.json").get_content()
+            assert info is not None
+            self._info = cast(Dict[str, Any], info)
+        return self._info
+
+    def get_content(self, filter_id: bool = True) -> Optional[ByteResponse]:
         if not self.is_full():
             raise ValueError(f"URI must be full: {self}")
         if self.is_empty():
@@ -2000,7 +2074,13 @@ class BlobHandle:
                         "uri": self.get_uri(),
                     })
                 self._ctype = ctype
-                return interpret_ctype(fin, ctype)
+                content = interpret_ctype(fin, ctype)
+                if filter_id and isinstance(content, pd.DataFrame):
+                    res = self.get_parent()
+                    row_id = res.get_info()
+                    index = content[content[row_id["row_id"]] < 0].index
+                    content.drop(index, inplace=True)
+                return content
             except HTTPError as e:
                 if e.response.status_code != 404:
                     raise e
