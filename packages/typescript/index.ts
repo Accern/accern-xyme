@@ -975,7 +975,7 @@ export class DagHandle {
         });
     }
 
-    public getUri(): string {
+    public getURI(): string {
         return this.uri;
     }
 
@@ -1094,7 +1094,7 @@ export class DagHandle {
     }
 
     public setDag(defs: DagDef) {
-        this.client.setDag(this.getUri(), defs);
+        this.client.setDag(this.getURI(), defs);
     }
 
     public async dynamicModel(
@@ -1110,7 +1110,7 @@ export class DagHandle {
                     format: formatMethod,
                     inputs,
                     no_cache: noCache,
-                    dag: this.getUri(),
+                    dag: this.getURI(),
                 },
             })
             .then((response) => response.results);
@@ -1137,7 +1137,7 @@ export class DagHandle {
                         inputs: inputs,
                         no_cache: noCache,
                         output_key: outputKey,
-                        dag: this.getUri(),
+                        dag: this.getURI(),
                     },
                 })
                 .then((res) => res.results);
@@ -1177,7 +1177,7 @@ export class DagHandle {
             method: METHOD_FILE,
             path: '/dynamic',
             args: {
-                dag: this.getUri(),
+                dag: this.getURI(),
             },
             files: {
                 file: inputData,
@@ -1207,7 +1207,7 @@ export class DagHandle {
             method: METHOD_FILE,
             path: '/dynamic_async',
             args: {
-                dag: this.getUri(),
+                dag: this.getURI(),
             },
             files,
         });
@@ -1244,7 +1244,7 @@ export class DagHandle {
                 method: METHOD_GET,
                 path: '/dynamic_result',
                 args: {
-                    dag: this.getUri(),
+                    dag: this.getURI(),
                     id: valueId,
                 },
             });
@@ -1268,7 +1268,7 @@ export class DagHandle {
             path: '/dynamic_status',
             args: {
                 value_ids: valueIds.map((id) => id.getId()),
-                dag: this.getUri(),
+                dag: this.getURI(),
             },
         });
         const status = res.status;
@@ -1298,7 +1298,7 @@ export class DagHandle {
             method: METHOD_GET,
             path: '/pretty',
             args: {
-                dag: this.getUri(),
+                dag: this.getURI(),
                 nodes_only: nodesOnly,
                 allow_unicode: allowUnicode,
                 method: method,
@@ -1343,7 +1343,7 @@ export class DagHandle {
             method: METHOD_GET,
             path: '/dag_def',
             args: {
-                dag: this.getUri(),
+                dag: this.getURI(),
                 full: +full,
             },
         });
@@ -1355,7 +1355,7 @@ export class DagHandle {
             ...dagDef,
             [attr]: value,
         };
-        await this.client.setDag(this.getUri(), dagDef);
+        await this.client.setDag(this.getURI(), dagDef);
     }
 
     public async setName(value: string): Promise<void> {
@@ -1387,9 +1387,9 @@ export class DagHandle {
     ): Promise<MinimalQueueStatsResponse | MinimalQueueStatsResponse> {
         // FIXME: WTF? https://github.com/microsoft/TypeScript/issues/19360
         if (minimal) {
-            return await this.client.checkQueueStats(true, this.getUri());
+            return await this.client.checkQueueStats(true, this.getURI());
         } else {
-            return await this.client.checkQueueStats(false, this.getUri());
+            return await this.client.checkQueueStats(false, this.getURI());
         }
     }
 
@@ -1399,7 +1399,7 @@ export class DagHandle {
                 method: METHOD_POST,
                 path: '/worker',
                 args: {
-                    dag: this.getUri(),
+                    dag: this.getURI(),
                     replicas,
                     task: undefined,
                 },
@@ -1413,7 +1413,7 @@ export class DagHandle {
                 method: METHOD_POST,
                 path: '/dag_reload',
                 args: {
-                    dag: this.getUri(),
+                    dag: this.getURI(),
                     when: timestamp,
                 },
             })
@@ -1426,7 +1426,7 @@ export class DagHandle {
                 method: METHOD_GET,
                 path: '/kafka_topic_names',
                 args: {
-                    dag: this.getUri(),
+                    dag: this.getURI(),
                     postfix: postfix,
                     no_output: true,
                 },
@@ -1441,7 +1441,7 @@ export class DagHandle {
                 method: METHOD_GET,
                 path: '/kafka_topic_names',
                 args: {
-                    dag: this.getUri(),
+                    dag: this.getURI(),
                 },
             })
             .then((response) => response.output);
@@ -1456,7 +1456,7 @@ export class DagHandle {
             method: METHOD_POST,
             path: '/kafka_to[ics',
             args: {
-                dag: this.getUri(),
+                dag: this.getURI(),
                 num_partitions: numPartitions,
                 large_input_retention: largeInputRetention,
             },
@@ -1487,7 +1487,7 @@ export class DagHandle {
                 method: METHOD_FILE,
                 path: '/kafka_msg',
                 args: {
-                    dag: this.getUri(),
+                    dag: this.getURI(),
                 },
                 files,
             })
@@ -1505,7 +1505,7 @@ export class DagHandle {
                 method: METHOD_GET,
                 path: '/kafka_msg',
                 args: {
-                    dag: this.getUri(),
+                    dag: this.getURI(),
                     offset: offsetStr[0],
                 },
             });
@@ -1545,7 +1545,7 @@ export class DagHandle {
             method: METHOD_GET,
             path: '/kafka_offsets',
             args: {
-                dag: this.getUri(),
+                dag: this.getURI(),
                 alive: +alive,
             },
         });
@@ -1616,7 +1616,7 @@ export class DagHandle {
             faster = 'input';
         }
         return {
-            dag: this.getUri(),
+            dag: this.getURI(),
             input: {
                 throughput: totalInput / total,
                 max: Math.max(...inputSegments),
@@ -1645,7 +1645,7 @@ export class DagHandle {
             method: METHOD_GET,
             path: '/kafka_group',
             args: {
-                dag: this.getUri(),
+                dag: this.getURI(),
             },
         });
     }
@@ -1659,7 +1659,7 @@ export class DagHandle {
             method: METHOD_PUT,
             path: '/kafka_group',
             args: {
-                dag: this.getUri(),
+                dag: this.getURI(),
                 groupId,
                 reset,
                 ...kwargs,
@@ -1773,7 +1773,7 @@ export class NodeHandle {
                 method: METHOD_GET,
                 path: '/node_status',
                 args: {
-                    dag: this.getDag().getUri(),
+                    dag: this.getDag().getURI(),
                     node: this.getId(),
                 },
             })
@@ -1804,7 +1804,7 @@ export class NodeHandle {
                 method: METHOD_PUT,
                 path: '/node_blob',
                 args: {
-                    dag: this.getDag().getUri(),
+                    dag: this.getDag().getURI(),
                     node: this.getId(),
                     blob_key: key,
                     blob_uri: blobUri,
@@ -1819,7 +1819,7 @@ export class NodeHandle {
                 method: METHOD_GET,
                 path: '/node_in_cursors',
                 args: {
-                    dag: this.getDag().getUri(),
+                    dag: this.getDag().getURI(),
                     node: this.getId(),
                 },
             })
@@ -1832,7 +1832,7 @@ export class NodeHandle {
                 method: METHOD_GET,
                 path: '/node_chunk',
                 args: {
-                    dag: this.getDag().getUri(),
+                    dag: this.getDag().getURI(),
                     node: this.getId(),
                 },
             })
@@ -1859,7 +1859,7 @@ export class NodeHandle {
             method: METHOD_GET,
             path: '/node_logs',
             args: {
-                dag: this.getDag().getUri(),
+                dag: this.getDag().getURI(),
                 node: this.getId(),
             },
         });
@@ -1873,7 +1873,7 @@ export class NodeHandle {
                 method: METHOD_GET,
                 path: '/node_perf',
                 args: {
-                    dag: this.getDag().getUri(),
+                    dag: this.getDag().getURI(),
                     node: this.getId(),
                 },
             })
@@ -1889,7 +1889,7 @@ export class NodeHandle {
                 method: METHOD_POST,
                 path: '/read_node',
                 args: {
-                    dag: this.getDag().getUri(),
+                    dag: this.getDag().getURI(),
                     node: this.getId(),
                     key,
                     chunk,
@@ -1918,7 +1918,7 @@ export class NodeHandle {
             method: METHOD_PUT,
             path: '/node_state',
             args: {
-                dag: this.getDag().getUri(),
+                dag: this.getDag().getURI(),
                 node: this.getId(),
                 action: 'reset',
             },
@@ -1933,12 +1933,12 @@ export class NodeHandle {
             method: METHOD_GET,
             path: '/csv_blob',
             args: {
-                dag: this.getDag().getUri(),
+                dag: this.getDag().getURI(),
                 node: this.getId(),
             },
         });
         const owner: BlobOwner = {
-            owner_dag: this.getDag().getUri(),
+            owner_dag: this.getDag().getURI(),
             owner_node: this.getId(),
         };
         return new CSVBlobHandle(this.client, res.csv, owner);
@@ -1958,7 +1958,7 @@ export class NodeHandle {
             method: METHOD_PUT,
             path: '/custom_imports',
             args: {
-                dag: this.getDag().getUri(),
+                dag: this.getDag().getURI(),
                 node: this.getId(),
                 modules,
             },
@@ -1971,7 +1971,7 @@ export class NodeHandle {
             method: METHOD_GET,
             path: '/custom_imports',
             args: {
-                dag: this.getDag().getUri(),
+                dag: this.getDag().getURI(),
                 node: this.getId(),
             },
         });
@@ -1982,7 +1982,7 @@ export class NodeHandle {
             method: METHOD_GET,
             path: '/user_columns',
             args: {
-                dag: this.getDag().getUri(),
+                dag: this.getDag().getURI(),
                 node: this.getId(),
                 key,
             },
@@ -1996,7 +1996,7 @@ export class NodeHandle {
             method: METHOD_PUT,
             path: '/model_setup',
             args: {
-                dag: this.getDag().getUri(),
+                dag: this.getDag().getURI(),
                 node: this.getId(),
                 config: obj,
             },
@@ -2008,7 +2008,7 @@ export class NodeHandle {
             method: METHOD_GET,
             path: '/model_params',
             args: {
-                dag: this.getDag().getUri(),
+                dag: this.getDag().getURI(),
                 node: this.getId(),
             },
         });
@@ -2019,7 +2019,7 @@ export class NodeHandle {
             method: METHOD_GET,
             path: '/node_def',
             args: {
-                dag: this.getDag().getUri(),
+                dag: this.getDag().getURI(),
                 node: this.getId(),
             },
         });
@@ -2044,7 +2044,7 @@ export class BlobHandle {
         return this.uri.startsWith(EMPTY_BLOB_PREFIX);
     }
 
-    public getUri(): string {
+    public getURI(): string {
         return this.uri;
     }
 
@@ -2095,7 +2095,7 @@ export class BlobHandle {
                     method: METHOD_POST,
                     path: '/uri',
                     args: {
-                        uri: this.getUri(),
+                        uri: this.getURI(),
                     },
                     retry: retryOptions,
                 });
@@ -2143,7 +2143,7 @@ export class BlobHandle {
             path: '/blob_owner',
             args: {
                 blob: this.uri,
-                owner_dag: owner.getDag().getUri(),
+                owner_dag: owner.getDag().getURI(),
                 owner_node: owner.getId(),
             },
         });
@@ -2166,7 +2166,7 @@ export class BlobHandle {
     ): Promise<BlobHandle> {
         this.ensureNotFull();
         const ownerDag =
-            newOwner !== undefined ? newOwner.getDag().getUri() : undefined;
+            newOwner !== undefined ? newOwner.getDag().getURI() : undefined;
         const ownerNode =
             newOwner !== undefined ? newOwner.getId() : undefined;
         const response = await this.client.requestJSON<CopyBlob>({
@@ -2184,13 +2184,13 @@ export class BlobHandle {
 
     public async downloadZip(toPath?: string): Promise<Buffer | undefined> {
         if (this.isFull) {
-            throw new Error(`URI must not be full: ${this.getUri()}`);
+            throw new Error(`URI must not be full: ${this.getURI()}`);
         }
         const [res] = await this.client.requestBytes({
             method: METHOD_GET,
             path: '/download_zip',
             args: {
-                blob: this.getUri(),
+                blob: this.getURI(),
             },
         });
         if (isUndefined(toPath)) {
@@ -2239,7 +2239,7 @@ export class BlobHandle {
         const res = await this.performUploadAction(
             'start',
             {
-                target: this.getUri(),
+                target: this.getURI(),
                 hash: hashStr,
                 size,
                 ext,
@@ -2429,7 +2429,7 @@ export class BlobHandle {
             method: METHOD_POST,
             path: '/convert_model',
             args: {
-                blob: this.getUri(),
+                blob: this.getURI(),
             },
         });
     }
@@ -2504,7 +2504,7 @@ export class CSVBlobHandle extends BlobHandle {
             path: '/finish_csv',
             args: {
                 tmp_uri: tmpUri,
-                csv_uri: this.getUri(),
+                csv_uri: this.getURI(),
                 owner_dag: this.owner.owner_dag,
                 owner_node: this.owner.owner_node,
             },
