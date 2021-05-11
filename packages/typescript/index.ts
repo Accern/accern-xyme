@@ -67,15 +67,15 @@ import {
     WorkerScale,
 } from './types';
 import {
+    handleError,
     HTTPResponseError,
+    METHOD_DELETE,
     METHOD_FILE,
     METHOD_GET,
     METHOD_POST,
     METHOD_PUT,
-    retryWithTimeout,
     RetryOptions,
-    handleError,
-    METHOD_DELETE,
+    retryWithTimeout,
 } from './request';
 import {
     assertBoolean,
