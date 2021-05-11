@@ -356,9 +356,9 @@ export interface KafkaTopics {
 }
 
 export interface KafkaTopicNames {
-    input: string | null,
-    output: string | null,
-    error: string | null,
+    input: string | null;
+    output: string | null;
+    error: string | null;
 }
 
 export interface KafkaMessage {

@@ -1420,27 +1420,31 @@ export class DagHandle {
             .then((res) => res.when);
     }
 
-    public async getKafkaInputTopic(postfix: string = ''): Promise<string> {
-        const res = await this.client.requestJSON<KafkaTopicNames>({
-            method: METHOD_GET,
-            path: '/kafka_topic_names',
-            args: {
-                dag: this.getUri(),
-                postfix: postfix,
-                no_output: true,
-            },
-        }).then((response) => response.input);
+    public async getKafkaInputTopic(postfix = ''): Promise<string> {
+        const res = await this.client
+            .requestJSON<KafkaTopicNames>({
+                method: METHOD_GET,
+                path: '/kafka_topic_names',
+                args: {
+                    dag: this.getUri(),
+                    postfix: postfix,
+                    no_output: true,
+                },
+            })
+            .then((response) => response.input);
         return assertString(res);
     }
 
     public async getKafkaOutputTopic(): Promise<string> {
-        const res = await this.client.requestJSON<KafkaTopicNames>({
-            method: METHOD_GET,
-            path: '/kafka_topic_names',
-            args: {
-                dag: this.getUri(),
-            },
-        }).then((response) => response.output);
+        const res = await this.client
+            .requestJSON<KafkaTopicNames>({
+                method: METHOD_GET,
+                path: '/kafka_topic_names',
+                args: {
+                    dag: this.getUri(),
+                },
+            })
+            .then((response) => response.output);
         return assertString(res);
     }
 
@@ -2047,7 +2051,10 @@ export class BlobHandle {
     public getPath(path: string[]): BlobHandle {
         this.ensureNotFull();
         return new BlobHandle(
-            this.client, `${this.uri}/${path.join('/')}`, true);
+            this.client,
+            `${this.uri}/${path.join('/')}`,
+            true
+        );
     }
 
     public getContentType(): string | undefined {
@@ -2061,10 +2068,11 @@ export class BlobHandle {
     public async getInfo(): Promise<{ [key: string]: any }> {
         this.ensureNotFull();
         if (!this.info) {
-            this.info = this.getPath(['info.json']).getContent().then(
-                (response) => assertDict(response));
+            this.info = this.getPath(['info.json'])
+                .getContent()
+                .then((response) => assertDict(response));
         }
-        return this.info
+        return this.info;
     }
 
     public async getContent(): Promise<ByteResponse | null> {

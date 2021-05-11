@@ -67,7 +67,7 @@ function isString(s: unknown): s is string {
 }
 
 function isDict(s: unknown): s is { [key: string]: any } {
-    return typeof s == 'object'
+    return typeof s == 'object';
 }
 
 function isIterable(obj: any) {
@@ -170,7 +170,9 @@ export function std(arr: number[]): number {
 }
 
 export function interpretContentType(
-        data: Buffer, ctype: string): ByteResponse {
+    data: Buffer,
+    ctype: string
+): ByteResponse {
     if (ctype === 'application/json') {
         return JSON.parse(data.toString());
     }
