@@ -31,6 +31,7 @@ import {
     KafkaMessage,
     KafkaOffsets,
     KafkaThroughput,
+    KafkaTopicNames,
     KafkaTopics,
     KnownBlobs,
     MinimalQueueStatsResponse,
@@ -78,6 +79,7 @@ import {
 } from './request';
 import {
     assertBoolean,
+    assertDict,
     assertString,
     ByteResponse,
     forceKey,
@@ -85,9 +87,9 @@ import {
     getFileHash,
     getFileUploadChunkSize,
     getQueryURL,
-    interpretCtype,
+    interpretContentType,
     isUndefined,
-    mergeCtype,
+    mergeContentType,
     openWrite,
     safeOptNumber,
     std,
@@ -784,6 +786,15 @@ export default class XYMEClient {
         });
     }
 
+    public async getKafkaErrorTopic(): Promise<string> {
+        const res = await this.requestJSON<KafkaTopicNames>({
+            method: METHOD_GET,
+            path: '/kafka_topic_names',
+            args: {},
+        }).then((response) => response.error);
+        return assertString(res);
+    }
+
     public async deleteKafkaErrorTopic(): Promise<KafkaTopics> {
         return await this.requestJSON<KafkaTopics>({
             method: METHOD_POST,
@@ -1172,7 +1183,7 @@ export class DagHandle {
                 file: inputData,
             },
         });
-        return interpretCtype(res, ctype);
+        return interpretContentType(res, ctype);
     }
 
     public async dynamicObj(inputObj: any): Promise<ByteResponse> {
@@ -1237,7 +1248,7 @@ export class DagHandle {
                     id: valueId,
                 },
             });
-            return interpretCtype(res, ctype);
+            return interpretContentType(res, ctype);
         } catch (error) {
             if (
                 error instanceof HTTPResponseError &&
@@ -1281,7 +1292,7 @@ export class DagHandle {
     private async _pretty(
         nodesOnly: boolean,
         allowUnicode: boolean,
-        prettyMethod = 'accern'
+        method = 'accern'
     ): Promise<PrettyResponse> {
         return await this.client.requestJSON<PrettyResponse>({
             method: METHOD_GET,
@@ -1290,7 +1301,7 @@ export class DagHandle {
                 dag: this.getUri(),
                 nodes_only: nodesOnly,
                 allow_unicode: allowUnicode,
-                method: prettyMethod,
+                method: method,
             },
         });
     }
@@ -1298,9 +1309,10 @@ export class DagHandle {
     public async pretty(
         nodesOnly = false,
         allowUnicode = true,
-        prettyMethod = 'accern',
+        method = 'accern',
         display = true
     ): Promise<string | undefined> {
+        // FIXME: add dot output and allow file like display
         const render = (value: string) => {
             if (display) {
                 console.log(value);
@@ -1312,7 +1324,7 @@ export class DagHandle {
         const graphStr = await this._pretty(
             nodesOnly,
             allowUnicode,
-            prettyMethod
+            method
         ).then((res) => res.pretty);
         return render(graphStr);
     }
@@ -1408,6 +1420,30 @@ export class DagHandle {
             .then((res) => res.when);
     }
 
+    public async getKafkaInputTopic(postfix: string = ''): Promise<string> {
+        const res = await this.client.requestJSON<KafkaTopicNames>({
+            method: METHOD_GET,
+            path: '/kafka_topic_names',
+            args: {
+                dag: this.getUri(),
+                postfix: postfix,
+                no_output: true,
+            },
+        }).then((response) => response.input);
+        return assertString(res);
+    }
+
+    public async getKafkaOutputTopic(): Promise<string> {
+        const res = await this.client.requestJSON<KafkaTopicNames>({
+            method: METHOD_GET,
+            path: '/kafka_topic_names',
+            args: {
+                dag: this.getUri(),
+            },
+        }).then((response) => response.output);
+        return assertString(res);
+    }
+
     public async setKafkaTopicPartitions(
         numPartitions: number,
         largeInputRetention = false
@@ -1472,21 +1508,21 @@ export class DagHandle {
         };
         if (maxRows <= 1) {
             const [res, ctype] = await readSingle();
-            return interpretCtype(res, ctype);
+            return interpretContentType(res, ctype);
         }
         let res: Buffer[] = [];
         let ctype: string | undefined;
         // eslint-disable-next-line no-constant-condition
         while (true) {
-            const [val, curCtype] = await readSingle();
+            const [val, curContentType] = await readSingle();
             if (val === null) {
                 break;
             }
-            if (curCtype === null) {
-                ctype = curCtype;
-            } else if (ctype !== curCtype) {
+            if (curContentType === null) {
+                ctype = curContentType;
+            } else if (ctype !== curContentType) {
                 throw new Error(
-                    `inconsistent return types ${ctype} != ${curCtype}`
+                    `inconsistent return types ${ctype} != ${curContentType}`
                 );
             }
             res = [...res, val];
@@ -1497,7 +1533,7 @@ export class DagHandle {
         if (res.length === 0 || isUndefined(ctype)) {
             return null;
         }
-        return mergeCtype(res, ctype);
+        return mergeContentType(res, ctype);
     }
 
     public async getKafkaOffsets(alive: boolean): Promise<KafkaOffsets> {
@@ -1992,6 +2028,7 @@ export class BlobHandle {
     isFull: boolean;
     ctype?: string;
     tmpUri?: string;
+    info?: Promise<{ [key: string]: any }>;
 
     constructor(client: XYMEClient, uri: string, isFull: boolean) {
         this.client = client;
@@ -1999,7 +2036,7 @@ export class BlobHandle {
         this.isFull = isFull;
     }
 
-    private isEmpty(): boolean {
+    public isEmpty(): boolean {
         return this.uri.startsWith(EMPTY_BLOB_PREFIX);
     }
 
@@ -2007,8 +2044,27 @@ export class BlobHandle {
         return this.uri;
     }
 
-    public getCtype(): string | undefined {
+    public getPath(path: string[]): BlobHandle {
+        this.ensureNotFull();
+        return new BlobHandle(
+            this.client, `${this.uri}/${path.join('/')}`, true);
+    }
+
+    public getContentType(): string | undefined {
         return this.ctype;
+    }
+
+    public clearInfoCache() {
+        this.info = null;
+    }
+
+    public async getInfo(): Promise<{ [key: string]: any }> {
+        this.ensureNotFull();
+        if (!this.info) {
+            this.info = this.getPath(['info.json']).getContent().then(
+                (response) => assertDict(response));
+        }
+        return this.info
     }
 
     public async getContent(): Promise<ByteResponse | null> {
@@ -2035,7 +2091,7 @@ export class BlobHandle {
                     },
                     retry: retryOptions,
                 });
-                return interpretCtype(res, ctype);
+                return interpretContentType(res, ctype);
             } catch (error) {
                 if (error.response.status === 404) {
                     throw error;

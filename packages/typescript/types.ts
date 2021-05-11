@@ -355,6 +355,12 @@ export interface KafkaTopics {
     create: boolean;
 }
 
+export interface KafkaTopicNames {
+    input: string | null,
+    output: string | null,
+    error: string | null,
+}
+
 export interface KafkaMessage {
     messages: DictStrStr;
 }

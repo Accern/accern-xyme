@@ -66,6 +66,10 @@ function isString(s: unknown): s is string {
     return typeof s === 'string';
 }
 
+function isDict(s: unknown): s is { [key: string]: any } {
+    return typeof s == 'object'
+}
+
 function isIterable(obj: any) {
     if (obj == null) {
         return false;
@@ -86,6 +90,14 @@ export function assertBoolean(value: unknown): boolean {
         return value;
     } else {
         throw new Error(`${value} is not boolean`);
+    }
+}
+
+export function assertDict(value: unknown): { [key: string]: any } {
+    if (isDict(value)) {
+        return value;
+    } else {
+        throw new Error(`${value} is not a dictionary`);
     }
 }
 
@@ -157,7 +169,8 @@ export function std(arr: number[]): number {
     );
 }
 
-export function interpretCtype(data: Buffer, ctype: string): ByteResponse {
+export function interpretContentType(
+        data: Buffer, ctype: string): ByteResponse {
     if (ctype === 'application/json') {
         return JSON.parse(data.toString());
     }
@@ -185,7 +198,7 @@ export function interpretCtype(data: Buffer, ctype: string): ByteResponse {
     return data;
 }
 
-export function mergeCtype(
+export function mergeContentType(
     datas: ByteResponse[],
     ctype: string
 ): ByteResponse {
