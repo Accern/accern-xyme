@@ -687,6 +687,13 @@ export default class XYMEClient {
         return dag;
     }
 
+    public async getBlobHandle(
+        uri: string,
+        isFull = false
+    ): Promise<BlobHandle> {
+        return new BlobHandle(this, uri, isFull);
+    }
+
     public async getNodeDefs(): Promise<NodeTypes['info']> {
         this.maybeRefresh();
         if (this.nodeDefs) {
@@ -711,13 +718,6 @@ export default class XYMEClient {
                 type: blobType,
             },
         }).then((response) => response.blob);
-    }
-
-    public async getBlobHandle(
-        uri: string,
-        isFull = false
-    ): Promise<BlobHandle> {
-        return new BlobHandle(this, uri, isFull);
     }
 
     public async getBlobOwner(blobURI: string): Promise<BlobOwner> {

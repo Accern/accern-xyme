@@ -599,6 +599,9 @@ class XYMEClient:
         self._dag_cache[dag_uri] = res
         return res
 
+    def get_blob_handle(self, uri: str, is_full: bool = False) -> 'BlobHandle':
+        return BlobHandle(self, uri, is_full=is_full)
+
     def get_node_defs(self) -> Dict[str, NodeDefInfo]:
         self._maybe_refresh()
         if self._node_defs is not None:
@@ -613,9 +616,6 @@ class XYMEClient:
             METHOD_POST, "/blob_init", {
                 "type": blob_type,
             }, add_namespace=False))["blob"]
-
-    def get_blob_handle(self, uri: str, is_full: bool = False) -> 'BlobHandle':
-        return BlobHandle(self, uri, is_full=is_full)
 
     def get_blob_owner(self, blob_uri: str) -> BlobOwner:
         return cast(BlobOwner, self.request_json(
