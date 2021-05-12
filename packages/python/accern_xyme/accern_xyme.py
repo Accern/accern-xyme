@@ -910,7 +910,7 @@ class XYMEClient:
             if warnings_io is not None:
                 warnings_io.write(
                     "Please install dvc https://dvc.org/doc/install")
-            return
+            return None
 
         import dvc.api
 
