@@ -2,7 +2,7 @@
 import { Readable } from 'stream';
 import FormData from 'form-data';
 import { promises as fpm } from 'fs';
-import { HeadersInit, Response, RequestInit } from 'node-fetch';
+import fetch, { HeadersInit, Response, RequestInit } from 'node-fetch';
 import { performance } from 'perf_hooks';
 import jsSHA from 'jssha';
 import {
@@ -28,7 +28,6 @@ import {
     InCursors,
     InstanceStatus,
     JSONBlobAppendResponse,
-    // JSONBlobResponse,
     KafkaGroup,
     KafkaMessage,
     KafkaOffsets,
@@ -240,13 +239,23 @@ export default class XYMEClient {
                 // eslint-disable-next-line @typescript-eslint/no-unused-vars
                 const { body, ...init } = options;
                 response = await retryWithTimeout(
-                    getQueryURL(args, url),
+                    getQueryURL(argsNew, url),
                     retry,
                     init
                 );
                 break;
             }
             case METHOD_POST:
+                response = await fetch(url, {
+                    method: METHOD_POST,
+                    headers: {
+                        'Authorization': headers['Authorization'],
+                        'content-type': 'application/json',
+                    },
+                    body: JSON.stringify(argsNew),
+                    ...rest,
+                });
+                break;
             case METHOD_PUT:
             case METHOD_DELETE: {
                 response = await retryWithTimeout(url, retry, options);
@@ -332,7 +341,7 @@ export default class XYMEClient {
                 // eslint-disable-next-line @typescript-eslint/no-unused-vars
                 const { body, ...init } = options;
                 response = await retryWithTimeout(
-                    getQueryURL(args, url),
+                    getQueryURL(argsNew, url),
                     retry,
                     init
                 );
@@ -417,7 +426,7 @@ export default class XYMEClient {
                 // eslint-disable-next-line @typescript-eslint/no-unused-vars
                 const { body, ...init } = options;
                 response = await retryWithTimeout(
-                    getQueryURL(args, url),
+                    getQueryURL(argsNew, url),
                     retry,
                     init
                 );
@@ -1283,10 +1292,8 @@ export class DagHandle {
             });
             return interpretCtype(res, ctype);
         } catch (error) {
-            if (
-                error instanceof HTTPResponseError &&
-                error.response.status === 404
-            ) {
+            if (!(error instanceof HTTPResponseError)) throw error;
+            if (error.response.status === 404) {
                 throw new KeyError(`valueId ${valueId} does not exist`);
             }
             throw error;
@@ -2099,10 +2106,8 @@ export class BlobHandle {
                 });
                 return interpretCtype(res, ctype);
             } catch (error) {
-                if (
-                    error instanceof HTTPResponseError &&
-                    error.response.status === 404
-                ) {
+                if (!(error instanceof HTTPResponseError)) throw error;
+                if (error.response.status === 404) {
                     throw error;
                 }
                 sleepTime = Math.min(sleepTime * sleepMul, sleepMax);

@@ -168,19 +168,44 @@ def is_jupyter() -> bool:
     return IS_JUPYTER
 
 
+HAS_GRAPH_EASY: Optional[bool] = None
+
+
 def has_graph_easy() -> bool:
-    import subprocess
+    global HAS_GRAPH_EASY
+
+    if HAS_GRAPH_EASY is not None:
+        return HAS_GRAPH_EASY
 
     try:
+        import subprocess
         subprocess.Popen(["graph-easy", "--help"])
-        return True
+        HAS_GRAPH_EASY = True
     except FileNotFoundError:
         # pylint: disable=line-too-long
         print(
             "Warning: Graph:Easy module not found. Use the "
             "whalebrew to install graph-easy. \n"
             "https://stackoverflow.com/questions/3211801/graphviz-and-ascii-output/55403011#55403011")  # nopep8, line too long
-        return False
+        HAS_GRAPH_EASY = False
+    return HAS_GRAPH_EASY
+
+
+HAS_DVC: Optional[bool] = None
+
+
+def has_dvc() -> bool:
+    global HAS_DVC
+
+    if HAS_DVC is not None:
+        return HAS_DVC
+    try:
+        # pylint: disable=unused-import
+        import dvc.api
+        HAS_DVC = True
+    except (NameError, ModuleNotFoundError) as _:
+        HAS_DVC = False
+    return HAS_DVC
 
 
 def get_progress_bar(out: Optional[IO[Any]]) -> Callable[[float, bool], None]:

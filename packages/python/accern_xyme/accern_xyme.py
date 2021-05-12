@@ -56,6 +56,7 @@ from .types import (
     BlobFilesResponse,
     BlobInit,
     BlobOwner,
+    BlobType,
     BlobUriResponse,
     CacheStats,
     CopyBlob,
@@ -638,21 +639,36 @@ class XYMEClient:
                 "index": index,
             }))["dag"]
 
+    def get_blob_type(self, blob_uri: str) -> str:
+        return cast(BlobType, self.request_json(
+            METHOD_GET, "/blob_type", {
+                "blob_uri": blob_uri,
+            },
+        ))["type"]
+
     def get_csv_blob(self, blob_uri: str) -> 'CSVBlobHandle':
-        return CSVBlobHandle(
-            self, blob_uri, owner=self.get_blob_owner(blob_uri))
+        blob_type = self.get_blob_type(blob_uri)
+        if blob_type not in CSVBlobHandle.valid_blob_types():
+            raise ValueError(f"blob: {blob_uri} is not csv type")
+        return CSVBlobHandle(self, blob_uri, is_full=False)
 
     def get_model_blob(self, blob_uri: str) -> 'ModelBlobHandle':
-        return ModelBlobHandle(
-            self, blob_uri, owner=self.get_blob_owner(blob_uri))
+        blob_type = self.get_blob_type(blob_uri)
+        if blob_type not in ModelBlobHandle.valid_blob_types():
+            raise ValueError(f"blob: {blob_uri} is not model type")
+        return ModelBlobHandle(self, blob_uri, is_full=False)
 
     def get_custom_code_blob(self, blob_uri: str) -> 'CustomCodeBlobHandle':
-        return CustomCodeBlobHandle(
-            self, blob_uri, owner=self.get_blob_owner(blob_uri))
+        blob_type = self.get_blob_type(blob_uri)
+        if blob_type not in CustomCodeBlobHandle.valid_blob_types():
+            raise ValueError(f"blob: {blob_uri} is not custom code type")
+        return CustomCodeBlobHandle(self, blob_uri, is_full=False)
 
     def get_json_blob(self, blob_uri: str) -> 'JSONBlobHandle':
-        return JSONBlobHandle(
-            self, blob_uri, owner=self.get_blob_owner(blob_uri))
+        blob_type = self.get_blob_type(blob_uri)
+        if blob_type not in JSONBlobHandle.valid_blob_types():
+            raise ValueError(f"blob: {blob_uri} is not json type")
+        return JSONBlobHandle(self, blob_uri, is_full=False)
 
     def duplicate_dag(
             self,
@@ -867,7 +883,11 @@ class XYMEClient:
             METHOD_GET, "/inference_models", {}))["models"]
 
     @staticmethod
-    def read_dvc(path: str, repo: str, rev: Optional[str] = "HEAD") -> Any:
+    def read_dvc(
+            path: str,
+            repo: str,
+            rev: Optional[str] = "HEAD",
+            warnings_io: Optional[IO[Any]] = sys.stderr) -> Any:
         """Reading dvc file content from git tracked DVC project.
 
         Args:
@@ -884,6 +904,14 @@ class XYMEClient:
         Returns:
             the content of the file.
         """
+        from .util import has_dvc
+
+        if not has_dvc():
+            if warnings_io is not None:
+                warnings_io.write(
+                    "Please install dvc https://dvc.org/doc/install")
+            return
+
         import dvc.api
 
         res = dvc.api.read(path, repo=repo, rev=rev, mode="r")
@@ -1673,9 +1701,8 @@ class NodeHandle:
             raise ValueError(f"{self._node_id} != {node_info['id']}")
         self._node_name = node_info["name"]
         self._type = node_info["type"]
-        owner = self.as_owner()
         self._blobs = {
-            key: BlobHandle(self._client, value, is_full=False, owner=owner)
+            key: BlobHandle(self._client, value, is_full=False)
             for (key, value) in node_info["blobs"].items()
         }
         self._inputs = node_info["inputs"]
@@ -1996,14 +2023,13 @@ class BlobHandle:
             self,
             client: XYMEClient,
             uri: str,
-            is_full: bool,
-            owner: BlobOwner) -> None:
+            is_full: bool) -> None:
         self._client = client
         self._uri = uri
         self._is_full = is_full
         self._ctype: Optional[str] = None
         self._tmp_uri: Optional[str] = None
-        self._owner = owner
+        self._owner: Optional[BlobOwner] = None
 
     def is_full(self) -> bool:
         return self._is_full
@@ -2051,7 +2077,7 @@ class BlobHandle:
                 "blob": self.get_uri(),
             }))
         return [
-            BlobHandle(self._client, blob_uri, is_full=True, owner=self._owner)
+            BlobHandle(self._client, blob_uri, is_full=True)
             for blob_uri in resp["files"]
         ]
 
@@ -2069,13 +2095,17 @@ class BlobHandle:
             }))
 
     def get_owner(self) -> BlobOwner:
+        if self._owner is None:
+            self._owner = self._client.get_blob_owner(self.get_uri())
         return self._owner
 
     def get_owner_dag(self) -> Optional[str]:
-        return self._owner["owner_dag"]
+        owner = self.get_owner()
+        return owner["owner_dag"]
 
     def get_owner_node(self) -> str:
-        return self._owner["owner_node"]
+        owner = self.get_owner()
+        return owner["owner_node"]
 
     def copy_to(
             self,
@@ -2239,17 +2269,14 @@ class BlobHandle:
 
 
 class CSVBlobHandle(BlobHandle):
-    def __init__(
-            self,
-            client: XYMEClient,
-            uri: str,
-            owner: BlobOwner) -> None:
-        super().__init__(client, uri, is_full=False, owner=owner)
+    @staticmethod
+    def valid_blob_types() -> Set[str]:
+        return {"csv"}
 
     def finish_csv_upload(self) -> UploadFilesResponse:
         tmp_uri = self._tmp_uri
         assert tmp_uri is not None
-        owner = self._owner
+        owner = self.get_owner()
         args: Dict[str, Optional[Union[str, int]]] = {
             "tmp_uri": tmp_uri,
             "csv_uri": self.get_uri(),
@@ -2304,12 +2331,9 @@ class CSVBlobHandle(BlobHandle):
 
 
 class JSONBlobHandle(BlobHandle):
-    def __init__(
-            self,
-            client: XYMEClient,
-            uri: str,
-            owner: BlobOwner) -> None:
-        super().__init__(client, uri, is_full=False, owner=owner)
+    @staticmethod
+    def valid_blob_types() -> Set[str]:
+        return {"json"}
 
     def append_jsons(
             self,
@@ -2330,12 +2354,9 @@ class JSONBlobHandle(BlobHandle):
 
 
 class CustomCodeBlobHandle(BlobHandle):
-    def __init__(
-            self,
-            client: XYMEClient,
-            uri: str,
-            owner: BlobOwner) -> None:
-        super().__init__(client, uri, is_full=False, owner=owner)
+    @staticmethod
+    def valid_blob_types() -> Set[str]:
+        return {"custom_code"}
 
     def set_custom_imports(
             self, modules: List[List[str]]) -> NodeCustomImports:
@@ -2383,12 +2404,15 @@ class CustomCodeBlobHandle(BlobHandle):
 
 
 class ModelBlobHandle(BlobHandle):
-    def __init__(
-            self,
-            client: XYMEClient,
-            uri: str,
-            owner: BlobOwner) -> None:
-        super().__init__(client, uri, is_full=False, owner=owner)
+    @staticmethod
+    def valid_blob_types() -> Set[str]:
+        return {
+            "text_model_reg",
+            "text_model_clf",
+            "embedding_model",
+            "sklike_model_reg",
+            "sklike_model_clf",
+        }
 
     def setup_model(self, obj: Dict[str, Any]) -> ModelSetupResponse:
         return cast(ModelSetupResponse, self._client.request_json(

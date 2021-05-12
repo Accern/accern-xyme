@@ -378,3 +378,6 @@ PrettyResponse = TypedDict('PrettyResponse', {
 BlobUriResponse = TypedDict('BlobUriResponse', {
     "uri": str,
 })
+BlobType = TypedDict('BlobType', {
+    "type": str,
+})
