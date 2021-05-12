@@ -480,3 +480,7 @@ export interface PrettyResponse {
 export type DictStrStr = { [key: string]: string };
 
 export type DynamicFormat = 'simple' | 'titan';
+
+export interface BlobTypeResponse {
+    type: string;
+}

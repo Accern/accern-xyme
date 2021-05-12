@@ -10,6 +10,7 @@ import {
     BlobFilesResponse,
     BlobInit,
     BlobOwner,
+    BlobTypeResponse,
     CacheStats,
     CopyBlob,
     CSVBlobResponse,
@@ -67,15 +68,15 @@ import {
     WorkerScale,
 } from './types';
 import {
+    handleError,
     HTTPResponseError,
+    METHOD_DELETE,
     METHOD_FILE,
     METHOD_GET,
     METHOD_POST,
     METHOD_PUT,
-    retryWithTimeout,
     RetryOptions,
-    handleError,
-    METHOD_DELETE,
+    sleep,
 } from './request';
 import {
     assertBoolean,
@@ -99,6 +100,8 @@ export * from './request';
 export * from './types';
 
 const API_VERSION = 4;
+const MAX_RETRY = 20;
+const RETRY_SLEEP = 5.0;
 const EMPTY_BLOB_PREFIX = 'null://';
 const PREFIX = 'xyme';
 const DEFAULT_NAMESPACE = 'default';
@@ -109,6 +112,8 @@ const CUSTOM_NODE_TYPES = [
     'custom_json_to_data',
     'custom_json_join_data',
 ];
+const NO_RETRY = [METHOD_POST, METHOD_FILE];
+const NO_RETRY_STATUS_CODE = [403, 404, 500];
 
 export interface XYMEConfig {
     url: string;
@@ -177,6 +182,7 @@ export default class XYMEClient {
             this.refresh();
         }
     }
+
     private async getPrefix(
         addPrefix: boolean,
         apiVersion: number | undefined
@@ -205,60 +211,186 @@ export default class XYMEClient {
             files,
             method,
             path,
-            retry,
-            ...rest
         } = rargs;
-        const prefix = await this.getPrefix(addPrefix, apiVersion);
-        const url = `${this.url}${prefix}${path}`;
-        const headers: HeadersInit = {
-            'Authorization': this.token,
-            'content-type': 'application/octet-stream',
-        };
-        let argsNew = { ...args };
-        if (addNamespace) {
-            argsNew = {
-                ...argsNew,
-                namespace: this.namespace,
-            };
+        let retry = 0;
+        // eslint-disable-next-line no-constant-condition
+        while (true) {
+            try {
+                try {
+                    return await this.fallibleRawRequestBytes(
+                        method,
+                        path,
+                        args,
+                        addPrefix,
+                        addNamespace,
+                        files,
+                        apiVersion
+                    );
+                } catch (e) {
+                    if (
+                        e instanceof HTTPResponseError &&
+                        NO_RETRY_STATUS_CODE.indexOf(e.response.status) > 0
+                    ) {
+                        retry = MAX_RETRY;
+                        throw e;
+                    }
+                }
+            } catch (error) {
+                if (retry >= MAX_RETRY) {
+                    throw error;
+                }
+                if (method in NO_RETRY) {
+                    throw error;
+                }
+                await sleep(RETRY_SLEEP);
+            }
+            retry += 1;
         }
-        const options: RequestInit = {
+    }
+
+    private async rawRequestJSON<T>(rargs: XYMERequestArgument): Promise<T> {
+        const {
+            addNamespace,
+            addPrefix,
+            apiVersion,
+            args,
+            files,
             method,
-            headers,
-            body: JSON.stringify(argsNew),
-            ...(rest as RequestInit),
-        };
+            path,
+        } = rargs;
+        let retry = 0;
+        // eslint-disable-next-line no-constant-condition
+        while (true) {
+            try {
+                try {
+                    return await this.fallibleRawRequestJSON(
+                        method,
+                        path,
+                        args,
+                        addPrefix,
+                        addNamespace,
+                        files,
+                        apiVersion
+                    );
+                } catch (e) {
+                    if (
+                        e instanceof HTTPResponseError &&
+                        NO_RETRY_STATUS_CODE.indexOf(e.response.status) > 0
+                    ) {
+                        retry = MAX_RETRY;
+                        throw e;
+                    }
+                }
+            } catch (error) {
+                if (retry >= MAX_RETRY) {
+                    throw error;
+                }
+                if (method in NO_RETRY) {
+                    throw error;
+                }
+                await sleep(RETRY_SLEEP);
+            }
+            retry += 1;
+        }
+    }
+
+    private async rawRequestString(
+        rargs: XYMERequestArgument
+    ): Promise<Readable> {
+        const {
+            addNamespace,
+            addPrefix,
+            apiVersion,
+            args,
+            method,
+            path,
+        } = rargs;
+        let retry = 0;
+        // eslint-disable-next-line no-constant-condition
+        while (true) {
+            try {
+                try {
+                    return await this.fallibleRawRequestString(
+                        method,
+                        path,
+                        args,
+                        addPrefix,
+                        addNamespace,
+                        apiVersion
+                    );
+                } catch (e) {
+                    if (
+                        e instanceof HTTPResponseError &&
+                        NO_RETRY_STATUS_CODE.indexOf(e.response.status) > 0
+                    ) {
+                        retry = MAX_RETRY;
+                        throw e;
+                    }
+                }
+            } catch (error) {
+                if (retry >= MAX_RETRY) {
+                    throw error;
+                }
+                if (method in NO_RETRY) {
+                    throw error;
+                }
+                await sleep(RETRY_SLEEP);
+            }
+            retry += 1;
+        }
+    }
+
+    private async fallibleRawRequestBytes(
+        method: string,
+        path: string,
+        args: { [key: string]: any },
+        addPrefix = true,
+        addNamespace = true,
+        files?: { [key: string]: Buffer },
+        apiVersion?: number
+    ): Promise<[Buffer, string]> {
         if (method !== 'FILE' && files !== undefined) {
             throw new Error(
                 `files are only allow for post (got ${method}): ${files}`
             );
         }
-        let response: Response | undefined = undefined;
+        const prefix = await this.getPrefix(addPrefix, apiVersion);
+        const url = `${this.url}${prefix}${path}`;
+        const headers: HeadersInit = {
+            authorization: this.token,
+        };
+        if (addNamespace) {
+            args = {
+                ...args,
+                namespace: this.namespace,
+            };
+        }
+        let options: RequestInit;
 
+        let response: Response | undefined = undefined;
         switch (method) {
             case METHOD_GET: {
-                // eslint-disable-next-line @typescript-eslint/no-unused-vars
-                const { body, ...init } = options;
-                response = await retryWithTimeout(
-                    getQueryURL(argsNew, url),
-                    retry,
-                    init
-                );
+                options = {
+                    method,
+                    headers: {
+                        ...headers,
+                        'content-type': 'application/octet-stream',
+                    },
+                };
+                response = await fetch(getQueryURL(args, url), options);
                 break;
             }
             case METHOD_POST:
+            case METHOD_PUT:
+            case METHOD_DELETE: {
                 response = await fetch(url, {
                     method: METHOD_POST,
                     headers: {
                         'Authorization': headers['Authorization'],
-                        'content-type': 'application/json',
+                        'content-type': 'application/octet-stream',
                     },
-                    body: JSON.stringify(argsNew),
-                    ...rest,
+                    body: JSON.stringify(args),
                 });
-                break;
-            case METHOD_PUT:
-            case METHOD_DELETE: {
-                response = await retryWithTimeout(url, retry, options);
                 break;
             }
             case METHOD_FILE: {
@@ -272,8 +404,7 @@ export default class XYMEClient {
                     Object.keys(args).map((key) => {
                         formData.append(key, args[key]);
                     });
-                    response = await retryWithTimeout(url, retry, {
-                        ...options,
+                    response = await fetch(url, {
                         method: METHOD_POST,
                         body: formData,
                         headers: {
@@ -298,59 +429,57 @@ export default class XYMEClient {
         }
     }
 
-    private async rawRequestJSON<T>(rargs: XYMERequestArgument): Promise<T> {
-        const {
-            addNamespace,
-            addPrefix,
-            apiVersion,
-            args,
-            files,
-            method,
-            path,
-            retry,
-            ...rest
-        } = rargs;
-        const prefix = await this.getPrefix(addPrefix, apiVersion);
-        const url = `${this.url}${prefix}${path}`;
-        const headers: HeadersInit = {
-            'Authorization': this.token,
-            'content-type': 'application/json',
-        };
-        let argsNew = { ...args };
-        if (addNamespace) {
-            argsNew = {
-                ...argsNew,
-                namespace: this.namespace,
-            };
-        }
-        const options: RequestInit = {
-            method,
-            headers,
-            body: JSON.stringify(argsNew),
-            ...(rest as RequestInit),
-        };
+    private async fallibleRawRequestJSON<T>(
+        method: string,
+        path: string,
+        args: { [key: string]: any },
+        addPrefix = true,
+        addNamespace = true,
+        files?: { [key: string]: Buffer },
+        apiVersion?: number
+    ): Promise<T> {
         if (method !== 'FILE' && files !== undefined) {
             throw new Error(
                 `files are only allow for post (got ${method}): ${files}`
             );
         }
+        const prefix = await this.getPrefix(addPrefix, apiVersion);
+        const url = `${this.url}${prefix}${path}`;
+        const headers: HeadersInit = {
+            authorization: this.token,
+        };
+        if (addNamespace) {
+            args = {
+                ...args,
+                namespace: this.namespace,
+            };
+        }
+        let options: RequestInit;
         let response: Response | undefined = undefined;
-
         switch (method) {
             case METHOD_GET: {
-                // eslint-disable-next-line @typescript-eslint/no-unused-vars
-                const { body, ...init } = options;
-                response = await retryWithTimeout(
-                    getQueryURL(argsNew, url),
-                    retry,
-                    init
-                );
+                options = {
+                    method,
+                    headers: {
+                        ...headers,
+                        'content-type': 'application/json',
+                    },
+                };
+                response = await fetch(getQueryURL(args, url), options);
                 break;
             }
             case METHOD_POST:
             case METHOD_PUT:
             case METHOD_DELETE: {
-                response = await retryWithTimeout(url, retry, options);
+                options = {
+                    method,
+                    headers: {
+                        ...headers,
+                        'content-type': 'application/json',
+                    },
+                    body: JSON.stringify(args),
+                };
+                response = await fetch(url, options);
                 break;
             }
             case METHOD_FILE: {
@@ -364,8 +493,7 @@ export default class XYMEClient {
                     Object.keys(args).map((key) => {
                         formData.append(key, args[key]);
                     });
-                    response = await retryWithTimeout(url, retry, {
-                        ...options,
+                    response = await fetch(url, {
                         method: METHOD_POST,
                         body: formData,
                         headers: {
@@ -387,19 +515,14 @@ export default class XYMEClient {
         }
     }
 
-    private async rawRequestString(
-        rargs: XYMERequestArgument
+    private async fallibleRawRequestString(
+        method: string,
+        path: string,
+        args: { [key: string]: any },
+        addPrefix = true,
+        addNamespace = true,
+        apiVersion?: number
     ): Promise<Readable> {
-        const {
-            addNamespace,
-            addPrefix,
-            apiVersion,
-            args,
-            method,
-            path,
-            retry,
-            ...rest
-        } = rargs;
         const prefix = await this.getPrefix(addPrefix, apiVersion);
         const url = `${this.url}${prefix}${path}`;
         let response: Response = undefined;
@@ -407,34 +530,25 @@ export default class XYMEClient {
             'Authorization': this.token,
             'content-type': 'application/text',
         };
-        let argsNew = { ...args };
         if (addNamespace) {
-            argsNew = {
-                ...argsNew,
+            args = {
+                ...args,
                 namespace: this.namespace,
             };
         }
         const options: RequestInit = {
-            ...rest,
             method,
-            headers,
-            body: JSON.stringify(argsNew),
+            headers: {
+                ...headers,
+                'content-type': 'application/text',
+            },
         };
-
         switch (method) {
-            case METHOD_GET: {
-                // eslint-disable-next-line @typescript-eslint/no-unused-vars
-                const { body, ...init } = options;
-                response = await retryWithTimeout(
-                    getQueryURL(argsNew, url),
-                    retry,
-                    init
-                );
+            case METHOD_GET:
+            case METHOD_POST: {
+                response = await fetch(getQueryURL(args, url), options);
                 break;
             }
-            case METHOD_POST:
-                response = await retryWithTimeout(url, retry, options);
-                break;
             default:
                 throw new Error(`unknown method ${method}`);
         }
@@ -549,6 +663,7 @@ export default class XYMEClient {
         });
         return ages;
     }
+
     public async getDagTimes(
         retrieveTimes: boolean
     ): Promise<[DagList['cur_time'], DagList['dags']]> {
@@ -562,13 +677,13 @@ export default class XYMEClient {
         return [response.cur_time, response.dags];
     }
 
-    public async getDag(dagUri: string): Promise<DagHandle> {
-        const mDag = this.dagCache.get({ uri: dagUri });
+    public async getDag(dagURI: string): Promise<DagHandle> {
+        const mDag = this.dagCache.get({ uri: dagURI });
         if (mDag) {
             return mDag;
         }
-        const dag = new DagHandle(this, dagUri);
-        this.dagCache.set({ uri: dagUri }, dag);
+        const dag = new DagHandle(this, dagURI);
+        this.dagCache.set({ uri: dagURI }, dag);
         return dag;
     }
 
@@ -598,19 +713,14 @@ export default class XYMEClient {
         }).then((response) => response.blob);
     }
 
-    // public getBlobHandle(uri: string, isFull = false): BlobHandle {
-    //     return new BlobHandle(this, uri, isFull);
-    // }
-
-    public async getCSVBlobHandle(blobURI: string): Promise<CSVBlobHandle> {
-        const owner = await this.requestJSON<BlobOwner>({
+    public async getBlobOwner(blobURI: string): Promise<BlobOwner> {
+        return await this.requestJSON<BlobOwner>({
             method: METHOD_GET,
             path: '/blob_owner',
             args: {
                 blob: blobURI,
             },
         });
-        return new CSVBlobHandle(this, blobURI, owner);
     }
 
     public async setBlobOwner(
@@ -648,28 +758,76 @@ export default class XYMEClient {
         }).then((response) => response.dag);
     }
 
+    public async getBlobType(blobURI: string): Promise<string> {
+        return this.requestJSON<BlobTypeResponse>({
+            method: METHOD_GET,
+            path: '/blob_type',
+            args: {
+                blob_uri: blobURI,
+            },
+        }).then((response) => response.type);
+    }
+
+    public async getCSVBlob(blobURI: string): Promise<CSVBlobHandle> {
+        const blobType = await this.getBlobType(blobURI);
+        const blob = new CSVBlobHandle(this, blobURI, false);
+        if (blob.validBlobTypes.indexOf(blobType) < 0) {
+            throw new Error(`blob: ${blobURI} is not csv type`);
+        }
+        return blob;
+    }
+
+    public async getModelBlob(blobURI: string): Promise<ModelBlobHandle> {
+        const blobType = await this.getBlobType(blobURI);
+        const blob = new ModelBlobHandle(this, blobURI, false);
+        if (blob.validBlobTypes.indexOf(blobType) < 0) {
+            throw new Error(`blob: ${blobURI} is not csv type`);
+        }
+        return blob;
+    }
+
+    public async getCustomCodeBlob(
+        blobURI: string
+    ): Promise<CustomCodeBlobHandle> {
+        const blobType = await this.getBlobType(blobURI);
+        const blob = new CustomCodeBlobHandle(this, blobURI, false);
+        if (blob.validBlobTypes.indexOf(blobType) < 0) {
+            throw new Error(`blob: ${blobURI} is not csv type`);
+        }
+        return blob;
+    }
+
+    public async getJSONBlob(blobURI: string): Promise<JSONBlobHandle> {
+        const blobType = await this.getBlobType(blobURI);
+        const blob = new JSONBlobHandle(this, blobURI, false);
+        if (blob.validBlobTypes.indexOf(blobType) < 0) {
+            throw new Error(`blob: ${blobURI} is not csv type`);
+        }
+        return blob;
+    }
+
     public async duplicateDag(
-        dagUri: string,
-        destUri?: string,
+        dagURI: string,
+        destURI?: string,
         copyNonownedBlobs = true
     ): Promise<string> {
         return await this.requestJSON<DagCreate>({
             method: METHOD_POST,
             path: '/dag_dup',
             args: {
-                dag: dagUri,
+                dag: dagURI,
                 copy_nonowned_blobs: copyNonownedBlobs,
-                ...(destUri ? { dest: destUri } : {}),
+                ...(destURI ? { dest: destURI } : {}),
             },
         }).then((response) => response.dag);
     }
 
-    public async setDag(dagUri: string, defs: DagDef): Promise<DagHandle> {
+    public async setDag(dagURI: string, defs: DagDef): Promise<DagHandle> {
         const dagCreate = await this.requestJSON<DagCreate>({
             method: METHOD_POST,
             path: '/dag_create',
             args: {
-                dag: dagUri,
+                dag: dagURI,
                 defs,
             },
         });
@@ -678,9 +836,9 @@ export default class XYMEClient {
         const numWarnings = warnings.length;
         if (numWarnings > 1) {
             console.info(`
-                ${numWarnings} warnings while setting dag ${dagUri}:\n"`);
+                ${numWarnings} warnings while setting dag ${dagURI}:\n"`);
         } else if (numWarnings === 1) {
-            console.info(`Warning while setting dag ${dagUri}:\n`);
+            console.info(`Warning while setting dag ${dagURI}:\n`);
         }
         warnings.forEach((warn) => console.info(`${warn}\n`));
         return this.getDag(uri);
@@ -717,10 +875,12 @@ export default class XYMEClient {
         minimal: false,
         dag?: string
     ): Promise<QueueStatsResponse>;
+
     public async checkQueueStats(
         minimal: true,
         dag?: string
     ): Promise<MinimalQueueStatsResponse>;
+
     public async checkQueueStats(
         minimal: boolean,
         dag?: string
@@ -750,14 +910,14 @@ export default class XYMEClient {
     }
 
     public async getInstanceStatus(
-        dagUri?: string,
+        dagURI?: string,
         nodeId?: string
     ): Promise<{ [key in InstanceStatus]: number }> {
         return await this.requestJSON<{ [key in InstanceStatus]: number }>({
             method: METHOD_GET,
             path: '/instance_status',
             args: {
-                dag: dagUri,
+                dag: dagURI,
                 node: nodeId,
             },
         });
@@ -1017,7 +1177,7 @@ export class DagHandle {
         });
     }
 
-    public getUri(): string {
+    public getURI(): string {
         return this.uri;
     }
 
@@ -1136,7 +1296,7 @@ export class DagHandle {
     }
 
     public setDag(defs: DagDef) {
-        this.client.setDag(this.getUri(), defs);
+        this.client.setDag(this.getURI(), defs);
     }
 
     public async dynamicModel(
@@ -1152,7 +1312,7 @@ export class DagHandle {
                     format: formatMethod,
                     inputs,
                     no_cache: noCache,
-                    dag: this.getUri(),
+                    dag: this.getURI(),
                 },
             })
             .then((response) => response.results);
@@ -1179,7 +1339,7 @@ export class DagHandle {
                         inputs: inputs,
                         no_cache: noCache,
                         output_key: outputKey,
-                        dag: this.getUri(),
+                        dag: this.getURI(),
                     },
                 })
                 .then((res) => res.results);
@@ -1219,7 +1379,7 @@ export class DagHandle {
             method: METHOD_FILE,
             path: '/dynamic',
             args: {
-                dag: this.getUri(),
+                dag: this.getURI(),
             },
             files: {
                 file: inputData,
@@ -1249,7 +1409,7 @@ export class DagHandle {
             method: METHOD_FILE,
             path: '/dynamic_async',
             args: {
-                dag: this.getUri(),
+                dag: this.getURI(),
             },
             files,
         });
@@ -1286,7 +1446,7 @@ export class DagHandle {
                 method: METHOD_GET,
                 path: '/dynamic_result',
                 args: {
-                    dag: this.getUri(),
+                    dag: this.getURI(),
                     id: valueId,
                 },
             });
@@ -1308,7 +1468,7 @@ export class DagHandle {
             path: '/dynamic_status',
             args: {
                 value_ids: valueIds.map((id) => id.getId()),
-                dag: this.getUri(),
+                dag: this.getURI(),
             },
         });
         const status = res.status;
@@ -1338,7 +1498,7 @@ export class DagHandle {
             method: METHOD_GET,
             path: '/pretty',
             args: {
-                dag: this.getUri(),
+                dag: this.getURI(),
                 nodes_only: nodesOnly,
                 allow_unicode: allowUnicode,
                 method: prettyMethod,
@@ -1382,7 +1542,7 @@ export class DagHandle {
             method: METHOD_GET,
             path: '/dag_def',
             args: {
-                dag: this.getUri(),
+                dag: this.getURI(),
                 full: +full,
             },
         });
@@ -1394,7 +1554,7 @@ export class DagHandle {
             ...dagDef,
             [attr]: value,
         };
-        await this.client.setDag(this.getUri(), dagDef);
+        await this.client.setDag(this.getURI(), dagDef);
     }
 
     public async setName(value: string): Promise<void> {
@@ -1421,14 +1581,15 @@ export class DagHandle {
     public async checkQueueStats(
         minimal: true
     ): Promise<MinimalQueueStatsResponse>;
+
     public async checkQueueStats(
         minimal: boolean
     ): Promise<MinimalQueueStatsResponse | MinimalQueueStatsResponse> {
         // FIXME: WTF? https://github.com/microsoft/TypeScript/issues/19360
         if (minimal) {
-            return await this.client.checkQueueStats(true, this.getUri());
+            return await this.client.checkQueueStats(true, this.getURI());
         } else {
-            return await this.client.checkQueueStats(false, this.getUri());
+            return await this.client.checkQueueStats(false, this.getURI());
         }
     }
 
@@ -1438,7 +1599,7 @@ export class DagHandle {
                 method: METHOD_POST,
                 path: '/worker',
                 args: {
-                    dag: this.getUri(),
+                    dag: this.getURI(),
                     replicas,
                     task: undefined,
                 },
@@ -1452,7 +1613,7 @@ export class DagHandle {
                 method: METHOD_POST,
                 path: '/dag_reload',
                 args: {
-                    dag: this.getUri(),
+                    dag: this.getURI(),
                     when: timestamp,
                 },
             })
@@ -1467,7 +1628,7 @@ export class DagHandle {
             method: METHOD_POST,
             path: '/kafka_to[ics',
             args: {
-                dag: this.getUri(),
+                dag: this.getURI(),
                 num_partitions: numPartitions,
                 large_input_retention: largeInputRetention,
             },
@@ -1498,7 +1659,7 @@ export class DagHandle {
                 method: METHOD_FILE,
                 path: '/kafka_msg',
                 args: {
-                    dag: this.getUri(),
+                    dag: this.getURI(),
                 },
                 files,
             })
@@ -1516,7 +1677,7 @@ export class DagHandle {
                 method: METHOD_GET,
                 path: '/kafka_msg',
                 args: {
-                    dag: this.getUri(),
+                    dag: this.getURI(),
                     offset: offsetStr[0],
                 },
             });
@@ -1556,7 +1717,7 @@ export class DagHandle {
             method: METHOD_GET,
             path: '/kafka_offsets',
             args: {
-                dag: this.getUri(),
+                dag: this.getURI(),
                 alive: +alive,
             },
         });
@@ -1627,7 +1788,7 @@ export class DagHandle {
             faster = 'input';
         }
         return {
-            dag: this.getUri(),
+            dag: this.getURI(),
             input: {
                 throughput: totalInput / total,
                 max: Math.max(...inputSegments),
@@ -1656,7 +1817,7 @@ export class DagHandle {
             method: METHOD_GET,
             path: '/kafka_group',
             args: {
-                dag: this.getUri(),
+                dag: this.getURI(),
             },
         });
     }
@@ -1670,7 +1831,7 @@ export class DagHandle {
             method: METHOD_PUT,
             path: '/kafka_group',
             args: {
-                dag: this.getUri(),
+                dag: this.getURI(),
                 groupId,
                 reset,
                 ...kwargs,
@@ -1702,13 +1863,6 @@ export class NodeHandle {
         this.nodeId = nodeId;
         this.name = name;
         this.type = kind;
-    }
-
-    private asOwner(): BlobOwner {
-        return {
-            owner_dag: this.getDag().getUri(),
-            owner_node: this.getId(),
-        } as BlobOwner;
     }
 
     static fromNodeInfo(
@@ -1746,11 +1900,10 @@ export class NodeHandle {
         this.state = nodeInfo.state;
         this.configError = nodeInfo.config_error;
         const blobs = nodeInfo.blobs;
-        const owner = this.asOwner();
         this.blobs = Object.keys(blobs).reduce(
             (o, key) => ({
                 ...o,
-                [key]: new BlobHandle(this.client, blobs[key], false, owner),
+                [key]: new BlobHandle(this.client, blobs[key], false),
             }),
             {}
         );
@@ -1792,7 +1945,7 @@ export class NodeHandle {
                 method: METHOD_GET,
                 path: '/node_status',
                 args: {
-                    dag: this.getDag().getUri(),
+                    dag: this.getDag().getURI(),
                     node: this.getId(),
                 },
             })
@@ -1817,16 +1970,16 @@ export class NodeHandle {
         return this.blobs[key];
     }
 
-    public async setBlobUri(key: string, blobUri: string): Promise<string> {
+    public async setBlobURI(key: string, blobURI: string): Promise<string> {
         return await this.client
             .requestJSON<PutNodeBlob>({
                 method: METHOD_PUT,
                 path: '/node_blob',
                 args: {
-                    dag: this.getDag().getUri(),
+                    dag: this.getDag().getURI(),
                     node: this.getId(),
                     blob_key: key,
-                    blob_uri: blobUri,
+                    blob_uri: blobURI,
                 },
             })
             .then((response) => response.new_uri);
@@ -1838,7 +1991,7 @@ export class NodeHandle {
                 method: METHOD_GET,
                 path: '/node_in_cursors',
                 args: {
-                    dag: this.getDag().getUri(),
+                    dag: this.getDag().getURI(),
                     node: this.getId(),
                 },
             })
@@ -1851,7 +2004,7 @@ export class NodeHandle {
                 method: METHOD_GET,
                 path: '/node_chunk',
                 args: {
-                    dag: this.getDag().getUri(),
+                    dag: this.getDag().getURI(),
                     node: this.getId(),
                 },
             })
@@ -1873,12 +2026,13 @@ export class NodeHandle {
         };
         return status_map[await this.getStatus()];
     }
+
     public async getLogs(): Promise<string> {
         const textStream = await this.client.requestString({
             method: METHOD_GET,
             path: '/node_logs',
             args: {
-                dag: this.getDag().getUri(),
+                dag: this.getDag().getURI(),
                 node: this.getId(),
             },
         });
@@ -1892,7 +2046,7 @@ export class NodeHandle {
                 method: METHOD_GET,
                 path: '/node_perf',
                 args: {
-                    dag: this.getDag().getUri(),
+                    dag: this.getDag().getURI(),
                     node: this.getId(),
                 },
             })
@@ -1909,7 +2063,7 @@ export class NodeHandle {
                 method: METHOD_POST,
                 path: '/read_node',
                 args: {
-                    dag: this.getDag().getUri(),
+                    dag: this.getDag().getURI(),
                     node: this.getId(),
                     key,
                     chunk,
@@ -1921,7 +2075,7 @@ export class NodeHandle {
         if (uri === undefined) {
             throw new Error('uri is undefined');
         }
-        return new BlobHandle(this.client, uri, true, this.asOwner());
+        return new BlobHandle(this.client, uri, true);
     }
 
     public async read(
@@ -1968,7 +2122,7 @@ export class NodeHandle {
             method: METHOD_PUT,
             path: '/node_state',
             args: {
-                dag: this.getDag().getUri(),
+                dag: this.getDag().getURI(),
                 node: this.getId(),
                 action: 'reset',
             },
@@ -1983,31 +2137,12 @@ export class NodeHandle {
             method: METHOD_GET,
             path: '/csv_blob',
             args: {
-                dag: this.getDag().getUri(),
+                dag: this.getDag().getURI(),
                 node: this.getId(),
             },
         });
-        const owner: BlobOwner = {
-            owner_dag: this.getDag().getUri(),
-            owner_node: this.getId(),
-        };
-        return new CSVBlobHandle(this.client, res.csv, owner);
+        return new CSVBlobHandle(this.client, res.csv, false);
     }
-
-    // public async getJSONBlob(): Promise<JSONBlobHandle> {
-    //     if (this.getType() !== 'jsons_reader') {
-    //         throw new Error('node has no json blob');
-    //     }
-    //     const res = await this.client.requestJSON<JSONBlobResponse>({
-    //         method: METHOD_GET,
-    //         path: '/json_blob',
-    //         args: {
-    //             dag: this.getDag().getUri(),
-    //             node: this.getId(),
-    //         },
-    //     });
-    //     return new JSONBlobHandle(this.client, res['json'], res['count']);
-    // }
 
     public checkCustomCodeNode() {
         if (CUSTOM_NODE_TYPES.indexOf(this.getType()) < 0) {
@@ -2020,7 +2155,7 @@ export class NodeHandle {
             method: METHOD_GET,
             path: '/user_columns',
             args: {
-                dag: this.getDag().getUri(),
+                dag: this.getDag().getURI(),
                 node: this.getId(),
                 key,
             },
@@ -2032,7 +2167,7 @@ export class NodeHandle {
             method: METHOD_GET,
             path: '/node_def',
             args: {
-                dag: this.getDag().getUri(),
+                dag: this.getDag().getURI(),
                 node: this.getId(),
             },
         });
@@ -2044,34 +2179,23 @@ export class BlobHandle {
     uri: string;
     isFull: boolean;
     ctype?: string;
-    tmpUri?: string;
-    owner: BlobOwner;
+    tmpURI?: string;
+    owner?: BlobOwner;
 
-    constructor(
-        client: XYMEClient,
-        uri: string,
-        isFull: boolean,
-        owner: BlobOwner
-    ) {
+    constructor(client: XYMEClient, uri: string, isFull: boolean) {
         this.client = client;
         this.uri = uri;
         this.isFull = isFull;
-        this.owner = owner;
-    }
-
-    public getOwnerDag(): string {
-        return this.owner.owner_dag;
-    }
-
-    public getOwnerNode(): string {
-        return this.owner.owner_node;
+        this.ctype = null;
+        this.tmpURI = null;
+        this.owner = null;
     }
 
     private isEmpty(): boolean {
         return this.uri.startsWith(EMPTY_BLOB_PREFIX);
     }
 
-    public getUri(): string {
+    public getURI(): string {
         return this.uri;
     }
 
@@ -2100,7 +2224,7 @@ export class BlobHandle {
                     method: METHOD_POST,
                     path: '/uri',
                     args: {
-                        uri: this.getUri(),
+                        uri: this.getURI(),
                     },
                     retry: retryOptions,
                 });
@@ -2138,7 +2262,7 @@ export class BlobHandle {
             },
         });
         return response.files.map((blob) => {
-            return new BlobHandle(this.client, blob, true, this.owner);
+            return new BlobHandle(this.client, blob, true);
         });
     }
 
@@ -2149,30 +2273,39 @@ export class BlobHandle {
             path: '/blob_owner',
             args: {
                 blob: this.uri,
-                owner_dag: owner.getDag().getUri(),
+                owner_dag: owner.getDag().getURI(),
                 owner_node: owner.getId(),
             },
         });
     }
 
     public async getOwner(): Promise<BlobOwner> {
-        this.ensureNotFull();
-        return this.client.requestJSON<BlobOwner>({
-            method: METHOD_GET,
-            path: '/blob_owner',
-            args: {
-                blob: this.uri,
-            },
-        });
+        let owner = this.owner;
+        if (!owner) {
+            owner = await this.client.getBlobOwner(this.uri);
+            this.owner = owner;
+        }
+        return this.owner;
+    }
+
+    public async getOwnerDag(): Promise<string> {
+        const owner = await this.getOwner();
+        return owner.owner_dag;
+    }
+
+    public async getOwnerNode(): Promise<string> {
+        const owner = await this.getOwner();
+        return owner.owner_node;
     }
 
     public async copyTo(
-        toUri: string,
-        newOwner: NodeHandle | undefined
+        toURI: string,
+        newOwner: NodeHandle | undefined,
+        externalOwner = false
     ): Promise<BlobHandle> {
         this.ensureNotFull();
         const ownerDag =
-            newOwner !== undefined ? newOwner.getDag().getUri() : undefined;
+            newOwner !== undefined ? newOwner.getDag().getURI() : undefined;
         const ownerNode =
             newOwner !== undefined ? newOwner.getId() : undefined;
         const response = await this.client.requestJSON<CopyBlob>({
@@ -2182,25 +2315,22 @@ export class BlobHandle {
                 from_uri: this.uri,
                 owner_dag: ownerDag,
                 owner_node: ownerNode,
-                to_uri: toUri,
+                externalOwner,
+                to_uri: toURI,
             },
         });
-        const owner = {
-            owner_dag: ownerDag,
-            owner_node: ownerNode,
-        } as BlobOwner;
-        return new BlobHandle(this.client, response.new_uri, false, owner);
+        return new BlobHandle(this.client, response.new_uri, false);
     }
 
     public async downloadZip(toPath?: string): Promise<Buffer | undefined> {
         if (this.isFull) {
-            throw new Error(`URI must not be full: ${this.getUri()}`);
+            throw new Error(`URI must not be full: ${this.getURI()}`);
         }
         const [res] = await this.client.requestBytes({
             method: METHOD_GET,
             path: '/download_zip',
             args: {
-                blob: this.getUri(),
+                blob: this.getURI(),
             },
         });
         if (isUndefined(toPath)) {
@@ -2231,7 +2361,7 @@ export class BlobHandle {
             files = undefined;
         }
         if (action == 'clear') {
-            this.tmpUri = undefined;
+            this.tmpURI = undefined;
         }
         return this.client.requestJSON<UploadFilesResponse>({
             method,
@@ -2249,7 +2379,7 @@ export class BlobHandle {
         const res = await this.performUploadAction(
             'start',
             {
-                target: this.getUri(),
+                target: this.getURI(),
                 hash: hashStr,
                 size,
                 ext,
@@ -2262,13 +2392,14 @@ export class BlobHandle {
         }
         return uri;
     }
+
     public async appendUpload(uri: string, fobj: Buffer): Promise<number> {
         const res = await this.performUploadAction('append', { uri }, fobj);
         return res.pos;
     }
 
     public async finishUploadZip(): Promise<string[]> {
-        const uri = this.tmpUri;
+        const uri = this.tmpURI;
         if (isUndefined(uri)) {
             throw new Error('uri undefined');
         }
@@ -2284,7 +2415,7 @@ export class BlobHandle {
     }
 
     public async clearUpload() {
-        const uri = this.tmpUri;
+        const uri = this.tmpURI;
         if (!isUndefined(uri)) {
             await this.performUploadAction('clear', { uri }, null);
         }
@@ -2314,7 +2445,7 @@ export class BlobHandle {
         } else {
             data = buffer;
         }
-        const newSize = await blobHandle.appendUpload(this.tmpUri, data);
+        const newSize = await blobHandle.appendUpload(this.tmpURI, data);
         if (newSize - curSize !== data.length) {
             throw new Error(`
                 incomplete chunk upload n:${newSize} o:${curSize}
@@ -2335,8 +2466,8 @@ export class BlobHandle {
         }
         const fileHash = await getFileHash(fileContent);
 
-        const tmpUri = await this.startUpload(totalSize, fileHash, ext);
-        this.tmpUri = tmpUri;
+        const tmpURI = await this.startUpload(totalSize, fileHash, ext);
+        this.tmpURI = tmpURI;
         let curPos = 0;
         let curSize = 0;
 
@@ -2385,8 +2516,8 @@ export class BlobHandle {
         const shaObj = new jsSHA('SHA-224', 'BYTES');
         shaObj.update(contentBuffer.toString());
         const fileHash = shaObj.getHash('HEX');
-        const tmpUri = await this.startUpload(totalSize, fileHash, ext);
-        this.tmpUri = tmpUri;
+        const tmpURI = await this.startUpload(totalSize, fileHash, ext);
+        this.tmpURI = tmpURI;
         let curPos = 0;
         let curSize = 0;
         async function uploadNextBufferChunk(
@@ -2434,15 +2565,13 @@ export class BlobHandle {
             this.clearUpload();
         }
         return files.map(
-            (blobUri) => new BlobHandle(this.client, blobUri, true, this.owner)
+            (blobURI) => new BlobHandle(this.client, blobURI, true)
         );
     }
 }
 
 export class CSVBlobHandle extends BlobHandle {
-    constructor(client: XYMEClient, uri: string, owner: BlobOwner) {
-        super(client, uri, false, owner);
-    }
+    validBlobTypes = ['csv'];
 
     public async addFromFile(
         fileName: string,
@@ -2496,16 +2625,16 @@ export class CSVBlobHandle extends BlobHandle {
     }
 
     public async finishCSVUpload(): Promise<UploadFilesResponse> {
-        const tmpUri = this.tmpUri;
-        if (isUndefined(tmpUri)) {
+        const tmpURI = this.tmpURI;
+        if (isUndefined(tmpURI)) {
             throw new Error('uri undefined');
         }
         return await this.client.requestJSON({
             method: METHOD_POST,
             path: '/finish_csv',
             args: {
-                tmp_uri: tmpUri,
-                csv_uri: this.getUri(),
+                tmp_uri: tmpURI,
+                csv_uri: this.getURI(),
                 owner_dag: this.owner.owner_dag,
                 owner_node: this.owner.owner_node,
             },
@@ -2514,10 +2643,7 @@ export class CSVBlobHandle extends BlobHandle {
 }
 
 export class CustomCodeBlobHandle extends BlobHandle {
-    constructor(client: XYMEClient, uri: string, owner: BlobOwner) {
-        super(client, uri, false, owner);
-    }
-
+    validBlobTypes = ['custom_code'];
     public async setCustomImports(
         modules: string[][]
     ): Promise<NodeCustomImports> {
@@ -2544,10 +2670,17 @@ export class CustomCodeBlobHandle extends BlobHandle {
     }
 }
 
+// *** CustomCodeBlobHandle ***
+
 export class ModelBlobHandle extends BlobHandle {
-    constructor(client: XYMEClient, uri: string, owner: BlobOwner) {
-        super(client, uri, false, owner);
-    }
+    validBlobTypes = [
+        'embedding_model',
+        'sklike_model_clf',
+        'sklike_model_reg',
+        'text_model_clf',
+        'text_model_reg',
+    ];
+
     public async setupModel(obj: {
         [key: string]: any;
     }): Promise<ModelSetupResponse> {
@@ -2578,23 +2711,17 @@ export class ModelBlobHandle extends BlobHandle {
             method: METHOD_POST,
             path: '/convert_model',
             args: {
-                blob: this.getUri(),
+                blob: this.getURI(),
             },
         });
     }
 }
 
+// *** ModelBlobHandle ***
+
 export class JSONBlobHandle extends BlobHandle {
+    validBlobTypes = ['json'];
     count: number;
-    constructor(
-        client: XYMEClient,
-        uri: string,
-        count: number,
-        owner: BlobOwner
-    ) {
-        super(client, uri, false, owner);
-        this.count = count;
-    }
 
     public getCount() {
         return this.count;
@@ -2605,13 +2732,13 @@ export class JSONBlobHandle extends BlobHandle {
         requeueOnFinish: NodeHandle = undefined
     ): Promise<JSONBlobHandle> {
         let obj: { [key: string]: any } = {
-            blob: this.getUri(),
+            blob: this.getURI(),
             jsons: jsons,
         };
         if (!isUndefined(requeueOnFinish)) {
             obj = {
                 ...obj,
-                dag: requeueOnFinish.getDag().getUri(),
+                dag: requeueOnFinish.getDag().getURI(),
                 node: requeueOnFinish.getId(),
             };
         }
@@ -2624,6 +2751,8 @@ export class JSONBlobHandle extends BlobHandle {
         return this;
     }
 }
+
+// *** JSONBlobHandle ***
 
 export class ComputationHandle {
     dag: DagHandle;
@@ -2663,7 +2792,10 @@ export class ComputationHandle {
             throw error;
         }
     }
+
     public getId(): string {
         return this.valueId;
     }
 }
+
+// *** ComputationHandle ***

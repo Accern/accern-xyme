@@ -56,7 +56,7 @@ from .types import (
     BlobFilesResponse,
     BlobInit,
     BlobOwner,
-    BlobType,
+    BlobTypeResponse,
     BlobURIResponse,
     CacheStats,
     CopyBlob,
@@ -147,6 +147,7 @@ CUSTOM_NODE_TYPES = {
     "custom_json_to_data",
     "custom_json_join_data",
 }
+NO_RETRY = [METHOD_POST, METHOD_FILE]
 
 
 class AccessDenied(Exception):
@@ -269,6 +270,8 @@ class XYMEClient:
                     raise
                 if not reset_files():
                     raise
+                if method in NO_RETRY:
+                    raise
                 time.sleep(get_retry_sleep())
             retry += 1
 
@@ -297,6 +300,8 @@ class XYMEClient:
                         retry = max_retry
                     raise e
             except RequestException:
+                if method in NO_RETRY:
+                    raise
                 if retry >= max_retry:
                     raise
                 time.sleep(get_retry_sleep())
@@ -350,6 +355,8 @@ class XYMEClient:
                 if retry >= max_retry:
                     raise
                 if not reset_files():
+                    raise
+                if method in NO_RETRY:
                     raise
                 time.sleep(get_retry_sleep())
             retry += 1
@@ -640,7 +647,7 @@ class XYMEClient:
             }))["dag"]
 
     def get_blob_type(self, blob_uri: str) -> str:
-        return cast(BlobType, self.request_json(
+        return cast(BlobTypeResponse, self.request_json(
             METHOD_GET, "/blob_type", {
                 "blob_uri": blob_uri,
             },

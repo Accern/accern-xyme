@@ -379,6 +379,6 @@ BlobURIResponse = TypedDict('BlobURIResponse', {
     "uri": str,
     "owner": BlobOwner,
 })
-BlobType = TypedDict('BlobType', {
+BlobTypeResponse = TypedDict('BlobTypeResponse', {
     "type": str,
 })
