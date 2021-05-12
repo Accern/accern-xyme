@@ -900,6 +900,8 @@ class XYMEClient:
                 Git commit (any revision such as a branch or tag name, or a
                 commit hash). If repo is not a Git repo, this option is
                 ignored. Default: HEAD.
+            warings_io (optional IO):
+                IO stream where the warning will be printed to
 
         Returns:
             the content of the file.
