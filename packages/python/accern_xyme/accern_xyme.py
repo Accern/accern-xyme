@@ -57,7 +57,7 @@ from .types import (
     BlobInit,
     BlobOwner,
     BlobType,
-    BlobUriResponse,
+    BlobURIResponse,
     CacheStats,
     CopyBlob,
     DagCreate,
@@ -1825,8 +1825,7 @@ class NodeHandle:
         uri = res["result_uri"]
         if uri is None:
             raise ValueError(f"uri is None: {res}")
-        return BlobHandle(
-            self._client, uri, is_full=True, owner=self.as_owner())
+        return BlobHandle(self._client, uri, is_full=True)
 
     def read(
             self,
@@ -1882,43 +1881,43 @@ class NodeHandle:
                 "action": "fix_error",
             }))
 
-    def get_blob_uri(self, blob_key: str, blob_type: str) -> str:
+    def get_blob_uri(
+            self, blob_key: str, blob_type: str) -> Tuple[str, BlobOwner]:
         dag = self.get_dag()
-        return cast(BlobUriResponse, self._client.request_json(
+        res = cast(BlobURIResponse, self._client.request_json(
             METHOD_GET, "/blob_uri", {
                 "dag": dag.get_uri(),
                 "node": self.get_id(),
                 "key": blob_key,
                 "type": blob_type,
-            }))["uri"]
+            }))
+        return res["uri"], res["owner"]
 
     def get_csv_blob(self, key: str = "orig") -> 'CSVBlobHandle':
-        return CSVBlobHandle(
-            self._client,
-            self.get_blob_uri(key, "csv"),
-            self.as_owner())
+        uri, owner = self.get_blob_uri(key, "csv")
+        blob = CSVBlobHandle(self._client, uri, is_full=False)
+        blob.set_local_owner(owner)
+        return blob
 
     def get_json_blob(self, key: str = "jsons_in") -> 'JSONBlobHandle':
-        return JSONBlobHandle(
-            self._client,
-            self.get_blob_uri(key, "json"),
-            self.as_owner())
+        uri, owner = self.get_blob_uri(key, "json")
+        blob = JSONBlobHandle(self._client, uri, is_full=False)
+        blob.set_local_owner(owner)
+        return blob
 
     def get_model_blob(
             self, blob_type: str, key: str = "model") -> 'ModelBlobHandle':
-        return ModelBlobHandle(
-            self._client,
-            self.get_blob_uri(key, blob_type),
-            self.as_owner())
+        uri, owner = self.get_blob_uri(key, blob_type)
+        blob = ModelBlobHandle(self._client, uri, is_full=False)
+        blob.set_local_owner(owner)
+        return blob
 
     def get_custom_code_blob(
-            self,
-            blob_type: str,
-            key: str = "custom_code") -> 'CustomCodeBlobHandle':
-        return CustomCodeBlobHandle(
-            self._client,
-            self.get_blob_uri(key, blob_type),
-            self.as_owner())
+            self, key: str = "custom_code") -> 'CustomCodeBlobHandle':
+        uri, owner = self.get_blob_uri(key, "custom_code")
+        blob = CustomCodeBlobHandle(self._client, uri, is_full=False)
+        blob.set_local_owner(owner)
+        return blob
 
     def check_custom_code_node(self) -> None:
         if not self.get_type() in CUSTOM_NODE_TYPES:
@@ -2099,6 +2098,9 @@ class BlobHandle:
             self._owner = self._client.get_blob_owner(self.get_uri())
         return self._owner
 
+    def set_local_owner(self, owner: BlobOwner) -> None:
+        self._owner = owner
+
     def get_owner_dag(self) -> Optional[str]:
         owner = self.get_owner()
         return owner["owner_dag"]
@@ -2110,9 +2112,11 @@ class BlobHandle:
     def copy_to(
             self,
             to_uri: str,
-            new_owner: Optional[NodeHandle] = None) -> 'BlobHandle':
+            new_owner: Optional[NodeHandle] = None,
+            external_owner: bool = False) -> 'BlobHandle':
         if self.is_full():
             raise ValueError(f"URI must not be full: {self}")
+
         owner_dag = \
             None if new_owner is None else new_owner.get_dag().get_uri()
         owner_node = None if new_owner is None else new_owner.get_id()
@@ -2121,14 +2125,10 @@ class BlobHandle:
                 "from_uri": self.get_uri(),
                 "owner_dag": owner_dag,
                 "owner_node": owner_node,
+                "external_owner": external_owner,
                 "to_uri": to_uri,
             }))
-        owner = cast(BlobOwner, {
-            "owner_dag": owner_dag,
-            "owner_node": owner_node,
-        })
-        return BlobHandle(
-            self._client, res["new_uri"], is_full=False, owner=owner)
+        return BlobHandle(self._client, res["new_uri"], is_full=False)
 
     def download_zip(self, to_path: Optional[str]) -> Optional[io.BytesIO]:
         if self.is_full():
@@ -2235,9 +2235,8 @@ class BlobHandle:
             files = self._finish_upload_zip()
         finally:
             self._clear_upload()
-        owner = self.get_owner()
         return [
-            BlobHandle(self._client, blob_uri, is_full=True, owner=owner)
+            BlobHandle(self._client, blob_uri, is_full=True)
             for blob_uri in files
         ]
 
@@ -2264,6 +2263,7 @@ class BlobHandle:
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}[{self.as_str()}]"
+
 
 # *** BlobHandle ***
 
@@ -2326,6 +2326,7 @@ class CSVBlobHandle(BlobHandle):
             if io_in is not None:
                 io_in.close()
             self._clear_upload()
+
 
 # *** CSVBlobHandle ***
 
@@ -2403,15 +2404,18 @@ class CustomCodeBlobHandle(BlobHandle):
             }))
 
 
+# *** CustomCodeBlobHandle ***
+
+
 class ModelBlobHandle(BlobHandle):
     @staticmethod
     def valid_blob_types() -> Set[str]:
         return {
-            "text_model_reg",
-            "text_model_clf",
             "embedding_model",
-            "sklike_model_reg",
             "sklike_model_clf",
+            "sklike_model_reg",
+            "text_model_clf",
+            "text_model_reg",
         }
 
     def setup_model(self, obj: Dict[str, Any]) -> ModelSetupResponse:
@@ -2428,6 +2432,9 @@ class ModelBlobHandle(BlobHandle):
                 "dag": self.get_owner_dag(),
                 "node": self.get_owner_node(),
             }))
+
+
+# *** ModelBlobHandle ***
 
 
 class ComputationHandle:

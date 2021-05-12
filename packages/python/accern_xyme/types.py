@@ -375,8 +375,9 @@ PrettyResponse = TypedDict('PrettyResponse', {
     "pretty": str,
     "nodes": List[DagPrettyNode],
 })
-BlobUriResponse = TypedDict('BlobUriResponse', {
+BlobURIResponse = TypedDict('BlobURIResponse', {
     "uri": str,
+    "owner": BlobOwner,
 })
 BlobType = TypedDict('BlobType', {
     "type": str,
