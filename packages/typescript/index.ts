@@ -713,6 +713,13 @@ export default class XYMEClient {
         }).then((response) => response.blob);
     }
 
+    public async getBlobHandle(
+        uri: string,
+        isFull = false
+    ): Promise<BlobHandle> {
+        return new BlobHandle(this, uri, isFull);
+    }
+
     public async getBlobOwner(blobURI: string): Promise<BlobOwner> {
         return await this.requestJSON<BlobOwner>({
             method: METHOD_GET,

@@ -614,6 +614,9 @@ class XYMEClient:
                 "type": blob_type,
             }, add_namespace=False))["blob"]
 
+    def get_blob_handle(self, uri: str, is_full: bool = False) -> 'BlobHandle':
+        return BlobHandle(self, uri, is_full=is_full)
+
     def get_blob_owner(self, blob_uri: str) -> BlobOwner:
         return cast(BlobOwner, self.request_json(
             METHOD_GET, "/blob_owner", {
@@ -907,7 +910,7 @@ class XYMEClient:
                 Git commit (any revision such as a branch or tag name, or a
                 commit hash). If repo is not a Git repo, this option is
                 ignored. Default: HEAD.
-            warings_io (optional IO):
+            warnings_io (optional IO):
                 IO stream where the warning will be printed to
 
         Returns:
