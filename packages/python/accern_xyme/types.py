@@ -387,5 +387,9 @@ BlobURIResponse = TypedDict('BlobURIResponse', {
     "owner": BlobOwner,
 })
 BlobTypeResponse = TypedDict('BlobTypeResponse', {
+    "is_csv": int,
+    "is_custom_code": int,
+    "is_json": int,
+    "is_model": int,
     "type": str,
 })

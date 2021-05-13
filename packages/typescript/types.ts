@@ -489,4 +489,8 @@ export type DynamicFormat = 'simple' | 'titan';
 
 export interface BlobTypeResponse {
     type: string;
+    is_csv: number;
+    is_custom_code: number;
+    is_json: number;
+    is_model: number;
 }

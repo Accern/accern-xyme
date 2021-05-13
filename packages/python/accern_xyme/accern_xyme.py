@@ -26,6 +26,7 @@ import textwrap
 import threading
 import contextlib
 from io import BytesIO, StringIO
+from graphviz.backend import ExecutableNotFound
 import pandas as pd
 import requests
 from requests import Response
@@ -651,34 +652,34 @@ class XYMEClient:
                 "index": index,
             }))["dag"]
 
-    def get_blob_type(self, blob_uri: str) -> str:
+    def get_blob_type(self, blob_uri: str) -> BlobTypeResponse:
         return cast(BlobTypeResponse, self.request_json(
             METHOD_GET, "/blob_type", {
                 "blob_uri": blob_uri,
             },
-        ))["type"]
+        ))
 
     def get_csv_blob(self, blob_uri: str) -> 'CSVBlobHandle':
         blob_type = self.get_blob_type(blob_uri)
-        if blob_type not in CSVBlobHandle.valid_blob_types():
+        if not blob_type["is_csv"]:
             raise ValueError(f"blob: {blob_uri} is not csv type")
         return CSVBlobHandle(self, blob_uri, is_full=False)
 
     def get_model_blob(self, blob_uri: str) -> 'ModelBlobHandle':
         blob_type = self.get_blob_type(blob_uri)
-        if blob_type not in ModelBlobHandle.valid_blob_types():
+        if not blob_type["is_model"]:
             raise ValueError(f"blob: {blob_uri} is not model type")
         return ModelBlobHandle(self, blob_uri, is_full=False)
 
     def get_custom_code_blob(self, blob_uri: str) -> 'CustomCodeBlobHandle':
         blob_type = self.get_blob_type(blob_uri)
-        if blob_type not in CustomCodeBlobHandle.valid_blob_types():
+        if not blob_type["is_custom_code"]:
             raise ValueError(f"blob: {blob_uri} is not custom code type")
         return CustomCodeBlobHandle(self, blob_uri, is_full=False)
 
     def get_json_blob(self, blob_uri: str) -> 'JSONBlobHandle':
         blob_type = self.get_blob_type(blob_uri)
-        if blob_type not in JSONBlobHandle.valid_blob_types():
+        if not blob_type["is_json"]:
             raise ValueError(f"blob: {blob_uri} is not json type")
         return JSONBlobHandle(self, blob_uri, is_full=False)
 
@@ -1374,53 +1375,60 @@ class DagHandle:
         if method == "accern":
             return render(graph_str)
         if method == "dot":
-            from graphviz import Source
+            try:
+                from graphviz import Source
 
-            graph = Source(graph_str)
-            if output_format == "dot":
-                return render(graph_str)
-            if output_format == "svg":
-                svg_str = graph.pipe(format="svg")
-                if display is not None:
-                    if not is_jupyter():
-                        display.write("Warning: Ipython instance not found.\n")
-                        display.write(svg_str)
-                        display.flush()
-                    else:
-                        from IPython.display import display as idisplay
-                        from IPython.display import SVG
-                        idisplay(SVG(svg_str))
-                    return None
-                return svg_str
-            if output_format == "png":
                 graph = Source(graph_str)
-                png_str = graph.pipe(format="png")
-                if display is not None:
-                    if not is_jupyter():
-                        display.write("Warning: Ipython instance not found.\n")
-                        display.write(png_str)
-                        display.flush()
-                    else:
-                        from IPython.display import display as idisplay
-                        from IPython.display import Image
-
-                        idisplay(Image(png_str))
-                    return None
-                return png_str
-            if output_format == "ascii":
-                if not has_graph_easy():
+                if output_format == "dot":
                     return render(graph_str)
+                if output_format == "svg":
+                    svg_str = graph.pipe(format="svg")
+                    if display is not None:
+                        if not is_jupyter():
+                            display.write(
+                                "Warning: Ipython instance not found.\n")
+                            display.write(svg_str)
+                            display.flush()
+                        else:
+                            from IPython.display import display as idisplay
+                            from IPython.display import SVG
+                            idisplay(SVG(svg_str))
+                        return None
+                    return svg_str
+                if output_format == "png":
+                    graph = Source(graph_str)
+                    png_str = graph.pipe(format="png")
+                    if display is not None:
+                        if not is_jupyter():
+                            display.write(
+                                "Warning: Ipython instance not found.\n")
+                            display.write(png_str)
+                            display.flush()
+                        else:
+                            from IPython.display import display as idisplay
+                            from IPython.display import Image
 
-                import subprocess
-                cmd = ["echo", graph_str]
-                p1 = subprocess.Popen(cmd, stdout=subprocess.PIPE)
-                p2 = subprocess.check_output(
-                    ["graph-easy"], stdin=p1.stdout)
-                res = p2.decode("utf-8")
-                return render(res)
-            raise ValueError(
-                f"invalid format {output_format}, "
-                "use svg, png, ascii, or dot")
+                            idisplay(Image(png_str))
+                        return None
+                    return png_str
+                if output_format == "ascii":
+                    if not has_graph_easy():
+                        return render(graph_str)
+
+                    import subprocess
+                    cmd = ["echo", graph_str]
+                    p1 = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+                    p2 = subprocess.check_output(
+                        ["graph-easy"], stdin=p1.stdout)
+                    res = p2.decode("utf-8")
+                    return render(res)
+                raise ValueError(
+                    f"invalid format {output_format}, "
+                    "use svg, png, ascii, or dot")
+            except ExecutableNotFound as e:
+                raise RuntimeError(
+                    "use 'brew install graphviz' or use 'method=accern'",
+                ) from e
         raise ValueError(
             f"invalid method {method}, use accern or dot")
 
@@ -2343,10 +2351,6 @@ class BlobHandle:
 
 
 class CSVBlobHandle(BlobHandle):
-    @staticmethod
-    def valid_blob_types() -> Set[str]:
-        return {"csv"}
-
     def finish_csv_upload(self) -> UploadFilesResponse:
         tmp_uri = self._tmp_uri
         assert tmp_uri is not None
@@ -2413,10 +2417,6 @@ class JSONBlobHandle(BlobHandle):
         super().__init__(client, uri, is_full)
         self._count: Optional[int] = None
 
-    @staticmethod
-    def valid_blob_types() -> Set[str]:
-        return {"json"}
-
     def get_count(self) -> Optional[int]:
         return self._count
 
@@ -2440,10 +2440,6 @@ class JSONBlobHandle(BlobHandle):
 
 
 class CustomCodeBlobHandle(BlobHandle):
-    @staticmethod
-    def valid_blob_types() -> Set[str]:
-        return {"custom_code"}
-
     def set_custom_imports(
             self, modules: List[List[str]]) -> NodeCustomImports:
         return cast(NodeCustomImports, self._client.request_json(
@@ -2492,16 +2488,6 @@ class CustomCodeBlobHandle(BlobHandle):
 
 
 class ModelBlobHandle(BlobHandle):
-    @staticmethod
-    def valid_blob_types() -> Set[str]:
-        return {
-            "embedding_model",
-            "sklike_model_clf",
-            "sklike_model_reg",
-            "text_model_clf",
-            "text_model_reg",
-        }
-
     def setup_model(self, obj: Dict[str, Any]) -> ModelSetupResponse:
         return cast(ModelSetupResponse, self._client.request_json(
             METHOD_PUT, "/model_setup", {

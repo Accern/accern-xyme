@@ -241,7 +241,7 @@ export default class XYMEClient {
                 if (retry >= MAX_RETRY) {
                     throw error;
                 }
-                if (method in NO_RETRY) {
+                if (NO_RETRY.indexOf(method) >= 0) {
                     throw error;
                 }
                 await sleep(RETRY_SLEEP);
@@ -287,7 +287,7 @@ export default class XYMEClient {
                 if (retry >= MAX_RETRY) {
                     throw error;
                 }
-                if (method in NO_RETRY) {
+                if (NO_RETRY.indexOf(method) >= 0) {
                     throw error;
                 }
                 await sleep(RETRY_SLEEP);
@@ -333,7 +333,7 @@ export default class XYMEClient {
                 if (retry >= MAX_RETRY) {
                     throw error;
                 }
-                if (method in NO_RETRY) {
+                if (NO_RETRY.indexOf(method) >= 0) {
                     throw error;
                 }
                 await sleep(RETRY_SLEEP);
@@ -681,10 +681,7 @@ export default class XYMEClient {
         return dag;
     }
 
-    public async getBlobHandle(
-        uri: string,
-        isFull = false
-    ): Promise<BlobHandle> {
+    public getBlobHandle(uri: string, isFull = false): BlobHandle {
         return new BlobHandle(this, uri, isFull);
     }
 
@@ -759,52 +756,48 @@ export default class XYMEClient {
         }).then((response) => response.dag);
     }
 
-    public async getBlobType(blobURI: string): Promise<string> {
+    public async getBlobType(blobURI: string): Promise<BlobTypeResponse> {
         return this.requestJSON<BlobTypeResponse>({
             method: METHOD_GET,
             path: '/blob_type',
             args: {
                 blob_uri: blobURI,
             },
-        }).then((response) => response.type);
+        });
     }
 
     public async getCSVBlob(blobURI: string): Promise<CSVBlobHandle> {
         const blobType = await this.getBlobType(blobURI);
-        const blob = new CSVBlobHandle(this, blobURI, false);
-        if (blob.validBlobTypes.indexOf(blobType) < 0) {
+        if (blobType.is_csv) {
             throw new Error(`blob: ${blobURI} is not csv type`);
         }
-        return blob;
+        return new CSVBlobHandle(this, blobURI, false);
     }
 
     public async getModelBlob(blobURI: string): Promise<ModelBlobHandle> {
         const blobType = await this.getBlobType(blobURI);
-        const blob = new ModelBlobHandle(this, blobURI, false);
-        if (blob.validBlobTypes.indexOf(blobType) < 0) {
-            throw new Error(`blob: ${blobURI} is not csv type`);
+        if (blobType.is_model) {
+            throw new Error(`blob: ${blobURI} is not model type`);
         }
-        return blob;
+        return new ModelBlobHandle(this, blobURI, false);
     }
 
     public async getCustomCodeBlob(
         blobURI: string
     ): Promise<CustomCodeBlobHandle> {
         const blobType = await this.getBlobType(blobURI);
-        const blob = new CustomCodeBlobHandle(this, blobURI, false);
-        if (blob.validBlobTypes.indexOf(blobType) < 0) {
-            throw new Error(`blob: ${blobURI} is not csv type`);
+        if (blobType.is_custom_code) {
+            throw new Error(`blob: ${blobURI} is not custom code type`);
         }
-        return blob;
+        return new CustomCodeBlobHandle(this, blobURI, false);
     }
 
     public async getJSONBlob(blobURI: string): Promise<JSONBlobHandle> {
         const blobType = await this.getBlobType(blobURI);
-        const blob = new JSONBlobHandle(this, blobURI, false);
-        if (blob.validBlobTypes.indexOf(blobType) < 0) {
-            throw new Error(`blob: ${blobURI} is not csv type`);
+        if (blobType.is_json) {
+            throw new Error(`blob: ${blobURI} is not json type`);
         }
-        return blob;
+        return new JSONBlobHandle(this, blobURI, false);
     }
 
     public async duplicateDag(
@@ -2632,8 +2625,6 @@ export class BlobHandle {
 }
 
 export class CSVBlobHandle extends BlobHandle {
-    validBlobTypes = ['csv'];
-
     public async addFromFile(
         fileName: string,
         progressBar: WritableStream | undefined = undefined
@@ -2696,15 +2687,14 @@ export class CSVBlobHandle extends BlobHandle {
             args: {
                 tmp_uri: tmpURI,
                 csv_uri: this.getURI(),
-                owner_dag: this.getOwnerDag(),
-                owner_node: this.getOwnerNode(),
+                owner_dag: await this.getOwnerDag(),
+                owner_node: await this.getOwnerNode(),
             },
         });
     }
 }
 
 export class CustomCodeBlobHandle extends BlobHandle {
-    validBlobTypes = ['custom_code'];
     public async setCustomImports(
         modules: string[][]
     ): Promise<NodeCustomImports> {
@@ -2712,8 +2702,8 @@ export class CustomCodeBlobHandle extends BlobHandle {
             method: METHOD_PUT,
             path: '/custom_imports',
             args: {
-                dag: this.getOwnerDag(),
-                node: this.getOwnerNode(),
+                dag: await this.getOwnerDag(),
+                node: await this.getOwnerNode(),
                 modules,
             },
         });
@@ -2724,8 +2714,8 @@ export class CustomCodeBlobHandle extends BlobHandle {
             method: METHOD_GET,
             path: '/custom_imports',
             args: {
-                dag: this.getOwnerDag(),
-                node: this.getOwnerNode(),
+                dag: await this.getOwnerDag(),
+                node: await this.getOwnerNode(),
             },
         });
     }
@@ -2734,14 +2724,6 @@ export class CustomCodeBlobHandle extends BlobHandle {
 // *** CustomCodeBlobHandle ***
 
 export class ModelBlobHandle extends BlobHandle {
-    validBlobTypes = [
-        'embedding_model',
-        'sklike_model_clf',
-        'sklike_model_reg',
-        'text_model_clf',
-        'text_model_reg',
-    ];
-
     public async setupModel(obj: {
         [key: string]: any;
     }): Promise<ModelSetupResponse> {
@@ -2749,8 +2731,8 @@ export class ModelBlobHandle extends BlobHandle {
             method: METHOD_PUT,
             path: '/model_setup',
             args: {
-                dag: this.getOwnerDag(),
-                node: this.getOwnerNode(),
+                dag: await this.getOwnerDag(),
+                node: await this.getOwnerNode(),
                 config: obj,
             },
         });
@@ -2761,8 +2743,8 @@ export class ModelBlobHandle extends BlobHandle {
             method: METHOD_GET,
             path: '/model_params',
             args: {
-                dag: this.getOwnerDag(),
-                node: this.getOwnerNode(),
+                dag: await this.getOwnerDag(),
+                node: await this.getOwnerNode(),
             },
         });
     }
@@ -2781,7 +2763,6 @@ export class ModelBlobHandle extends BlobHandle {
 // *** ModelBlobHandle ***
 
 export class JSONBlobHandle extends BlobHandle {
-    validBlobTypes = ['json'];
     count: number;
 
     public getCount() {
