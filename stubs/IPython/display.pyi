@@ -31,6 +31,22 @@ class SVG:
         ...
 
 
+class Image:
+    def __init__(
+            self,
+            data: Optional[Any] = None,
+            url: Optional[str] = None,
+            filename: Optional[str] = None,
+            format: Optional[str] = None,
+            embed: Optional[bool] = None,
+            width: Optional[int] = None,
+            height: Optional[int] = None,
+            retina: bool = False,
+            unconfined: bool = False,
+            metadata: Optional[Dict[str, Any]] = None) -> None:
+        ...
+
+
 def display(
         *objs: Any,
         include: Optional[List[Any]] = None,
