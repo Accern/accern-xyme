@@ -396,7 +396,6 @@ export default class XYMEClient {
                 break;
             }
             case METHOD_FILE: {
-                const { headers } = options;
                 const formData = new FormData();
                 if (files) {
                     Object.keys(files).map((key) => {
@@ -485,7 +484,6 @@ export default class XYMEClient {
                 break;
             }
             case METHOD_FILE: {
-                const { headers } = options;
                 const formData = new FormData();
                 if (files) {
                     Object.keys(files).map((key) => {
@@ -2351,10 +2349,8 @@ export class BlobHandle {
     }
 
     public async getOwner(): Promise<BlobOwner> {
-        let owner = this.owner;
-        if (!owner) {
-            owner = await this.client.getBlobOwner(this.uri);
-            this.owner = owner;
+        if (!this.owner) {
+            this.owner = await this.client.getBlobOwner(this.uri);
         }
         return this.owner;
     }
@@ -2706,8 +2702,8 @@ export class CSVBlobHandle extends BlobHandle {
             args: {
                 tmp_uri: tmpURI,
                 csv_uri: this.getURI(),
-                owner_dag: this.owner.owner_dag,
-                owner_node: this.owner.owner_node,
+                owner_dag: this.getOwnerDag(),
+                owner_node: this.getOwnerNode(),
             },
         });
     }
