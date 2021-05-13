@@ -22,7 +22,6 @@ lint-comment:
 	  '#.*(todo|xxx|fixme|n[oO][tT][eE]:|Note:|nopep8\s*$$)|.\"^s%'
 
 lint-docstring:
-	cd packages/python
 	flake8 --verbose --select DAR --exclude venv --show-source ./
 
 lint-flake8:
