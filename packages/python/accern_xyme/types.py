@@ -241,7 +241,9 @@ NodeCustomImports = TypedDict('NodeCustomImports', {
 AllowedCustomImports = TypedDict('AllowedCustomImports', {
     "modules": List[str],
 })
-
+JSONBlobAppendResponse = TypedDict('JSONBlobAppendResponse', {
+    "count": int,
+})
 NodeUserColumnsResponse = TypedDict('NodeUserColumnsResponse', {
     "user_columns": List[str],
 })

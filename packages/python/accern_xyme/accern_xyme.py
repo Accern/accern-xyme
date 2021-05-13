@@ -74,6 +74,7 @@ from .types import (
     FlushAllQueuesResponse,
     InCursors,
     InstanceStatus,
+    JSONBlobAppendResponse,
     KafkaGroup,
     KafkaMessage,
     KafkaOffsets,
@@ -2404,9 +2405,20 @@ class CSVBlobHandle(BlobHandle):
 
 
 class JSONBlobHandle(BlobHandle):
+    def __init__(
+            self,
+            client: XYMEClient,
+            uri: str,
+            is_full: bool) -> None:
+        super().__init__(client, uri, is_full)
+        self._count: Optional[int] = None
+
     @staticmethod
     def valid_blob_types() -> Set[str]:
         return {"json"}
+
+    def get_count(self) -> Optional[int]:
+        return self._count
 
     def append_jsons(
             self,
@@ -2420,7 +2432,9 @@ class JSONBlobHandle(BlobHandle):
         if requeue_on_finish is not None:
             obj["dag"] = requeue_on_finish.get_dag().get_uri()
             obj["node"] = requeue_on_finish.get_id()
-        self._client.request_json(METHOD_PUT, "/json_append", obj)
+        res = cast(JSONBlobAppendResponse, self._client.request_json(
+            METHOD_PUT, "/json_append", obj))
+        self._count = res["count"]
 
 # *** JSONBlobHandle ***
 
