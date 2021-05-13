@@ -275,6 +275,11 @@ KafkaTopics = TypedDict('KafkaTopics', {
     "topics": Dict[str, Optional[str]],
     "create": bool,
 })
+KafkaTopicNames = TypedDict('KafkaTopicNames', {
+    "input": Optional[str],
+    "output": Optional[str],
+    "error": Optional[str],
+})
 KafkaMessage = TypedDict('KafkaMessage', {
     "messages": Dict[str, str],
 })
