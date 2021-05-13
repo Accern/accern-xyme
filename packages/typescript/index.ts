@@ -374,10 +374,7 @@ export default class XYMEClient {
             case METHOD_GET: {
                 options = {
                     method,
-                    headers: {
-                        ...headers,
-                        'content-type': 'application/octet-stream',
-                    },
+                    headers,
                 };
                 response = await fetch(getQueryURL(args, url), options);
                 break;
@@ -388,8 +385,8 @@ export default class XYMEClient {
                 response = await fetch(url, {
                     method: METHOD_POST,
                     headers: {
-                        'Authorization': headers['Authorization'],
-                        'content-type': 'application/octet-stream',
+                        ...headers,
+                        'content-type': 'application/json',
                     },
                     body: JSON.stringify(args),
                 });
@@ -461,10 +458,7 @@ export default class XYMEClient {
             case METHOD_GET: {
                 options = {
                     method,
-                    headers: {
-                        ...headers,
-                        'content-type': 'application/json',
-                    },
+                    headers,
                 };
                 response = await fetch(getQueryURL(args, url), options);
                 break;
@@ -528,7 +522,7 @@ export default class XYMEClient {
         let response: Response = undefined;
         const headers: HeadersInit = {
             'Authorization': this.token,
-            'content-type': 'application/text',
+            'content-type': 'application/json',
         };
         if (addNamespace) {
             args = {
@@ -538,15 +532,15 @@ export default class XYMEClient {
         }
         const options: RequestInit = {
             method,
-            headers: {
-                ...headers,
-                'content-type': 'application/text',
-            },
+            headers,
         };
         switch (method) {
-            case METHOD_GET:
-            case METHOD_POST: {
+            case METHOD_GET: {
                 response = await fetch(getQueryURL(args, url), options);
+                break;
+            }
+            case METHOD_POST: {
+                response = await fetch(url, options);
                 break;
             }
             default:
