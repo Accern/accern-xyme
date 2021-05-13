@@ -234,8 +234,8 @@ export default class XYMEClient {
                         NO_RETRY_STATUS_CODE.indexOf(e.response.status) > 0
                     ) {
                         retry = MAX_RETRY;
-                        throw e;
                     }
+                    throw e;
                 }
             } catch (error) {
                 if (retry >= MAX_RETRY) {
@@ -280,8 +280,8 @@ export default class XYMEClient {
                         NO_RETRY_STATUS_CODE.indexOf(e.response.status) > 0
                     ) {
                         retry = MAX_RETRY;
-                        throw e;
                     }
+                    throw e;
                 }
             } catch (error) {
                 if (retry >= MAX_RETRY) {
@@ -326,8 +326,8 @@ export default class XYMEClient {
                         NO_RETRY_STATUS_CODE.indexOf(e.response.status) > 0
                     ) {
                         retry = MAX_RETRY;
-                        throw e;
                     }
+                    throw e;
                 }
             } catch (error) {
                 if (retry >= MAX_RETRY) {
