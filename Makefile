@@ -53,7 +53,7 @@ lint-stringformat:
 	| xargs grep --color=always -nE "%[^'\"]*\"\\s*%\\s*"
 
 lint-type-check:
-	mypy . --config-file mypy.ini
+	mypy packages/python --config-file mypy.ini
 
 lint-all: \
 	lint-comment \

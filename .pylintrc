@@ -29,3 +29,6 @@ allow-wildcard-with-all=yes
 [FORMAT]
 good-names=df,db,x,y,w,ix,jx,ip,io,ws,v,r,tz,gc,p,q,t,f,a,b,fn,th,e,_,pf,m,n,cm,c,fs,lr,k,ax,el,s,ci,le,ms,x1,x2,y1,y2,op,ft,qa,nl,tp,fp,tn,fn
 bad-names=i,j
+
+[TYPECHECK]
+ignored-modules=dvc
