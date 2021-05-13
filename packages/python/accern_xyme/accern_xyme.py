@@ -940,7 +940,6 @@ class XYMEClient:
             pass
         return res
 
-
 # *** XYMEClient ***
 
 
@@ -2339,7 +2338,6 @@ class BlobHandle:
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}[{self.as_str()}]"
 
-
 # *** BlobHandle ***
 
 
@@ -2402,7 +2400,6 @@ class CSVBlobHandle(BlobHandle):
                 io_in.close()
             self._clear_upload()
 
-
 # *** CSVBlobHandle ***
 
 
@@ -2424,7 +2421,6 @@ class JSONBlobHandle(BlobHandle):
             obj["dag"] = requeue_on_finish.get_dag().get_uri()
             obj["node"] = requeue_on_finish.get_id()
         self._client.request_json(METHOD_PUT, "/json_append", obj)
-
 
 # *** JSONBlobHandle ***
 
@@ -2478,7 +2474,6 @@ class CustomCodeBlobHandle(BlobHandle):
                 "node": self.get_owner_node(),
             }))
 
-
 # *** CustomCodeBlobHandle ***
 
 
@@ -2507,7 +2502,6 @@ class ModelBlobHandle(BlobHandle):
                 "dag": self.get_owner_dag(),
                 "node": self.get_owner_node(),
             }))
-
 
 # *** ModelBlobHandle ***
 
@@ -2566,8 +2560,8 @@ class ComputationHandle:
     def __ne__(self, other: object) -> bool:
         return not self.__eq__(other)
 
-
 # *** ComputationHandle ***
+
 
 def create_xyme_client(
         url: str,
