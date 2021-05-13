@@ -22,6 +22,7 @@ lint-comment:
 	  '#.*(todo|xxx|fixme|n[oO][tT][eE]:|Note:|nopep8\s*$$)|.\"^s%'
 
 lint-docstring:
+	cd packages/python
 	flake8 --verbose --select DAR --exclude venv --show-source ./
 
 lint-flake8:
@@ -53,7 +54,7 @@ lint-stringformat:
 	| xargs grep --color=always -nE "%[^'\"]*\"\\s*%\\s*"
 
 lint-type-check:
-	mypy . --config-file mypy.ini
+	mypy packages/python --config-file mypy.ini
 
 lint-all: \
 	lint-comment \
