@@ -5,6 +5,7 @@ import { promises as fpm } from 'fs';
 import fetch, { HeadersInit, Response, RequestInit } from 'node-fetch';
 import { performance } from 'perf_hooks';
 import jsSHA from 'jssha';
+import _ from 'lodash';
 import {
     AllowedCustomImports,
     BlobFilesResponse,
@@ -39,7 +40,7 @@ import {
     MinimalQueueStatsResponse,
     ModelParamsResponse,
     ModelReleaseResponse,
-    ModelSetupResponse,
+    ModelInfo,
     NamespaceUpdateSettings,
     NodeChunk,
     NodeCustomImports,
@@ -67,6 +68,7 @@ import {
     UploadFilesResponse,
     VersionResponse,
     WorkerScale,
+    BlobURIResponse,
 } from './types';
 import {
     handleError,
@@ -723,6 +725,24 @@ export default class XYMEClient {
         });
     }
 
+    /**
+     * Usage:
+     * 1. create a blobURI at you desired location, i.e. s3://bucket/csv/buuid
+     * 2. call setBlobOwner('s3://bucer/folder/buuid', null, null, true)
+     * 3. BlobOwner will be an external owner
+     * {
+     *   owner_dag: 'disk://localhost/dag/b00000000000000000000000000000000',
+     *   owner_node: 'n00000000000000000000000000000000'
+     * }
+     * You can use this technique to maintain `external-owned` csv data without
+     * breaking the ownership of the blob. These `external-owned` blobs will be
+     * read-only to other dags.
+     * @param blobURI
+     * @param dagId
+     * @param nodeId
+     * @param externalOwner
+     * @returns
+     */
     public async setBlobOwner(
         blobURI: string,
         dagId: string = undefined,
@@ -1876,6 +1896,7 @@ export class NodeHandle {
     name: string;
     state?: number;
     type: string;
+    _isModel?: boolean;
 
     constructor(
         client: XYMEClient,
@@ -1889,6 +1910,13 @@ export class NodeHandle {
         this.nodeId = nodeId;
         this.name = name;
         this.type = kind;
+    }
+
+    public asOwner(): BlobOwner {
+        return {
+            owner_node: this.getId(),
+            owner_dag: this.getDag().getURI(),
+        };
     }
 
     static fromNodeInfo(
@@ -2113,6 +2141,9 @@ export class NodeHandle {
         return await blob.getContent();
     }
 
+    /**
+     * Read and combine all output chunks.
+     */
     public async readAll(
         key: string,
         forceRefresh = false
@@ -2155,7 +2186,29 @@ export class NodeHandle {
         });
     }
 
-    public async getCSVBlob(): Promise<CSVBlobHandle> {
+    public async getBlobURI(
+        blobKey: string,
+        blobType: string
+    ): Promise<[string, BlobOwner]> {
+        const res = await this.client.requestJSON<BlobURIResponse>({
+            method: METHOD_GET,
+            path: '/blob_uri',
+            args: {
+                dag: this.getDag().getURI(),
+                node: this.getId(),
+                key: blobKey,
+                type: blobType,
+            },
+        });
+        return [res.uri, res.owner];
+    }
+
+    public async getCSVBlob(key = 'orig'): Promise<CSVBlobHandle> {
+        const [uri, owner] = await this.getBlobURI(key, 'csv');
+        const blob = new CSVBlobHandle(this.client, uri, false);
+        blob.setLocalOwner(owner);
+        return blob;
+
         if (this.getType() !== 'csv_reader') {
             throw new Error('node has no csv blob');
         }
@@ -2199,10 +2252,35 @@ export class NodeHandle {
         });
     }
 
-    public async setupModel(obj: {
-        [key: string]: any;
-    }): Promise<ModelSetupResponse> {
-        return await this.client.requestJSON<ModelSetupResponse>({
+    // ModelLike Nodes only
+
+    public async getModelInfo(): Promise<ModelInfo> {
+        return await this.client.requestJSON<ModelInfo>({
+            method: METHOD_PUT,
+            path: '/node_model_info',
+            args: {
+                dag: this.getDag().getURI(),
+                node: this.getId(),
+            },
+        });
+    }
+
+    public async isModel(): Promise<boolean> {
+        if (this._isModel === null) {
+            const modelInfo = await this.getModelInfo();
+            this._isModel = _.isEmpty(modelInfo);
+        }
+        return this._isModel;
+    }
+
+    public ensureIsModel() {
+        if (!this.isModel()) {
+            throw new Error(`${this} is not a model node.`);
+        }
+    }
+
+    public async setupModel(obj: { [key: string]: any }): Promise<ModelInfo> {
+        return await this.client.requestJSON<ModelInfo>({
             method: METHOD_PUT,
             path: '/model_setup',
             args: {
@@ -2361,6 +2439,10 @@ export class BlobHandle {
         return this.owner;
     }
 
+    public setLocalOwner(owner: BlobOwner) {
+        this.owner = owner;
+    }
+
     public async getOwnerDag(): Promise<string> {
         const owner = await this.getOwner();
         return owner.owner_dag;
@@ -2371,6 +2453,10 @@ export class BlobHandle {
         return owner.owner_node;
     }
 
+    /**
+     * User can pass `externalOwner: true` to set the blob at toURI as
+     * external-owned blob.
+     */
     public async copyTo(
         toURI: string,
         newOwner: NodeHandle | undefined,

@@ -86,7 +86,7 @@ from .types import (
     MinimalQueueStatsResponse,
     ModelParamsResponse,
     ModelReleaseResponse,
-    ModelSetupResponse,
+    ModelInfo,
     NamespaceList,
     NamespaceUpdateSettings,
     NodeChunk,
@@ -664,12 +664,6 @@ class XYMEClient:
         if not blob_type["is_csv"]:
             raise ValueError(f"blob: {blob_uri} is not csv type")
         return CSVBlobHandle(self, blob_uri, is_full=False)
-
-    def get_model_blob(self, blob_uri: str) -> 'ModelBlobHandle':
-        blob_type = self.get_blob_type(blob_uri)
-        if not blob_type["is_model"]:
-            raise ValueError(f"blob: {blob_uri} is not model type")
-        return ModelBlobHandle(self, blob_uri, is_full=False)
 
     def get_custom_code_blob(self, blob_uri: str) -> 'CustomCodeBlobHandle':
         blob_type = self.get_blob_type(blob_uri)
@@ -1733,10 +1727,11 @@ class NodeHandle:
         self._inputs: Dict[str, Tuple[str, str]] = {}
         self._state: Optional[int] = None
         self._config_error: Optional[str] = None
+        self._is_model: Optional[bool] = None
 
     def as_owner(self) -> BlobOwner:
         return cast(BlobOwner, {
-            "owner_blob": self.get_dag().get_uri(),
+            "owner_dag": self.get_dag().get_uri(),
             "owner_node": self.get_id(),
         })
 
@@ -1947,10 +1942,9 @@ class NodeHandle:
 
     def get_blob_uri(
             self, blob_key: str, blob_type: str) -> Tuple[str, BlobOwner]:
-        dag = self.get_dag()
         res = cast(BlobURIResponse, self._client.request_json(
             METHOD_GET, "/blob_uri", {
-                "dag": dag.get_uri(),
+                "dag": self.get_dag().get_uri(),
                 "node": self.get_id(),
                 "key": blob_key,
                 "type": blob_type,
@@ -1966,13 +1960,6 @@ class NodeHandle:
     def get_json_blob(self, key: str = "jsons_in") -> 'JSONBlobHandle':
         uri, owner = self.get_blob_uri(key, "json")
         blob = JSONBlobHandle(self._client, uri, is_full=False)
-        blob.set_local_owner(owner)
-        return blob
-
-    def get_model_blob(
-            self, blob_type: str, key: str = "model") -> 'ModelBlobHandle':
-        uri, owner = self.get_blob_uri(key, blob_type)
-        blob = ModelBlobHandle(self._client, uri, is_full=False)
         blob.set_local_owner(owner)
         return blob
 
@@ -2052,6 +2039,42 @@ class NodeHandle:
     def get_def(self) -> NodeDef:
         return cast(NodeDef, self._client.request_json(
             METHOD_GET, "/node_def", {
+                "dag": self.get_dag().get_uri(),
+                "node": self.get_id(),
+            }))
+
+    # ModelLike Nodes only
+
+    def get_model_info(self) -> ModelInfo:
+        return cast(ModelInfo, self._client.request_json(
+            METHOD_GET, "/node_model_info", {
+                "dag": self.get_dag().get_uri(),
+                "node": self.get_id(),
+            }))
+
+    def is_model(self) -> bool:
+        if self._is_model is None:
+            model_info = self.get_model_info()
+            self._is_model = len(model_info) > 0
+        return self._is_model
+
+    def ensure_is_model(self) -> None:
+        if not self.is_model():
+            raise ValueError(f"{self} is not a model node.")
+
+    def setup_model(self, obj: Dict[str, Any]) -> ModelInfo:
+        self.ensure_is_model()
+        return cast(ModelInfo, self._client.request_json(
+            METHOD_PUT, "/model_setup", {
+                "dag": self.get_dag().get_uri(),
+                "node": self.get_id(),
+                "config": obj,
+            }))
+
+    def get_model_params(self) -> ModelParamsResponse:
+        self.ensure_is_model()
+        return cast(ModelParamsResponse, self._client.request_json(
+            METHOD_GET, "/model_params", {
                 "dag": self.get_dag().get_uri(),
                 "node": self.get_id(),
             }))
@@ -2485,25 +2508,6 @@ class CustomCodeBlobHandle(BlobHandle):
             }))
 
 # *** CustomCodeBlobHandle ***
-
-
-class ModelBlobHandle(BlobHandle):
-    def setup_model(self, obj: Dict[str, Any]) -> ModelSetupResponse:
-        return cast(ModelSetupResponse, self._client.request_json(
-            METHOD_PUT, "/model_setup", {
-                "dag": self.get_owner_dag(),
-                "node": self.get_owner_node(),
-                "config": obj,
-            }))
-
-    def get_model_params(self) -> ModelParamsResponse:
-        return cast(ModelParamsResponse, self._client.request_json(
-            METHOD_GET, "/model_params", {
-                "dag": self.get_owner_dag(),
-                "node": self.get_owner_node(),
-            }))
-
-# *** ModelBlobHandle ***
 
 
 class ComputationHandle:

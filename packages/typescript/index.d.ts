@@ -2,7 +2,7 @@
 /// <reference lib="dom" />
 import { Readable } from 'stream';
 import { promises as fpm } from 'fs';
-import { AllowedCustomImports, BlobOwner, BlobTypeResponse, CacheStats, DagDef, DagInfo, DagList, DagPrettyNode, DictStrStr, DynamicFormat, InstanceStatus, KafkaGroup, KafkaOffsets, KafkaThroughput, KafkaTopics, KnownBlobs, MinimalQueueStatsResponse, ModelParamsResponse, ModelReleaseResponse, ModelSetupResponse, NodeCustomImports, NodeDef, NodeDefInfo, NodeInfo, NodeState, NodeTypes, NodeUserColumnsResponse, QueueStatsResponse, QueueStatus, SettingsObj, TaskStatus, Timing, TimingResult, UploadFilesResponse, VersionResponse } from './types';
+import { AllowedCustomImports, BlobOwner, BlobTypeResponse, CacheStats, DagDef, DagInfo, DagList, DagPrettyNode, DictStrStr, DynamicFormat, InstanceStatus, KafkaGroup, KafkaOffsets, KafkaThroughput, KafkaTopics, KnownBlobs, MinimalQueueStatsResponse, ModelParamsResponse, ModelReleaseResponse, ModelInfo, NodeCustomImports, NodeDef, NodeDefInfo, NodeInfo, NodeState, NodeTypes, NodeUserColumnsResponse, QueueStatsResponse, QueueStatus, SettingsObj, TaskStatus, Timing, TimingResult, UploadFilesResponse, VersionResponse } from './types';
 import { RetryOptions } from './request';
 import { ByteResponse } from './util';
 export * from './errors';
@@ -65,6 +65,24 @@ export default class XYMEClient {
     getNodeDefs(): Promise<NodeTypes['info']>;
     createNewBlob(blobType: string): Promise<string>;
     getBlobOwner(blobURI: string): Promise<BlobOwner>;
+    /**
+     * Usage:
+     * 1. create a blobURI at you desired location, i.e. s3://bucket/csv/buuid
+     * 2. call setBlobOwner('s3://bucer/folder/buuid', null, null, true)
+     * 3. BlobOwner will be an external owner
+     * {
+     *   owner_dag: 'disk://localhost/dag/b00000000000000000000000000000000',
+     *   owner_node: 'n00000000000000000000000000000000'
+     * }
+     * You can use this technique to maintain `external-owned` csv data without
+     * breaking the ownership of the blob. These `external-owned` blobs will be
+     * read-only to other dags.
+     * @param blobURI
+     * @param dagId
+     * @param nodeId
+     * @param externalOwner
+     * @returns
+     */
     setBlobOwner(blobURI: string, dagId?: string, nodeId?: string, externalOwner?: boolean): Promise<BlobOwner>;
     createNewDag(userName?: string, dagName?: string, index?: string): Promise<string>;
     getBlobType(blobURI: string): Promise<BlobTypeResponse>;
@@ -184,7 +202,9 @@ export declare class NodeHandle {
     name: string;
     state?: number;
     type: string;
+    _isModel?: boolean;
     constructor(client: XYMEClient, dag: DagHandle, nodeId: string, name: string, kind: string);
+    asOwner(): BlobOwner;
     static fromNodeInfo(client: XYMEClient, dag: DagHandle, nodeInfo: NodeInfo, prev?: NodeHandle): NodeHandle;
     private updateInfo;
     getDag(): DagHandle;
@@ -211,15 +231,22 @@ export declare class NodeHandle {
     getTiming(): Promise<Timing[]>;
     readBlob(key: string, chunk: number | undefined, forceRefresh?: boolean): Promise<BlobHandle>;
     read(key: string, chunk: number | null, forceRefresh?: boolean): Promise<ByteResponse | null>;
+    /**
+     * Read and combine all output chunks.
+     */
     readAll(key: string, forceRefresh?: boolean): Promise<ByteResponse | null>;
     clear(): Promise<NodeState>;
-    getCSVBlob(): Promise<CSVBlobHandle>;
+    getBlobURI(blobKey: string, blobType: string): Promise<[string, BlobOwner]>;
+    getCSVBlob(key?: string): Promise<CSVBlobHandle>;
     checkCustomCodeNode(): void;
     getUserColumn(key: string): Promise<NodeUserColumnsResponse>;
     getDef(): Promise<NodeDef>;
+    getModelInfo(): Promise<ModelInfo>;
+    isModel(): Promise<boolean>;
+    ensureIsModel(): void;
     setupModel(obj: {
         [key: string]: any;
-    }): Promise<ModelSetupResponse>;
+    }): Promise<ModelInfo>;
     getModelParams(): Promise<ModelParamsResponse>;
 }
 export declare class BlobHandle {
@@ -248,8 +275,13 @@ export declare class BlobHandle {
     listFiles(): Promise<BlobHandle[]>;
     setOwner(owner: NodeHandle): Promise<BlobOwner>;
     getOwner(): Promise<BlobOwner>;
+    setLocalOwner(owner: BlobOwner): void;
     getOwnerDag(): Promise<string>;
     getOwnerNode(): Promise<string>;
+    /**
+     * User can pass `externalOwner: true` to set the blob at toURI as
+     * external-owned blob.
+     */
     copyTo(toURI: string, newOwner: NodeHandle | undefined, externalOwner?: boolean): Promise<BlobHandle>;
     downloadZip(toPath?: string): Promise<Buffer | undefined>;
     performUploadAction(action: string, additional: {
