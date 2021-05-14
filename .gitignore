@@ -10,6 +10,7 @@ dist/
 # Typescript
 .yalc/
 *.d.ts
+!packages/typescript/index.d.ts
 *.js
 *.js.map
 *.log

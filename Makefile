@@ -94,3 +94,9 @@ publish-ts:
 	@test "${CUR_TAG}" = "v${VERSION}" || (echo "local tag $(CUR_TAG) != v$(VERSION)" && exit 1)
 	yarn publish --new-version $(VERSION)
 	@echo "succesfully deployed $(VERSION)"
+
+type-information:
+	cd packages/python/accern_xyme && \
+		stubgen accern_xyme.py -o .
+	cd packages/typescript && \
+		tsc --p tsconfig-info.json
