@@ -238,6 +238,8 @@ export declare class NodeHandle {
     clear(): Promise<NodeState>;
     getBlobURI(blobKey: string, blobType: string): Promise<[string, BlobOwner]>;
     getCSVBlob(key?: string): Promise<CSVBlobHandle>;
+    getJSONBlob(key?: string): Promise<JSONBlobHandle>;
+    getCustomCodeBlob(key?: string): Promise<CustomCodeBlobHandle>;
     checkCustomCodeNode(): void;
     getUserColumn(key: string): Promise<NodeUserColumnsResponse>;
     getDef(): Promise<NodeDef>;

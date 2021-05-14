@@ -14,7 +14,6 @@ import {
     BlobTypeResponse,
     CacheStats,
     CopyBlob,
-    CSVBlobResponse,
     DagCreate,
     DagDef,
     DagInfo,
@@ -2208,19 +2207,22 @@ export class NodeHandle {
         const blob = new CSVBlobHandle(this.client, uri, false);
         blob.setLocalOwner(owner);
         return blob;
+    }
 
-        if (this.getType() !== 'csv_reader') {
-            throw new Error('node has no csv blob');
-        }
-        const res = await this.client.requestJSON<CSVBlobResponse>({
-            method: METHOD_GET,
-            path: '/csv_blob',
-            args: {
-                dag: this.getDag().getURI(),
-                node: this.getId(),
-            },
-        });
-        return new CSVBlobHandle(this.client, res.csv, false);
+    public async getJSONBlob(key = 'jsons_in'): Promise<JSONBlobHandle> {
+        const [uri, owner] = await this.getBlobURI(key, 'json');
+        const blob = new JSONBlobHandle(this.client, uri, false);
+        blob.setLocalOwner(owner);
+        return blob;
+    }
+
+    public async getCustomCodeBlob(
+        key = 'custom_code'
+    ): Promise<CustomCodeBlobHandle> {
+        const [uri, owner] = await this.getBlobURI(key, 'custom_code');
+        const blob = new CustomCodeBlobHandle(this.client, uri, false);
+        blob.setLocalOwner(owner);
+        return blob;
     }
 
     public checkCustomCodeNode() {
