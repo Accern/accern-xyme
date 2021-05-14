@@ -1,16 +1,6 @@
 import fetch, { RequestInit, Response } from 'node-fetch';
 import AbortController from 'abort-controller';
-import { AccessDenied, ServerSideError } from './errors';
-
-export class HTTPResponseError extends Error {
-    response: Response;
-    constructor(response: Response) {
-        super(
-            `HTTP Error Response: ${response.status} ${response.statusText}`
-        );
-        this.response = response;
-    }
-}
+import { AccessDenied, ServerSideError, HTTPResponseError } from './errors';
 
 // ====== Timeout ======
 

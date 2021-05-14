@@ -95,8 +95,10 @@ publish-ts:
 	yarn publish --new-version $(VERSION)
 	@echo "succesfully deployed $(VERSION)"
 
-type-information:
+type-information-python:
 	cd packages/python/accern_xyme && \
 		stubgen accern_xyme.py -o .
+
+type-information-ts:
 	cd packages/typescript && \
 		tsc --p tsconfig-info.json

@@ -70,7 +70,6 @@ import {
 } from './types';
 import {
     handleError,
-    HTTPResponseError,
     METHOD_DELETE,
     METHOD_FILE,
     METHOD_GET,
@@ -96,7 +95,7 @@ import {
     safeOptNumber,
     std,
 } from './util';
-import { KeyError } from './errors';
+import { AccessDenied, KeyError, HTTPResponseError } from './errors';
 export * from './errors';
 export * from './request';
 export * from './types';
@@ -115,7 +114,7 @@ const CUSTOM_NODE_TYPES = [
     'custom_json_join_data',
 ];
 const NO_RETRY = [METHOD_POST, METHOD_FILE];
-const NO_RETRY_STATUS_CODE = [403, 404, 500];
+const NO_RETRY_CODE = [403, 404, 500];
 
 export interface XYMEConfig {
     url: string;
@@ -230,8 +229,9 @@ export default class XYMEClient {
                     );
                 } catch (e) {
                     if (
-                        e instanceof HTTPResponseError &&
-                        NO_RETRY_STATUS_CODE.indexOf(e.response.status) > 0
+                        e instanceof AccessDenied ||
+                        (e instanceof HTTPResponseError &&
+                            NO_RETRY_CODE.indexOf(e.response.status) >= 0)
                     ) {
                         retry = MAX_RETRY;
                     }
@@ -276,8 +276,9 @@ export default class XYMEClient {
                     );
                 } catch (e) {
                     if (
-                        e instanceof HTTPResponseError &&
-                        NO_RETRY_STATUS_CODE.indexOf(e.response.status) > 0
+                        e instanceof AccessDenied ||
+                        (e instanceof HTTPResponseError &&
+                            NO_RETRY_CODE.indexOf(e.response.status) >= 0)
                     ) {
                         retry = MAX_RETRY;
                     }
@@ -322,8 +323,9 @@ export default class XYMEClient {
                     );
                 } catch (e) {
                     if (
-                        e instanceof HTTPResponseError &&
-                        NO_RETRY_STATUS_CODE.indexOf(e.response.status) > 0
+                        e instanceof AccessDenied ||
+                        (e instanceof HTTPResponseError &&
+                            NO_RETRY_CODE.indexOf(e.response.status) >= 0)
                     ) {
                         retry = MAX_RETRY;
                     }
@@ -417,7 +419,7 @@ export default class XYMEClient {
                 throw new Error(`unknown method ${method}`);
         }
         if (response) {
-            handleError(response);
+            await handleError(response);
             return [
                 await response.buffer(),
                 response.headers.get('content-type'),
@@ -502,7 +504,7 @@ export default class XYMEClient {
                 throw new Error(`unknown method ${method}`);
         }
         if (response) {
-            handleError(response);
+            await handleError(response);
             return await response.json();
         } else {
             throw new Error('no server response');
@@ -547,7 +549,7 @@ export default class XYMEClient {
                 throw new Error(`unknown method ${method}`);
         }
         if (response) {
-            handleError(response);
+            await handleError(response);
             try {
                 const text = await response.text();
                 return Readable.from(text);
