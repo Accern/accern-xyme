@@ -63,6 +63,15 @@ class NodeHandle
 
 - get_input_example
 
+class NodeHandle
+
+- getCSVBlob
+
+- getModelBlob
+
+- getCustomCodeBlob
+
+- getJSONBlob
 
 
 class CSVBlobHandle
