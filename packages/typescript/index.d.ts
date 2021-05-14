@@ -69,7 +69,6 @@ export default class XYMEClient {
     createNewDag(userName?: string, dagName?: string, index?: string): Promise<string>;
     getBlobType(blobURI: string): Promise<BlobTypeResponse>;
     getCSVBlob(blobURI: string): Promise<CSVBlobHandle>;
-    getModelBlob(blobURI: string): Promise<ModelBlobHandle>;
     getCustomCodeBlob(blobURI: string): Promise<CustomCodeBlobHandle>;
     getJSONBlob(blobURI: string): Promise<JSONBlobHandle>;
     duplicateDag(dagURI: string, destURI?: string, copyNonownedBlobs?: boolean): Promise<string>;
@@ -218,6 +217,10 @@ export declare class NodeHandle {
     checkCustomCodeNode(): void;
     getUserColumn(key: string): Promise<NodeUserColumnsResponse>;
     getDef(): Promise<NodeDef>;
+    setupModel(obj: {
+        [key: string]: any;
+    }): Promise<ModelSetupResponse>;
+    getModelParams(): Promise<ModelParamsResponse>;
 }
 export declare class BlobHandle {
     client: XYMEClient;
@@ -286,12 +289,6 @@ export declare class CSVBlobHandle extends BlobHandle {
 export declare class CustomCodeBlobHandle extends BlobHandle {
     setCustomImports(modules: string[][]): Promise<NodeCustomImports>;
     getCustomImports(): Promise<NodeCustomImports>;
-}
-export declare class ModelBlobHandle extends BlobHandle {
-    setupModel(obj: {
-        [key: string]: any;
-    }): Promise<ModelSetupResponse>;
-    getModelParams(): Promise<ModelParamsResponse>;
 }
 export declare class JSONBlobHandle extends BlobHandle {
     count: number;

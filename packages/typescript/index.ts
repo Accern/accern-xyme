@@ -776,14 +776,6 @@ export default class XYMEClient {
         return new CSVBlobHandle(this, blobURI, false);
     }
 
-    public async getModelBlob(blobURI: string): Promise<ModelBlobHandle> {
-        const blobType = await this.getBlobType(blobURI);
-        if (blobType.is_model) {
-            throw new Error(`blob: ${blobURI} is not model type`);
-        }
-        return new ModelBlobHandle(this, blobURI, false);
-    }
-
     public async getCustomCodeBlob(
         blobURI: string
     ): Promise<CustomCodeBlobHandle> {
@@ -2206,6 +2198,31 @@ export class NodeHandle {
             },
         });
     }
+
+    public async setupModel(obj: {
+        [key: string]: any;
+    }): Promise<ModelSetupResponse> {
+        return await this.client.requestJSON<ModelSetupResponse>({
+            method: METHOD_PUT,
+            path: '/model_setup',
+            args: {
+                dag: this.getDag().getURI(),
+                node: this.getId(),
+                config: obj,
+            },
+        });
+    }
+
+    public async getModelParams(): Promise<ModelParamsResponse> {
+        return await this.client.requestJSON<ModelParamsResponse>({
+            method: METHOD_GET,
+            path: '/model_params',
+            args: {
+                dag: this.getDag().getURI(),
+                node: this.getId(),
+            },
+        });
+    }
 }
 
 export class BlobHandle {
@@ -2734,35 +2751,6 @@ export class CustomCodeBlobHandle extends BlobHandle {
 }
 
 // *** CustomCodeBlobHandle ***
-
-export class ModelBlobHandle extends BlobHandle {
-    public async setupModel(obj: {
-        [key: string]: any;
-    }): Promise<ModelSetupResponse> {
-        return await this.client.requestJSON<ModelSetupResponse>({
-            method: METHOD_PUT,
-            path: '/model_setup',
-            args: {
-                dag: await this.getOwnerDag(),
-                node: await this.getOwnerNode(),
-                config: obj,
-            },
-        });
-    }
-
-    public async getModelParams(): Promise<ModelParamsResponse> {
-        return await this.client.requestJSON<ModelParamsResponse>({
-            method: METHOD_GET,
-            path: '/model_params',
-            args: {
-                dag: await this.getOwnerDag(),
-                node: await this.getOwnerNode(),
-            },
-        });
-    }
-}
-
-// *** ModelBlobHandle ***
 
 export class JSONBlobHandle extends BlobHandle {
     count: number;
