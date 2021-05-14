@@ -2622,6 +2622,16 @@ export class BlobHandle {
             (blobURI) => new BlobHandle(this.client, blobURI, true)
         );
     }
+
+    public async convertModel(): Promise<ModelReleaseResponse> {
+        return await this.client.requestJSON<ModelReleaseResponse>({
+            method: METHOD_POST,
+            path: '/convert_model',
+            args: {
+                blob: this.getURI(),
+            },
+        });
+    }
 }
 
 export class CSVBlobHandle extends BlobHandle {
@@ -2745,16 +2755,6 @@ export class ModelBlobHandle extends BlobHandle {
             args: {
                 dag: await this.getOwnerDag(),
                 node: await this.getOwnerNode(),
-            },
-        });
-    }
-
-    public async convertModel(): Promise<ModelReleaseResponse> {
-        return await this.client.requestJSON<ModelReleaseResponse>({
-            method: METHOD_POST,
-            path: '/convert_model',
-            args: {
-                blob: this.getURI(),
             },
         });
     }
