@@ -1,7 +1,7 @@
 dvc>=2.0.17
 graphviz>=0.14.1
-numpy>=1.17.3
-pandas>=0.25.3
+numpy>=1.20.0
+pandas>=1.2.4
 pyarrow>=2.0.0
 quick-server>=0.7.14
 requests>=2.22.0

@@ -68,7 +68,6 @@ from pandas.core.api import (
     to_datetime as to_datetime,
     to_timedelta as to_timedelta,
     # misc
-    np as np,
     Grouper as Grouper,
     factorize as factorize,
     unique as unique,
@@ -114,9 +113,6 @@ from pandas.io.api import (
     ExcelFile as ExcelFile,
     ExcelWriter as ExcelWriter,
     read_excel as read_excel,
-    # packers
-    read_msgpack as read_msgpack,
-    to_msgpack as to_msgpack,
     # parsers
     read_csv as read_csv,
     read_fwf as read_fwf,

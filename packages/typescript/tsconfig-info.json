@@ -6,6 +6,7 @@
       "module": "commonjs",
       "moduleResolution": "node",
       "sourceMap": true,
+      "outDir": "../types",
       "target": "es5",
       "lib": [
         "es2019"
