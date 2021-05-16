@@ -12,4 +12,5 @@
       "es2019"
     ]
   },
+  "include": ["packages/typescript/*"]
 }
