@@ -38,6 +38,7 @@ from .util import (
     async_compute,
     ByteResponse,
     content_to_csv_bytes,
+    df_to_csv_bytes,
     get_age,
     get_file_hash,
     get_file_upload_chunk_size,
@@ -114,6 +115,7 @@ from .types import (
     Timings,
     TritonModelsResponse,
     UploadFilesResponse,
+    UUIDResponse,
     VersionResponse,
     WorkerScale,
 )
@@ -661,7 +663,6 @@ class XYMEClient:
 
     def get_csv_blob(self, blob_uri: str) -> 'CSVBlobHandle':
         blob_type = self.get_blob_type(blob_uri)
-        print("blob_type", blob_type)
         if not blob_type["is_csv"]:
             raise ValueError(f"blob: {blob_uri} is not csv type")
         return CSVBlobHandle(self, blob_uri, is_full=False)
@@ -931,13 +932,14 @@ class XYMEClient:
         import dvc.api
 
         res = dvc.api.read(path, repo=repo, rev=rev, mode="r")
-        try:
-            maybe_parse = maybe_json_loads(res)
-            if maybe_parse is not None:
-                return maybe_parse
-        except json.JSONDecodeError:
-            pass
+        maybe_parse = maybe_json_loads(res)
+        if maybe_parse is not None:
+            return maybe_parse
         return res
+
+    def get_uuid(self) -> str:
+        return cast(UUIDResponse, self.request_json(
+            METHOD_GET, "/uuid", {}))["uuid"]
 
 # *** XYMEClient ***
 
@@ -1733,10 +1735,10 @@ class NodeHandle:
         self._is_model: Optional[bool] = None
 
     def as_owner(self) -> BlobOwner:
-        return cast(BlobOwner, {
+        return {
             "owner_dag": self.get_dag().get_uri(),
             "owner_node": self.get_id(),
-        })
+        }
 
     @staticmethod
     def from_node_info(
@@ -2413,9 +2415,27 @@ class CSVBlobHandle(BlobHandle):
         finally:
             self._clear_upload()
 
+    def add_from_df(
+            self,
+            df: pd.DataFrame,
+            progress_bar: Optional[IO[Any]] = sys.stdout,
+            ) -> Optional[UploadFilesResponse]:
+        io_in = None
+        try:
+            io_in = df_to_csv_bytes(df)
+            self._upload_file(
+                io_in,
+                ext="csv",
+                progress_bar=progress_bar)
+            return self.finish_csv_upload()
+        finally:
+            if io_in is not None:
+                io_in.close()
+            self._clear_upload()
+
     def add_from_content(
             self,
-            content: Any,
+            content: Union[bytes, str, pd.DataFrame],
             progress_bar: Optional[IO[Any]] = sys.stdout,
             ) -> Optional[UploadFilesResponse]:
         io_in = None

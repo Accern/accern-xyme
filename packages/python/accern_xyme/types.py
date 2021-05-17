@@ -392,3 +392,6 @@ BlobTypeResponse = TypedDict('BlobTypeResponse', {
     "is_json": bool,
     "type": str,
 })
+UUIDResponse = TypedDict('UUIDResponse', {
+    "uuid": str,
+})

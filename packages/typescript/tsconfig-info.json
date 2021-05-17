@@ -1,16 +1,16 @@
 {
-    "compilerOptions": {
-      "noImplicitAny": true,
-      "declaration": true,
-      "esModuleInterop": true,
-      "module": "commonjs",
-      "moduleResolution": "node",
-      "sourceMap": true,
-      "outDir": "../types",
-      "target": "es5",
-      "lib": [
-        "es2019"
-      ]
-    },
-    "include": ["index.ts"]
-  }
+  "compilerOptions": {
+    "noImplicitAny": true,
+    "declaration": true,
+    "esModuleInterop": true,
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "sourceMap": true,
+    "outDir": "../types",
+    "target": "es5",
+    "lib": [
+      "es2019"
+    ]
+  },
+  "include": ["index.ts"]
+}

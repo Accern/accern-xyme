@@ -65,6 +65,7 @@ import {
     TimingResult,
     Timings,
     TritonModelsResponse,
+    UUIDResponse,
     UploadFilesResponse,
     VersionResponse,
     WorkerScale,
@@ -1108,6 +1109,14 @@ export default class XYMEClient {
             args: {},
         }).then((response) => response.models);
     }
+
+    public async getUUID(): Promise<string> {
+        return await this.requestJSON<UUIDResponse>({
+            method: METHOD_GET,
+            path: '/uuid',
+            args: {},
+        }).then((response) => response.uuid);
+    }
 }
 
 export class DagHandle {
@@ -1336,13 +1345,23 @@ export class DagHandle {
 
     public async dynamicList(
         inputs: any[],
-        inputKey: string = undefined,
-        outputKey: string = undefined,
-        splitTh: number | null = 1000,
-        formatMethod: DynamicFormat = 'simple',
-        forceKeys = false,
-        noCache = false
+        fargs: {
+            inputKey?: string;
+            outputKey?: string;
+            splitTh?: number | null;
+            formatMethod?: DynamicFormat;
+            forceKeys?: boolean;
+            noCache?: boolean;
+        }
     ): Promise<any[]> {
+        const {
+            inputKey,
+            outputKey,
+            splitTh = 1000,
+            formatMethod = 'simple',
+            forceKeys = false,
+            noCache = false,
+        } = fargs;
         if (splitTh === null || inputs.length <= splitTh) {
             return await this.client
                 .requestJSON<DynamicResults>({
@@ -1364,15 +1383,14 @@ export class DagHandle {
         const splitNum = splitTh;
         const computeHalf = async (cur: any[], offset: number) => {
             if (cur.length <= splitNum) {
-                const curRes = await this.dynamicList(
-                    cur,
+                const curRes = await this.dynamicList(cur, {
                     inputKey,
                     outputKey,
-                    null,
+                    splitTh: null,
                     formatMethod,
                     forceKeys,
-                    noCache
-                );
+                    noCache,
+                });
                 Array.from(Array(curRes.length).keys()).forEach((ix) => {
                     resArray[offset + ix] = curRes[ix];
                 });
@@ -1665,17 +1683,27 @@ export class DagHandle {
         return assertString(res);
     }
 
-    public async setKafkaTopicPartitions(
-        numPartitions: number,
-        largeInputRetention = false
-    ): Promise<KafkaTopics> {
+    public async setKafkaTopicPartitions(fargs: {
+        postfix?: string;
+        numPartitions?: number;
+        largeInputRetention?: boolean;
+        noOutput?: boolean;
+    }): Promise<KafkaTopics> {
+        const {
+            postfix = '',
+            numPartitions,
+            largeInputRetention = false,
+            noOutput = false,
+        } = fargs;
         return await this.client.requestJSON<KafkaTopics>({
             method: METHOD_POST,
-            path: '/kafka_to[ics',
+            path: '/kafka_topics',
             args: {
                 dag: this.getURI(),
                 num_partitions: numPartitions,
+                postfix: postfix,
                 large_input_retention: largeInputRetention,
+                no_output: noOutput,
             },
         });
     }
@@ -2730,12 +2758,13 @@ export class BlobHandle {
         );
     }
 
-    public async convertModel(): Promise<ModelReleaseResponse> {
+    public async convertModel(reload=true): Promise<ModelReleaseResponse> {
         return await this.client.requestJSON<ModelReleaseResponse>({
             method: METHOD_POST,
             path: '/convert_model',
             args: {
                 blob: this.getURI(),
+                reload
             },
         });
     }

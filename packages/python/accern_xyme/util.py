@@ -127,13 +127,24 @@ def maybe_timestamp(timestamp: Optional[str]) -> Optional[pd.Timestamp]:
     return None if timestamp is None else pd.Timestamp(timestamp)
 
 
-def content_to_csv_bytes(content: Any) -> BytesIO:
+def content_to_csv_bytes(content: Union[bytes, str, pd.DataFrame]) -> BytesIO:
     bio = BytesIO()
     wrap = TextIOWrapper(bio, encoding="utf-8", write_through=True)
     if isinstance(content, pd.DataFrame):
         content.to_csv(wrap, index=False)
-    elif isinstance(content, str):
+    elif isinstance(content, bytes):
+        wrap.write(content.decode("utf-8"))
+    else:
         wrap.write(content)
+    wrap.detach()
+    bio.seek(0)
+    return bio
+
+
+def df_to_csv_bytes(df: pd.DataFrame) -> BytesIO:
+    bio = BytesIO()
+    wrap = TextIOWrapper(bio, encoding="utf-8", write_through=True)
+    df.to_csv(wrap, index=False)
     wrap.detach()
     bio.seek(0)
     return bio

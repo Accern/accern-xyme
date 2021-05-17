@@ -498,3 +498,6 @@ export interface BlobURIResponse {
     uri: string;
     owner: BlobOwner;
 }
+export interface UUIDResponse {
+    uuid: string;
+}
