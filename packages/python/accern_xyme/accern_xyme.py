@@ -762,12 +762,12 @@ class XYMEClient:
             return cast(MinimalQueueStatsResponse, self.request_json(
                 METHOD_GET, "/queue_stats", {
                     "dag": dag,
-                    "minimal": 1,
+                    "minimal": True,
                 }))
         return cast(QueueStatsResponse, self.request_json(
             METHOD_GET, "/queue_stats", {
                 "dag": dag,
-                "minimal": 0,
+                "minimal": False,
             }))
 
     def get_instance_status(
@@ -1437,7 +1437,7 @@ class DagHandle:
         return cast(DagDef, self._client.request_json(
             METHOD_GET, "/dag_def", {
                 "dag": self.get_uri(),
-                "full": 1 if full else 0,
+                "full": full,
             }))
 
     def set_attr(self, attr: str, value: Any) -> None:

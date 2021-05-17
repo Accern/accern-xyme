@@ -892,8 +892,8 @@ export default class XYMEClient {
         minimal: boolean,
         dag?: string
     ): Promise<MinimalQueueStatsResponse | MinimalQueueStatsResponse> {
-        let args: { [key: string]: number | string } = {
-            minimal: +minimal,
+        let args: { [key: string]: boolean | string } = {
+            minimal,
         };
         if (!isUndefined(dag)) {
             args = {
@@ -1560,7 +1560,7 @@ export class DagHandle {
             path: '/dag_def',
             args: {
                 dag: this.getURI(),
-                full: +full,
+                full,
             },
         });
     }
