@@ -12,6 +12,7 @@ import {
     BlobInit,
     BlobOwner,
     BlobTypeResponse,
+    BlobURIResponse,
     CacheStats,
     CopyBlob,
     DagCreate,
@@ -37,9 +38,9 @@ import {
     KafkaTopics,
     KnownBlobs,
     MinimalQueueStatsResponse,
+    ModelInfo,
     ModelParamsResponse,
     ModelReleaseResponse,
-    ModelInfo,
     NamespaceUpdateSettings,
     NodeChunk,
     NodeCustomImports,
@@ -67,7 +68,6 @@ import {
     UploadFilesResponse,
     VersionResponse,
     WorkerScale,
-    BlobURIResponse,
 } from './types';
 import {
     handleError,
