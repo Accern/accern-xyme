@@ -81,7 +81,7 @@ export default class XYMEClient {
      * @param dagId
      * @param nodeId
      * @param externalOwner
-     * @returns
+     * @returns BlobOwner
      */
     setBlobOwner(blobURI: string, dagId?: string, nodeId?: string, externalOwner?: boolean): Promise<BlobOwner>;
     createNewDag(userName?: string, dagName?: string, index?: string): Promise<string>;
