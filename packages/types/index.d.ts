@@ -116,6 +116,7 @@ export default class XYMEClient {
     getKnownBlobAges(blobType?: string, connector?: string): Promise<[string, string][]>;
     getKnonwBlobTimes(retrieveTimes: boolean, blobType?: string, connector?: string): Promise<[KnownBlobs['cur_time'], KnownBlobs['blobs']]>;
     getTritonModels(): Promise<string[]>;
+    getUUID(): Promise<string>;
 }
 export declare class DagHandle {
     client: XYMEClient;
@@ -152,7 +153,14 @@ export declare class DagHandle {
     getOuts(): Promise<[string, string][]>;
     setDag(defs: DagDef): void;
     dynamicModel(inputs: any[], formatMethod?: DynamicFormat, noCache?: boolean): Promise<any[]>;
-    dynamicList(inputs: any[], inputKey?: string, outputKey?: string, splitTh?: number | null, formatMethod?: DynamicFormat, forceKeys?: boolean, noCache?: boolean): Promise<any[]>;
+    dynamicList(inputs: any[], fargs: {
+        inputKey?: string;
+        outputKey?: string;
+        splitTh?: number | null;
+        formatMethod?: DynamicFormat;
+        forceKeys?: boolean;
+        noCache?: boolean;
+    }): Promise<any[]>;
     dynamic(inputData: Buffer): Promise<ByteResponse>;
     dynamicObj(inputObj: any): Promise<ByteResponse>;
     dynamicAsync(inputData: Buffer[]): Promise<ComputationHandle[]>;
@@ -179,7 +187,12 @@ export declare class DagHandle {
     reload(timestamp: number | undefined): Promise<number>;
     getKafkaInputTopic(postfix?: string): Promise<string>;
     getKafkaOutputTopic(): Promise<string>;
-    setKafkaTopicPartitions(numPartitions: number, largeInputRetention?: boolean): Promise<KafkaTopics>;
+    setKafkaTopicPartitions(fargs: {
+        postfix?: string;
+        numPartitions?: number;
+        largeInputRetention?: boolean;
+        noOutput?: boolean;
+    }): Promise<KafkaTopics>;
     postKafkaObjs(inputObjs: any[]): Promise<string[]>;
     postKafkaMsgs(inputData: Buffer[]): Promise<string[]>;
     readKafkaOutput(offset?: string, maxRows?: number): Promise<ByteResponse | null>;
@@ -313,7 +326,7 @@ export declare class BlobHandle {
      */
     uploadFileUsingContent(contentBuffer: Buffer, ext: string, progressBar?: WritableStream): Promise<void>;
     uploadZip(source: string | fpm.FileHandle): Promise<BlobHandle[]>;
-    convertModel(): Promise<ModelReleaseResponse>;
+    convertModel(reload?: boolean): Promise<ModelReleaseResponse>;
 }
 export declare class CSVBlobHandle extends BlobHandle {
     addFromFile(fileName: string, progressBar?: WritableStream | undefined): Promise<UploadFilesResponse>;
