@@ -2120,11 +2120,10 @@ class BlobHandle:
     def get_parent(self) -> 'BlobHandle':
         if self._parent is None:
             parsed = parse.urlparse(self._uri)
-            path = "/".join(parsed.path.split("/")[1:3])
+            path = "/".join(parsed.path.split("/")[0:3])
             parsed = parsed._replace(path=path)
             uri = parsed.geturl()
-            res = BlobHandle(
-                self._client, uri, is_full=False)
+            res = BlobHandle(self._client, uri, is_full=False)
             self._parent = res
         return self._parent
 
