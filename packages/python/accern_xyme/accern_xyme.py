@@ -1900,8 +1900,7 @@ class NodeHandle:
             filter_id: bool = True) -> Optional[ByteResponse]:
         content = self.read_blob(key, chunk, force_refresh).get_content()
         if filter_id and isinstance(content, pd.DataFrame):
-            index = content[content["row_id"] < 0].index
-            content.drop(index, inplace=True)
+            content = content[content["row_id"] > 0]
         return content
 
     def read_all(
