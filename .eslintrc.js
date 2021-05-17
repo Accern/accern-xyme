@@ -8,6 +8,11 @@ module.exports = {
         '@typescript-eslint/ban-ts-comment': 'off',
         '@typescript-eslint/no-explicit-any': 'off',
         'max-len': [2, { code: 79, tabWidth: 4, ignoreUrls: true }],
+        'lines-between-class-members': [
+            'error',
+            'always',
+            { exceptAfterSingleLine: true },
+        ],
     },
     extends: [
         'eslint:recommended',

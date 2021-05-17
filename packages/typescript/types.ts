@@ -355,6 +355,12 @@ export interface KafkaTopics {
     create: boolean;
 }
 
+export interface KafkaTopicNames {
+    input: string | null;
+    output: string | null;
+    error: string | null;
+}
+
 export interface KafkaMessage {
     messages: DictStrStr;
 }
@@ -480,3 +486,11 @@ export interface PrettyResponse {
 export type DictStrStr = { [key: string]: string };
 
 export type DynamicFormat = 'simple' | 'titan';
+
+export interface BlobTypeResponse {
+    type: string;
+    is_csv: boolean;
+    is_custom_code: boolean;
+    is_json: boolean;
+    is_model: boolean;
+}

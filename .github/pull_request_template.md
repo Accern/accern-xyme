@@ -4,14 +4,14 @@ TODO (If this is a bug fix, explain what was causing the issue)
 
 ## Changes
 
--   [ ] TODO
+- [ ] TODO
 
 ## Before reviewing
 
--   [ ] Are there any linked PRs?
--   [ ] Did you test this PR?
--   [ ] Is there any migration or seeding necessary?
--   [ ] Did you add api to only one of the language (python/typescript)?
+- [ ] Are there any linked PRs?
+- [ ] Did you test this PR?
+- [ ] Is there any migration or seeding necessary?
+- [ ] Did you add api to only one of the language (python/typescript)?
 
 ### Links:
 

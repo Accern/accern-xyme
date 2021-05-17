@@ -229,17 +229,6 @@ TimingResult = TypedDict('TimingResult', {
 InCursors = TypedDict('InCursors', {
     "cursors": Dict[str, int],
 })
-CSVBlobResponse = TypedDict('CSVBlobResponse', {
-    "count": int,
-    "csv": str,
-    "pos": int,
-    "tmp": bool,
-})
-CSVOp = TypedDict('CSVOp', {
-    "count": int,
-    "pos": int,
-    "tmp": bool,
-})
 NamespaceList = TypedDict('NamespaceList', {
     "namespaces": List[str],
 })
@@ -251,10 +240,6 @@ NodeCustomImports = TypedDict('NodeCustomImports', {
 })
 AllowedCustomImports = TypedDict('AllowedCustomImports', {
     "modules": List[str],
-})
-JSONBlobResponse = TypedDict('JSONBlobResponse', {
-    "count": int,
-    "json": str,
 })
 JSONBlobAppendResponse = TypedDict('JSONBlobAppendResponse', {
     "count": int,
@@ -291,6 +276,11 @@ SetNamedSecret = TypedDict('SetNamedSecret', {
 KafkaTopics = TypedDict('KafkaTopics', {
     "topics": Dict[str, Optional[str]],
     "create": bool,
+})
+KafkaTopicNames = TypedDict('KafkaTopicNames', {
+    "input": Optional[str],
+    "output": Optional[str],
+    "error": Optional[str],
 })
 KafkaMessage = TypedDict('KafkaMessage', {
     "messages": Dict[str, str],
@@ -391,4 +381,15 @@ DagPrettyNode = TypedDict('DagPrettyNode', {
 PrettyResponse = TypedDict('PrettyResponse', {
     "pretty": str,
     "nodes": List[DagPrettyNode],
+})
+BlobURIResponse = TypedDict('BlobURIResponse', {
+    "uri": str,
+    "owner": BlobOwner,
+})
+BlobTypeResponse = TypedDict('BlobTypeResponse', {
+    "is_csv": bool,
+    "is_custom_code": bool,
+    "is_json": bool,
+    "is_model": bool,
+    "type": str,
 })

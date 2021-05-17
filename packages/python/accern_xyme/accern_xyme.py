@@ -26,6 +26,7 @@ import textwrap
 import threading
 import contextlib
 from io import BytesIO, StringIO
+from graphviz.backend import ExecutableNotFound
 import pandas as pd
 import requests
 from requests import Response
@@ -47,6 +48,7 @@ from .util import (
     has_graph_easy,
     interpret_ctype,
     is_jupyter,
+    json_loads,
     merge_ctype,
     safe_opt_num,
     ServerSideError,
@@ -56,9 +58,10 @@ from .types import (
     BlobFilesResponse,
     BlobInit,
     BlobOwner,
+    BlobTypeResponse,
+    BlobURIResponse,
     CacheStats,
     CopyBlob,
-    CSVBlobResponse,
     DagCreate,
     DagDef,
     DagDupResponse,
@@ -74,7 +77,6 @@ from .types import (
     InCursors,
     InstanceStatus,
     JSONBlobAppendResponse,
-    JSONBlobResponse,
     KafkaGroup,
     KafkaMessage,
     KafkaOffsets,
@@ -149,6 +151,7 @@ CUSTOM_NODE_TYPES = {
     "custom_json_to_data",
     "custom_json_join_data",
 }
+NO_RETRY = [METHOD_POST, METHOD_FILE]
 
 
 class AccessDenied(Exception):
@@ -271,6 +274,8 @@ class XYMEClient:
                     raise
                 if not reset_files():
                     raise
+                if method in NO_RETRY:
+                    raise
                 time.sleep(get_retry_sleep())
             retry += 1
 
@@ -299,6 +304,8 @@ class XYMEClient:
                         retry = max_retry
                     raise e
             except RequestException:
+                if method in NO_RETRY:
+                    raise
                 if retry >= max_retry:
                     raise
                 time.sleep(get_retry_sleep())
@@ -352,6 +359,8 @@ class XYMEClient:
                 if retry >= max_retry:
                     raise
                 if not reset_files():
+                    raise
+                if method in NO_RETRY:
                     raise
                 time.sleep(get_retry_sleep())
             retry += 1
@@ -612,6 +621,26 @@ class XYMEClient:
                 "type": blob_type,
             }, add_namespace=False))["blob"]
 
+    def get_blob_owner(self, blob_uri: str) -> BlobOwner:
+        return cast(BlobOwner, self.request_json(
+            METHOD_GET, "/blob_owner", {
+                "blob": blob_uri,
+            }))
+
+    def set_blob_owner(
+            self,
+            blob_uri: str,
+            dag_id: Optional[str] = None,
+            node_id: Optional[str] = None,
+            external_owner: bool = False) -> BlobOwner:
+        return cast(BlobOwner, self.request_json(
+            METHOD_PUT, "/blob_owner", {
+                "blob": blob_uri,
+                "owner_dag": dag_id,
+                "owner_node": node_id,
+                "external_owner": external_owner,
+            }))
+
     def create_new_dag(
             self,
             username: Optional[str] = None,
@@ -623,6 +652,37 @@ class XYMEClient:
                 "name": dagname,
                 "index": index,
             }))["dag"]
+
+    def get_blob_type(self, blob_uri: str) -> BlobTypeResponse:
+        return cast(BlobTypeResponse, self.request_json(
+            METHOD_GET, "/blob_type", {
+                "blob_uri": blob_uri,
+            },
+        ))
+
+    def get_csv_blob(self, blob_uri: str) -> 'CSVBlobHandle':
+        blob_type = self.get_blob_type(blob_uri)
+        if not blob_type["is_csv"]:
+            raise ValueError(f"blob: {blob_uri} is not csv type")
+        return CSVBlobHandle(self, blob_uri, is_full=False)
+
+    def get_model_blob(self, blob_uri: str) -> 'ModelBlobHandle':
+        blob_type = self.get_blob_type(blob_uri)
+        if not blob_type["is_model"]:
+            raise ValueError(f"blob: {blob_uri} is not model type")
+        return ModelBlobHandle(self, blob_uri, is_full=False)
+
+    def get_custom_code_blob(self, blob_uri: str) -> 'CustomCodeBlobHandle':
+        blob_type = self.get_blob_type(blob_uri)
+        if not blob_type["is_custom_code"]:
+            raise ValueError(f"blob: {blob_uri} is not custom code type")
+        return CustomCodeBlobHandle(self, blob_uri, is_full=False)
+
+    def get_json_blob(self, blob_uri: str) -> 'JSONBlobHandle':
+        blob_type = self.get_blob_type(blob_uri)
+        if not blob_type["is_json"]:
+            raise ValueError(f"blob: {blob_uri} is not json type")
+        return JSONBlobHandle(self, blob_uri, is_full=False)
 
     def duplicate_dag(
             self,
@@ -842,6 +902,46 @@ class XYMEClient:
         return cast(TritonModelsResponse, self.request_json(
             METHOD_GET, "/inference_models", {}))["models"]
 
+    @staticmethod
+    def read_dvc(
+            path: str,
+            repo: str,
+            rev: Optional[str] = "HEAD",
+            warnings_io: Optional[IO[Any]] = sys.stderr) -> Any:
+        """Reading dvc file content from git tracked DVC project.
+
+        Args:
+            path (str):
+                File path to read, relative to the root of the repo.
+            repo (str):
+                specifies the location of the DVC project. It can be a
+                github URL or a file system path.
+            rev (str):
+                Git commit (any revision such as a branch or tag name, or a
+                commit hash). If repo is not a Git repo, this option is
+                ignored. Default: HEAD.
+            warnings_io (optional IO):
+                IO stream where the warning will be printed to
+
+        Returns:
+            the content of the file.
+        """
+        from .util import has_dvc
+
+        if not has_dvc():
+            if warnings_io is not None:
+                warnings_io.write(
+                    "Please install dvc https://dvc.org/doc/install")
+            return None
+
+        import dvc.api
+
+        res = dvc.api.read(path, repo=repo, rev=rev, mode="r")
+        try:
+            return json_loads(res)
+        except json.JSONDecodeError:
+            pass
+        return res
 
 # *** XYMEClient ***
 
@@ -1259,7 +1359,7 @@ class DagHandle:
             nodes_only: bool = False,
             allow_unicode: bool = True,
             method: Optional[str] = "dot",
-            format: Optional[str] = "png",
+            output_format: Optional[str] = "png",
             display: Optional[IO[Any]] = sys.stdout) -> Optional[str]:
 
         def render(value: str) -> Optional[str]:
@@ -1276,52 +1376,62 @@ class DagHandle:
         if method == "accern":
             return render(graph_str)
         if method == "dot":
-            from graphviz import Source
+            try:
+                from graphviz import Source
 
-            graph = Source(graph_str)
-            if format == "dot":
-                return render(graph_str)
-            if format == "svg":
-                svg_str = graph.pipe(format="svg")
-                if display is not None:
-                    if not is_jupyter():
-                        display.write("Warning: Ipython instance not found.\n")
-                        display.write(svg_str)
-                        display.flush()
-                    else:
-                        from IPython.display import display as idisplay
-                        from IPython.display import SVG
-                        idisplay(SVG(svg_str))
-                    return None
-                return svg_str
-            if format == "png":
                 graph = Source(graph_str)
-                png_str = graph.pipe(format="png")
-                if display is not None:
-                    if not is_jupyter():
-                        display.write("Warning: Ipython instance not found.\n")
-                        display.write(png_str)
-                        display.flush()
-                    else:
-                        from IPython.display import display as idisplay
-                        from IPython.display import Image
-
-                        idisplay(Image(png_str))
-                    return None
-                return png_str
-            if format == "ascii":
-                if not has_graph_easy():
+                if output_format == "dot":
                     return render(graph_str)
+                if output_format == "svg":
+                    svg_str = graph.pipe(format="svg")
+                    if display is not None:
+                        if not is_jupyter():
+                            display.write(
+                                "Warning: Ipython instance not found.\n")
+                            display.write(svg_str)
+                            display.flush()
+                        else:
+                            from IPython.display import display as idisplay
+                            from IPython.display import SVG
+                            idisplay(SVG(svg_str))
+                        return None
+                    return svg_str
+                if output_format == "png":
+                    graph = Source(graph_str)
+                    png_str = graph.pipe(format="png")
+                    if display is not None:
+                        if not is_jupyter():
+                            display.write(
+                                "Warning: Ipython instance not found.\n")
+                            display.write(png_str)
+                            display.flush()
+                        else:
+                            from IPython.display import display as idisplay
+                            from IPython.display import Image
 
-                import subprocess
-                cmd = ["echo", graph_str]
-                p1 = subprocess.Popen(cmd, stdout=subprocess.PIPE)
-                p2 = subprocess.check_output(
-                    ["graph-easy"], stdin=p1.stdout)
-                res = p2.decode("utf-8")
-                return render(res)
-            raise ValueError("invalid format, use svg, png, ascii, or dot")
-        raise ValueError("invalid method, use accern or dot")
+                            idisplay(Image(png_str))
+                        return None
+                    return png_str
+                if output_format == "ascii":
+                    if not has_graph_easy():
+                        return render(graph_str)
+
+                    import subprocess
+                    cmd = ["echo", graph_str]
+                    p1 = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+                    p2 = subprocess.check_output(
+                        ["graph-easy"], stdin=p1.stdout)
+                    res = p2.decode("utf-8")
+                    return render(res)
+                raise ValueError(
+                    f"invalid format {output_format}, "
+                    "use svg, png, ascii, or dot")
+            except ExecutableNotFound as e:
+                raise RuntimeError(
+                    "use 'brew install graphviz' or use 'method=accern'",
+                ) from e
+        raise ValueError(
+            f"invalid method {method}, use accern or dot")
 
     def pretty_obj(
             self,
@@ -1625,6 +1735,12 @@ class NodeHandle:
         self._state: Optional[int] = None
         self._config_error: Optional[str] = None
 
+    def as_owner(self) -> BlobOwner:
+        return cast(BlobOwner, {
+            "owner_blob": self.get_dag().get_uri(),
+            "owner_node": self.get_id(),
+        })
+
     @staticmethod
     def from_node_info(
             client: XYMEClient,
@@ -1646,7 +1762,7 @@ class NodeHandle:
         return res
 
     def update_info(self, node_info: NodeInfo) -> None:
-        if self._node_id != node_info["id"]:
+        if self.get_id() != node_info["id"]:
             raise ValueError(f"{self._node_id} != {node_info['id']}")
         self._node_name = node_info["name"]
         self._type = node_info["type"]
@@ -1831,32 +1947,43 @@ class NodeHandle:
                 "action": "fix_error",
             }))
 
-    def get_csv_blob(self) -> 'CSVBlobHandle':
-        if self.get_type() != "csv_reader":
-            raise ValueError("node doesn't have csv blob")
+    def get_blob_uri(
+            self, blob_key: str, blob_type: str) -> Tuple[str, BlobOwner]:
         dag = self.get_dag()
-        res = cast(CSVBlobResponse, self._client.request_json(
-            METHOD_GET, "/csv_blob", {
+        res = cast(BlobURIResponse, self._client.request_json(
+            METHOD_GET, "/blob_uri", {
                 "dag": dag.get_uri(),
                 "node": self.get_id(),
+                "key": blob_key,
+                "type": blob_type,
             }))
-        owner: BlobOwner = {
-            "owner_dag": self.get_dag().get_uri(),
-            "owner_node": self.get_id(),
-        }
-        return CSVBlobHandle(self._client, res["csv"], owner)
+        return res["uri"], res["owner"]
 
-    def get_json_blob(self) -> 'JSONBlobHandle':
-        if self.get_type() != "jsons_reader":
-            raise ValueError(
-                f"can not access JSON of {self}, node is not a 'jsons_reader'")
-        dag = self.get_dag()
-        res = cast(JSONBlobResponse, self._client.request_json(
-            METHOD_GET, "/json_blob", {
-                "dag": dag.get_uri(),
-                "node": self.get_id(),
-            }))
-        return JSONBlobHandle(self._client, res["json"], res["count"])
+    def get_csv_blob(self, key: str = "orig") -> 'CSVBlobHandle':
+        uri, owner = self.get_blob_uri(key, "csv")
+        blob = CSVBlobHandle(self._client, uri, is_full=False)
+        blob.set_local_owner(owner)
+        return blob
+
+    def get_json_blob(self, key: str = "jsons_in") -> 'JSONBlobHandle':
+        uri, owner = self.get_blob_uri(key, "json")
+        blob = JSONBlobHandle(self._client, uri, is_full=False)
+        blob.set_local_owner(owner)
+        return blob
+
+    def get_model_blob(
+            self, blob_type: str, key: str = "model") -> 'ModelBlobHandle':
+        uri, owner = self.get_blob_uri(key, blob_type)
+        blob = ModelBlobHandle(self._client, uri, is_full=False)
+        blob.set_local_owner(owner)
+        return blob
+
+    def get_custom_code_blob(
+            self, key: str = "custom_code") -> 'CustomCodeBlobHandle':
+        uri, owner = self.get_blob_uri(key, "custom_code")
+        blob = CustomCodeBlobHandle(self._client, uri, is_full=False)
+        blob.set_local_owner(owner)
+        return blob
 
     def check_custom_code_node(self) -> None:
         if not self.get_type() in CUSTOM_NODE_TYPES:
@@ -1903,37 +2030,6 @@ class NodeHandle:
             },
         ))
 
-    def set_custom_code(self, func: FUNC) -> NodeCustomCode:
-        from RestrictedPython import compile_restricted
-
-        self.check_custom_code_node()
-
-        def fn_as_str(fun: FUNC) -> str:
-            body = textwrap.dedent(inspect.getsource(fun))
-            res = body + textwrap.dedent(f"""
-            result = {fun.__name__}(*data)
-            if result is None:
-                raise ValueError("{fun.__name__} must return a value")
-            """)
-            compile_restricted(res, "inline", "exec")
-            return res
-
-        raw_code = fn_as_str(func)
-        return cast(NodeCustomCode, self._client.request_json(
-            METHOD_PUT, "/custom_code", {
-                "dag": self.get_dag().get_uri(),
-                "node": self.get_id(),
-                "code": raw_code,
-            }))
-
-    def get_custom_code(self) -> NodeCustomCode:
-        self.check_custom_code_node()
-        return cast(NodeCustomCode, self._client.request_json(
-            METHOD_GET, "/custom_code", {
-                "dag": self.get_dag().get_uri(),
-                "node": self.get_id(),
-            }))
-
     def get_user_columns(self, key: str) -> NodeUserColumnsResponse:
         return cast(NodeUserColumnsResponse, self._client.request_json(
             METHOD_GET, "/user_columns", {
@@ -1954,21 +2050,6 @@ class NodeHandle:
                 df = df.loc[:, user_columns].rename(columns=rmap)
             res[key] = df
         return res
-
-    def setup_model(self, obj: Dict[str, Any]) -> ModelSetupResponse:
-        return cast(ModelSetupResponse, self._client.request_json(
-            METHOD_PUT, "/model_setup", {
-                "dag": self.get_dag().get_uri(),
-                "node": self.get_id(),
-                "config": obj,
-            }))
-
-    def get_model_params(self) -> ModelParamsResponse:
-        return cast(ModelParamsResponse, self._client.request_json(
-            METHOD_GET, "/model_params", {
-                "dag": self.get_dag().get_uri(),
-                "node": self.get_id(),
-            }))
 
     def get_def(self) -> NodeDef:
         return cast(NodeDef, self._client.request_json(
@@ -2115,19 +2196,29 @@ class BlobHandle:
             }))
 
     def get_owner(self) -> BlobOwner:
-        if self.is_full():
-            raise ValueError(f"URI must not be full: {self}")
-        return cast(BlobOwner, self._client.request_json(
-            METHOD_GET, "/blob_owner", {
-                "blob": self.get_uri(),
-            }))
+        if self._owner is None:
+            self._owner = self._client.get_blob_owner(self.get_uri())
+        return self._owner
+
+    def set_local_owner(self, owner: BlobOwner) -> None:
+        self._owner = owner
+
+    def get_owner_dag(self) -> Optional[str]:
+        owner = self.get_owner()
+        return owner["owner_dag"]
+
+    def get_owner_node(self) -> str:
+        owner = self.get_owner()
+        return owner["owner_node"]
 
     def copy_to(
             self,
             to_uri: str,
-            new_owner: Optional[NodeHandle] = None) -> 'BlobHandle':
+            new_owner: Optional[NodeHandle] = None,
+            external_owner: bool = False) -> 'BlobHandle':
         if self.is_full():
             raise ValueError(f"URI must not be full: {self}")
+
         owner_dag = \
             None if new_owner is None else new_owner.get_dag().get_uri()
         owner_node = None if new_owner is None else new_owner.get_id()
@@ -2136,6 +2227,7 @@ class BlobHandle:
                 "from_uri": self.get_uri(),
                 "owner_dag": owner_dag,
                 "owner_node": owner_node,
+                "external_owner": external_owner,
                 "to_uri": to_uri,
             }))
         return BlobHandle(self._client, res["new_uri"], is_full=False)
@@ -2278,18 +2370,10 @@ class BlobHandle:
 
 
 class CSVBlobHandle(BlobHandle):
-    def __init__(
-            self,
-            client: XYMEClient,
-            uri: str,
-            owner: BlobOwner) -> None:
-        super().__init__(client, uri, is_full=False)
-        self._owner = owner
-
     def finish_csv_upload(self) -> UploadFilesResponse:
         tmp_uri = self._tmp_uri
         assert tmp_uri is not None
-        owner = self._owner
+        owner = self.get_owner()
         args: Dict[str, Optional[Union[str, int]]] = {
             "tmp_uri": tmp_uri,
             "csv_uri": self.get_uri(),
@@ -2348,18 +2432,18 @@ class JSONBlobHandle(BlobHandle):
             self,
             client: XYMEClient,
             uri: str,
-            count: int) -> None:
-        super().__init__(client, uri, is_full=False)
-        self._count = count
+            is_full: bool) -> None:
+        super().__init__(client, uri, is_full)
+        self._count: Optional[int] = None
 
-    def get_count(self) -> int:
+    def get_count(self) -> Optional[int]:
         return self._count
 
     def append_jsons(
             self,
             jsons: List[Any],
             requeue_on_finish: Optional[NodeHandle] = None,
-            ) -> 'JSONBlobHandle':
+            ) -> None:
         obj = {
             "blob": self.get_uri(),
             "jsons": jsons,
@@ -2370,9 +2454,75 @@ class JSONBlobHandle(BlobHandle):
         res = cast(JSONBlobAppendResponse, self._client.request_json(
             METHOD_PUT, "/json_append", obj))
         self._count = res["count"]
-        return self
 
 # *** JSONBlobHandle ***
+
+
+class CustomCodeBlobHandle(BlobHandle):
+    def set_custom_imports(
+            self, modules: List[List[str]]) -> NodeCustomImports:
+        return cast(NodeCustomImports, self._client.request_json(
+            METHOD_PUT, "/custom_imports", {
+                "dag": self.get_owner_dag(),
+                "node": self.get_owner_node(),
+                "modules": modules,
+            }))
+
+    def get_custom_imports(self) -> NodeCustomImports:
+        return cast(NodeCustomImports, self._client.request_json(
+            METHOD_GET, "/custom_imports", {
+                "dag": self.get_owner_dag(),
+                "node": self.get_owner_node(),
+            }))
+
+    def set_custom_code(self, func: FUNC) -> NodeCustomCode:
+        from RestrictedPython import compile_restricted
+
+        def fn_as_str(fun: FUNC) -> str:
+            body = textwrap.dedent(inspect.getsource(fun))
+            res = body + textwrap.dedent(f"""
+            result = {fun.__name__}(*data)
+            if result is None:
+                raise ValueError("{fun.__name__} must return a value")
+            """)
+            compile_restricted(res, "inline", "exec")
+            return res
+
+        raw_code = fn_as_str(func)
+        return cast(NodeCustomCode, self._client.request_json(
+            METHOD_PUT, "/custom_code", {
+                "dag": self.get_owner_dag(),
+                "node": self.get_owner_node(),
+                "code": raw_code,
+            }))
+
+    def get_custom_code(self) -> NodeCustomCode:
+        return cast(NodeCustomCode, self._client.request_json(
+            METHOD_GET, "/custom_code", {
+                "dag": self.get_owner_dag(),
+                "node": self.get_owner_node(),
+            }))
+
+# *** CustomCodeBlobHandle ***
+
+
+class ModelBlobHandle(BlobHandle):
+    def setup_model(self, obj: Dict[str, Any]) -> ModelSetupResponse:
+        return cast(ModelSetupResponse, self._client.request_json(
+            METHOD_PUT, "/model_setup", {
+                "dag": self.get_owner_dag(),
+                "node": self.get_owner_node(),
+                "config": obj,
+            }))
+
+    def get_model_params(self) -> ModelParamsResponse:
+        return cast(ModelParamsResponse, self._client.request_json(
+            METHOD_GET, "/model_params", {
+                "dag": self.get_owner_dag(),
+                "node": self.get_owner_node(),
+            }))
+
+# *** ModelBlobHandle ***
 
 
 class ComputationHandle:
@@ -2428,7 +2578,6 @@ class ComputationHandle:
 
     def __ne__(self, other: object) -> bool:
         return not self.__eq__(other)
-
 
 # *** ComputationHandle ***
 
