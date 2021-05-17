@@ -26,6 +26,7 @@ import textwrap
 import threading
 import contextlib
 from io import BytesIO, StringIO
+from urllib import parse
 from graphviz.backend import ExecutableNotFound
 import pandas as pd
 import requests
@@ -33,7 +34,6 @@ from requests import Response
 from requests.exceptions import HTTPError, RequestException
 from typing_extensions import Literal
 import quick_server
-from urllib import parse
 
 from .util import (
     async_compute,
