@@ -740,7 +740,7 @@ export default class XYMEClient {
      * @param dagId
      * @param nodeId
      * @param externalOwner
-     * @returns
+     * @returns BlobOwner
      */
     public async setBlobOwner(
         blobURI: string,
