@@ -2094,6 +2094,7 @@ class BlobHandle:
         self._is_full = is_full
         self._ctype: Optional[str] = None
         self._tmp_uri: Optional[str] = None
+        self._owner: Optional[BlobOwner] = None
         self._info: Optional[Dict[str, Any]] = None
         self._parent: Optional[BlobHandle] = None
 
