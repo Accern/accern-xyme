@@ -790,7 +790,7 @@ export default class XYMEClient {
 
     public async getCSVBlob(blobURI: string): Promise<CSVBlobHandle> {
         const blobType = await this.getBlobType(blobURI);
-        if (blobType.is_csv) {
+        if (!blobType.is_csv) {
             throw new Error(`blob: ${blobURI} is not csv type`);
         }
         return new CSVBlobHandle(this, blobURI, false);
@@ -800,7 +800,7 @@ export default class XYMEClient {
         blobURI: string
     ): Promise<CustomCodeBlobHandle> {
         const blobType = await this.getBlobType(blobURI);
-        if (blobType.is_custom_code) {
+        if (!blobType.is_custom_code) {
             throw new Error(`blob: ${blobURI} is not custom code type`);
         }
         return new CustomCodeBlobHandle(this, blobURI, false);
@@ -808,7 +808,7 @@ export default class XYMEClient {
 
     public async getJSONBlob(blobURI: string): Promise<JSONBlobHandle> {
         const blobType = await this.getBlobType(blobURI);
-        if (blobType.is_json) {
+        if (!blobType.is_json) {
             throw new Error(`blob: ${blobURI} is not json type`);
         }
         return new JSONBlobHandle(this, blobURI, false);
