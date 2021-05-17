@@ -2,9 +2,9 @@ name: Create Type Definition Files
 
 on:
   push:
-    branches:
-      - '!hotfix'
-      - '!dev'
+    branches-ignore:
+      - 'hotfix'
+      - 'dev'
 
 jobs:
     python-type:
