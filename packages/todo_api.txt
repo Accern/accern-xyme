@@ -10,10 +10,6 @@ TODO APIs:
 class BlobHandle
  - uploadFileUsingContent
 
-class CSVBlobHandle
- - addFromContent
-
-
 # Missing in Typescript
 
 class XYMEClient
@@ -63,8 +59,3 @@ class NodeHandle
 - get_custom_code
 
 - get_input_example
-
-
-class CSVBlobHandle
-
-- add_from_df?

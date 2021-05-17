@@ -37,7 +37,7 @@ import quick_server
 from .util import (
     async_compute,
     ByteResponse,
-    df_to_csv,
+    content_to_csv_bytes,
     get_age,
     get_file_hash,
     get_file_upload_chunk_size,
@@ -47,7 +47,7 @@ from .util import (
     has_graph_easy,
     interpret_ctype,
     is_jupyter,
-    json_loads,
+    maybe_json_loads,
     merge_ctype,
     safe_opt_num,
     ServerSideError,
@@ -661,6 +661,7 @@ class XYMEClient:
 
     def get_csv_blob(self, blob_uri: str) -> 'CSVBlobHandle':
         blob_type = self.get_blob_type(blob_uri)
+        print("blob_type", blob_type)
         if not blob_type["is_csv"]:
             raise ValueError(f"blob: {blob_uri} is not csv type")
         return CSVBlobHandle(self, blob_uri, is_full=False)
@@ -931,7 +932,9 @@ class XYMEClient:
 
         res = dvc.api.read(path, repo=repo, rev=rev, mode="r")
         try:
-            return json_loads(res)
+            maybe_parse = maybe_json_loads(res)
+            if maybe_parse is not None:
+                return maybe_parse
         except json.JSONDecodeError:
             pass
         return res
@@ -2410,14 +2413,14 @@ class CSVBlobHandle(BlobHandle):
         finally:
             self._clear_upload()
 
-    def add_from_df(
+    def add_from_content(
             self,
-            df: pd.DataFrame,
+            content: Any,
             progress_bar: Optional[IO[Any]] = sys.stdout,
             ) -> Optional[UploadFilesResponse]:
         io_in = None
         try:
-            io_in = df_to_csv(df)
+            io_in = content_to_csv_bytes(content)
             self._upload_file(
                 io_in,
                 ext="csv",

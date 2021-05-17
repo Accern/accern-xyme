@@ -127,10 +127,13 @@ def maybe_timestamp(timestamp: Optional[str]) -> Optional[pd.Timestamp]:
     return None if timestamp is None else pd.Timestamp(timestamp)
 
 
-def df_to_csv(df: pd.DataFrame) -> BytesIO:
+def content_to_csv_bytes(content: Any) -> BytesIO:
     bio = BytesIO()
     wrap = TextIOWrapper(bio, encoding="utf-8", write_through=True)
-    df.to_csv(wrap, index=False)
+    if isinstance(content, pd.DataFrame):
+        content.to_csv(wrap, index=False)
+    elif isinstance(content, str):
+        wrap.write(content)
     wrap.detach()
     bio.seek(0)
     return bio
@@ -536,3 +539,10 @@ def json_loads(value: str) -> Any:
     except json.JSONDecodeError as e:
         report_json_error(e)
         raise e
+
+
+def maybe_json_loads(value: str) -> Any:
+    try:
+        return json.loads(escape_str(value))
+    except json.JSONDecodeError:
+        return None
