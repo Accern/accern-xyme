@@ -1898,7 +1898,11 @@ class NodeHandle:
             chunk: Optional[int],
             force_refresh: bool = False,
             filter_id: bool = True) -> Optional[ByteResponse]:
-        return self.read_blob(key, chunk, force_refresh).get_content(filter_id)
+        content = self.read_blob(key, chunk, force_refresh).get_content()
+        if filter_id and isinstance(content, pd.DataFrame):
+            index = content[content["row_id"] < 0].index
+            content.drop(index, inplace=True)
+        return content
 
     def read_all(
             self,
@@ -2139,7 +2143,7 @@ class BlobHandle:
             self._info = cast(Dict[str, Any], info)
         return self._info
 
-    def get_content(self, filter_id: bool = True) -> Optional[ByteResponse]:
+    def get_content(self) -> Optional[ByteResponse]:
         if not self.is_full():
             raise ValueError(f"URI must be full: {self}")
         if self.is_empty():
@@ -2156,13 +2160,7 @@ class BlobHandle:
                         "uri": self.get_uri(),
                     })
                 self._ctype = ctype
-                content = interpret_ctype(fin, ctype)
-                if filter_id and isinstance(content, pd.DataFrame):
-                    res = self.get_parent()
-                    row_id = res.get_info()
-                    index = content[content[row_id["row_id"]] < 0].index
-                    content.drop(index, inplace=True)
-                return content
+                return interpret_ctype(fin, ctype)
             except HTTPError as e:
                 if e.response.status_code != 404:
                     raise e
