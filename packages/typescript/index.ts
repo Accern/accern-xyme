@@ -1716,7 +1716,10 @@ export class DagHandle {
         return await this.postKafkaMsgs(bios);
     }
 
-    public async postKafkaMsgs(inputData: Buffer[]): Promise<string[]> {
+    public async postKafkaMsgs(
+        inputData: Buffer[],
+        postfix = ''
+    ): Promise<string[]> {
         const range = Array.from(Array(inputData.length).keys());
         const names: string[] = range.map((ix) => `file_${ix}`);
 
@@ -1733,6 +1736,7 @@ export class DagHandle {
                 path: '/kafka_msg',
                 args: {
                     dag: this.getURI(),
+                    postfix,
                 },
                 files,
             })
@@ -1785,18 +1789,23 @@ export class DagHandle {
         return mergeContentType(res, ctype);
     }
 
-    public async getKafkaOffsets(alive: boolean): Promise<KafkaOffsets> {
+    public async getKafkaOffsets(
+        alive: boolean,
+        postfix?: string
+    ): Promise<KafkaOffsets> {
         return await this.client.requestJSON({
             method: METHOD_GET,
             path: '/kafka_offsets',
             args: {
                 dag: this.getURI(),
                 alive: +alive,
+                ...(postfix ? { postfix } : {}),
             },
         });
     }
 
     public async getKafkaThroughput(
+        postfix?: string,
         segmentInterval = 120.0,
         segments = 5
     ): Promise<KafkaThroughput> {
@@ -1806,7 +1815,7 @@ export class DagHandle {
         if (segments <= 0) {
             throw new Error('segments should be > 0');
         }
-        let offsets = await this.getKafkaOffsets(false);
+        let offsets = await this.getKafkaOffsets(false, postfix);
         let now = performance.now();
         let measurements: [number, number, number, number][] = [
             [offsets.input, offsets.output, offsets.error, now],
