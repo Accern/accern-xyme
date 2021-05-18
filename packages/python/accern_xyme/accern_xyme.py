@@ -37,7 +37,8 @@ import quick_server
 from .util import (
     async_compute,
     ByteResponse,
-    df_to_csv,
+    content_to_csv_bytes,
+    df_to_csv_bytes,
     get_age,
     get_file_hash,
     get_file_upload_chunk_size,
@@ -47,7 +48,7 @@ from .util import (
     has_graph_easy,
     interpret_ctype,
     is_jupyter,
-    json_loads,
+    maybe_json_loads,
     merge_ctype,
     safe_opt_num,
     ServerSideError,
@@ -84,9 +85,9 @@ from .types import (
     KafkaTopics,
     KnownBlobs,
     MinimalQueueStatsResponse,
+    ModelInfo,
     ModelParamsResponse,
     ModelReleaseResponse,
-    ModelSetupResponse,
     NamespaceList,
     NamespaceUpdateSettings,
     NodeChunk,
@@ -114,6 +115,7 @@ from .types import (
     Timings,
     TritonModelsResponse,
     UploadFilesResponse,
+    UUIDResponse,
     VersionResponse,
     WorkerScale,
 )
@@ -665,12 +667,6 @@ class XYMEClient:
             raise ValueError(f"blob: {blob_uri} is not csv type")
         return CSVBlobHandle(self, blob_uri, is_full=False)
 
-    def get_model_blob(self, blob_uri: str) -> 'ModelBlobHandle':
-        blob_type = self.get_blob_type(blob_uri)
-        if not blob_type["is_model"]:
-            raise ValueError(f"blob: {blob_uri} is not model type")
-        return ModelBlobHandle(self, blob_uri, is_full=False)
-
     def get_custom_code_blob(self, blob_uri: str) -> 'CustomCodeBlobHandle':
         blob_type = self.get_blob_type(blob_uri)
         if not blob_type["is_custom_code"]:
@@ -768,12 +764,12 @@ class XYMEClient:
             return cast(MinimalQueueStatsResponse, self.request_json(
                 METHOD_GET, "/queue_stats", {
                     "dag": dag,
-                    "minimal": 1,
+                    "minimal": True,
                 }))
         return cast(QueueStatsResponse, self.request_json(
             METHOD_GET, "/queue_stats", {
                 "dag": dag,
-                "minimal": 0,
+                "minimal": False,
             }))
 
     def get_instance_status(
@@ -936,11 +932,14 @@ class XYMEClient:
         import dvc.api
 
         res = dvc.api.read(path, repo=repo, rev=rev, mode="r")
-        try:
-            return json_loads(res)
-        except json.JSONDecodeError:
-            pass
+        maybe_parse = maybe_json_loads(res)
+        if maybe_parse is not None:
+            return maybe_parse
         return res
+
+    def get_uuid(self) -> str:
+        return cast(UUIDResponse, self.request_json(
+            METHOD_GET, "/uuid", {}))["uuid"]
 
 # *** XYMEClient ***
 
@@ -1443,7 +1442,7 @@ class DagHandle:
         return cast(DagDef, self._client.request_json(
             METHOD_GET, "/dag_def", {
                 "dag": self.get_uri(),
-                "full": 1 if full else 0,
+                "full": full,
             }))
 
     def set_attr(self, attr: str, value: Any) -> None:
@@ -1733,12 +1732,13 @@ class NodeHandle:
         self._inputs: Dict[str, Tuple[str, str]] = {}
         self._state: Optional[int] = None
         self._config_error: Optional[str] = None
+        self._is_model: Optional[bool] = None
 
     def as_owner(self) -> BlobOwner:
-        return cast(BlobOwner, {
-            "owner_blob": self.get_dag().get_uri(),
+        return {
+            "owner_dag": self.get_dag().get_uri(),
             "owner_node": self.get_id(),
-        })
+        }
 
     @staticmethod
     def from_node_info(
@@ -1947,10 +1947,9 @@ class NodeHandle:
 
     def get_blob_uri(
             self, blob_key: str, blob_type: str) -> Tuple[str, BlobOwner]:
-        dag = self.get_dag()
         res = cast(BlobURIResponse, self._client.request_json(
             METHOD_GET, "/blob_uri", {
-                "dag": dag.get_uri(),
+                "dag": self.get_dag().get_uri(),
                 "node": self.get_id(),
                 "key": blob_key,
                 "type": blob_type,
@@ -1966,13 +1965,6 @@ class NodeHandle:
     def get_json_blob(self, key: str = "jsons_in") -> 'JSONBlobHandle':
         uri, owner = self.get_blob_uri(key, "json")
         blob = JSONBlobHandle(self._client, uri, is_full=False)
-        blob.set_local_owner(owner)
-        return blob
-
-    def get_model_blob(
-            self, blob_type: str, key: str = "model") -> 'ModelBlobHandle':
-        uri, owner = self.get_blob_uri(key, blob_type)
-        blob = ModelBlobHandle(self._client, uri, is_full=False)
         blob.set_local_owner(owner)
         return blob
 
@@ -2052,6 +2044,42 @@ class NodeHandle:
     def get_def(self) -> NodeDef:
         return cast(NodeDef, self._client.request_json(
             METHOD_GET, "/node_def", {
+                "dag": self.get_dag().get_uri(),
+                "node": self.get_id(),
+            }))
+
+    # ModelLike Nodes only
+
+    def get_model_info(self) -> ModelInfo:
+        return cast(ModelInfo, self._client.request_json(
+            METHOD_GET, "/node_model_info", {
+                "dag": self.get_dag().get_uri(),
+                "node": self.get_id(),
+            }))
+
+    def is_model(self) -> bool:
+        if self._is_model is None:
+            model_info = self.get_model_info()
+            self._is_model = len(model_info) > 0
+        return self._is_model
+
+    def ensure_is_model(self) -> None:
+        if not self.is_model():
+            raise ValueError(f"{self} is not a model node.")
+
+    def setup_model(self, obj: Dict[str, Any]) -> ModelInfo:
+        self.ensure_is_model()
+        return cast(ModelInfo, self._client.request_json(
+            METHOD_PUT, "/model_setup", {
+                "dag": self.get_dag().get_uri(),
+                "node": self.get_id(),
+                "config": obj,
+            }))
+
+    def get_model_params(self) -> ModelParamsResponse:
+        self.ensure_is_model()
+        return cast(ModelParamsResponse, self._client.request_json(
+            METHOD_GET, "/model_params", {
                 "dag": self.get_dag().get_uri(),
                 "node": self.get_id(),
             }))
@@ -2394,7 +2422,25 @@ class CSVBlobHandle(BlobHandle):
             ) -> Optional[UploadFilesResponse]:
         io_in = None
         try:
-            io_in = df_to_csv(df)
+            io_in = df_to_csv_bytes(df)
+            self._upload_file(
+                io_in,
+                ext="csv",
+                progress_bar=progress_bar)
+            return self.finish_csv_upload()
+        finally:
+            if io_in is not None:
+                io_in.close()
+            self._clear_upload()
+
+    def add_from_content(
+            self,
+            content: Union[bytes, str, pd.DataFrame],
+            progress_bar: Optional[IO[Any]] = sys.stdout,
+            ) -> Optional[UploadFilesResponse]:
+        io_in = None
+        try:
+            io_in = content_to_csv_bytes(content)
             self._upload_file(
                 io_in,
                 ext="csv",
@@ -2485,25 +2531,6 @@ class CustomCodeBlobHandle(BlobHandle):
             }))
 
 # *** CustomCodeBlobHandle ***
-
-
-class ModelBlobHandle(BlobHandle):
-    def setup_model(self, obj: Dict[str, Any]) -> ModelSetupResponse:
-        return cast(ModelSetupResponse, self._client.request_json(
-            METHOD_PUT, "/model_setup", {
-                "dag": self.get_owner_dag(),
-                "node": self.get_owner_node(),
-                "config": obj,
-            }))
-
-    def get_model_params(self) -> ModelParamsResponse:
-        return cast(ModelParamsResponse, self._client.request_json(
-            METHOD_GET, "/model_params", {
-                "dag": self.get_owner_dag(),
-                "node": self.get_owner_node(),
-            }))
-
-# *** ModelBlobHandle ***
 
 
 class ComputationHandle:

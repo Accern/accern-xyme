@@ -1,0 +1,94 @@
+name: Update Type Definition Files
+
+on:
+  push:
+    branches-ignore:
+      - 'hotfix'
+      - 'dev'
+
+jobs:
+    python-type:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v2
+
+            - name: Use Python 3.8
+              uses: actions/setup-python@v1
+              with:
+                python-version: 3.8
+
+            - name: Get yarn cache directory path
+              id: yarn-cache-dir-path
+              run: echo "::set-output name=dir::$(yarn cache dir)"
+
+            - name: Cache python modules 3.8
+              uses: actions/cache@v2
+              with:
+                path: ${{ env.pythonLocation }}
+                key: ${{ env.pythonLocation }}-${{ hashFiles('**/requirements.txt') }}-${{ hashFiles('**/requirements.lint.txt') }}
+
+            - name: Install dependencies
+              run: pip3 install -r requirements.lint.txt
+
+            - name: Generate Type files
+              run: make type-information-python
+
+            - name: Commit files
+              run: |
+                git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
+                git config --local user.name "github-actions[bot]"
+                git diff --exit-code 2>&1 >/dev/null && git diff --cached --exit-code 2>&1 >/dev/null && exit 0
+                git commit -m "Update python type declaration" -a
+
+            - name: GitHub Push
+              uses: ad-m/github-push-action@v0.6.0
+              with:
+                github_token: ${{ secrets.GITHUB_TOKEN }}
+                branch: ${{ github.ref }}
+
+    typescript-type:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v2
+
+            - name: Use Node.js 12.x
+              uses: actions/setup-node@v1
+              with:
+                  node-version: 12.x
+
+            - name: Get yarn cache directory path
+              id: yarn-cache-dir-path
+              run: echo "::set-output name=dir::$(yarn cache dir)"
+
+            - name: Cache yarn
+              uses: actions/cache@v2
+              with:
+                  path: ${{ steps.yarn-cache-dir-path.outputs.dir }}
+                  key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}
+                  restore-keys: |
+                      ${{ runner.os }}-yarn-
+
+            - name: Cache node modules
+              uses: actions/cache@v2
+              with:
+                  path: '**/node_modules'
+                  key: ${{ runner.os }}-modules-${{ hashFiles('**/yarn.lock') }}
+
+            - name: Install dependencies
+              run: yarn
+
+            - name: Generate Type file
+              run: make type-information-ts
+
+            - name: Commit files
+              run: |
+                git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
+                git config --local user.name "github-actions[bot]"
+                git diff --exit-code 2>&1 >/dev/null && git diff --cached --exit-code 2>&1 >/dev/null && exit 0
+                git commit -m "Update typescript type declaration" -a
+
+            - name: GitHub Push
+              uses: ad-m/github-push-action@v0.6.0
+              with:
+                github_token: ${{ secrets.GITHUB_TOKEN }}
+                branch: ${{ github.ref }}

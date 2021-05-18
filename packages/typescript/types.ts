@@ -320,7 +320,7 @@ export interface ModelParamsResponse {
     model_params: ModelParamDefs;
 }
 
-export interface ModelSetupResponse {
+export interface ModelInfo {
     model_info: DictStrStr;
 }
 
@@ -492,5 +492,12 @@ export interface BlobTypeResponse {
     is_csv: boolean;
     is_custom_code: boolean;
     is_json: boolean;
-    is_model: boolean;
+}
+
+export interface BlobURIResponse {
+    uri: string;
+    owner: BlobOwner;
+}
+export interface UUIDResponse {
+    uuid: string;
 }

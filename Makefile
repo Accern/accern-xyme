@@ -31,16 +31,16 @@ lint-forgottenformat:
 	! ./forgottenformat.sh
 
 lint-pycodestyle:
-	pycodestyle --exclude=venv --show-source .
+	pycodestyle --exclude=venv --show-source packages/python
 
 lint-pycodestyle-debug:
-	pycodestyle --exclude=venv -v --show-source .
+	pycodestyle --exclude=venv -v --show-source packages/python
 
 lint-pylint:
-	find . \( -name '*.py' -o -name '*.pyi' \) -and -not -path './venv/*' \
+	find packages/python \( -name '*.py' -o -name '*.pyi' \) -and -not -path './venv/*' \
 	-and -not -path './stubs/*' \
 	| sort
-	find . \( -name '*.py' -o -name '*.pyi' \) -and -not -path './venv/*' \
+	find packages/python \( -name '*.py' -o -name '*.pyi' \) -and -not -path './venv/*' \
 	-and -not -path './stubs/*' \
 	| sort | xargs pylint -j 6
 
@@ -94,3 +94,9 @@ publish-ts:
 	@test "${CUR_TAG}" = "v${VERSION}" || (echo "local tag $(CUR_TAG) != v$(VERSION)" && exit 1)
 	yarn publish --new-version $(VERSION)
 	@echo "succesfully deployed $(VERSION)"
+
+type-information-python:
+	cd packages/python/accern_xyme && stubgen accern_xyme.py -o ../../types
+
+type-information-ts:
+	cd packages/typescript && tsc --p tsconfig-info.json
