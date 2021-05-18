@@ -151,7 +151,7 @@ export declare class DagHandle {
     getQueueMng(): Promise<string | undefined>;
     getIns(): Promise<string[]>;
     getOuts(): Promise<[string, string][]>;
-    setDag(defs: DagDef): void;
+    setDag(defs: DagDef): Promise<void>;
     dynamicModel(inputs: any[], formatMethod?: DynamicFormat, noCache?: boolean): Promise<any[]>;
     dynamicList(inputs: any[], fargs: {
         inputKey?: string;
