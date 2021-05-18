@@ -194,10 +194,10 @@ export declare class DagHandle {
         noOutput?: boolean;
     }): Promise<KafkaTopics>;
     postKafkaObjs(inputObjs: any[]): Promise<string[]>;
-    postKafkaMsgs(inputData: Buffer[]): Promise<string[]>;
+    postKafkaMsgs(inputData: Buffer[], postfix?: string): Promise<string[]>;
     readKafkaOutput(offset?: string, maxRows?: number): Promise<ByteResponse | null>;
-    getKafkaOffsets(alive: boolean): Promise<KafkaOffsets>;
-    getKafkaThroughput(segmentInterval?: number, segments?: number): Promise<KafkaThroughput>;
+    getKafkaOffsets(alive: boolean, postfix?: string): Promise<KafkaOffsets>;
+    getKafkaThroughput(postfix?: string, segmentInterval?: number, segments?: number): Promise<KafkaThroughput>;
     getKafkaGroup(): Promise<KafkaGroup>;
     setKafkaGroup(groupId: string | undefined, reset: string | undefined, ...kwargs: any[]): Promise<KafkaGroup>;
 }
