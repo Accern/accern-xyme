@@ -1320,8 +1320,8 @@ export class DagHandle {
         }
     }
 
-    public setDag(defs: DagDef) {
-        this.client.setDag(this.getURI(), defs);
+    public async setDag(defs: DagDef) {
+        await this.client.setDag(this.getURI(), defs);
     }
 
     public async dynamicModel(
@@ -1631,7 +1631,7 @@ export class DagHandle {
     public async scaleWorker(replicas: number): Promise<boolean> {
         return await this.client
             .requestJSON<WorkerScale>({
-                method: METHOD_POST,
+                method: METHOD_PUT,
                 path: '/worker',
                 args: {
                     dag: this.getURI(),
