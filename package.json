@@ -14,7 +14,7 @@
         "typecheck": "tsc",
         "lint": "eslint 'packages/typescript/**/*.ts'",
         "build": "npx tsc -p tsconfig.json",
-        "prepare": "cd packages/typescript && tsc --p tsconfig-info.json && husky install",
+        "prepare": "cd packages/typescript && tsc --p tsconfig-info.json",
         "clean": "rimraf ./dist && mkdir dist",
         "prebuild": "yarn run clean"
     },
