@@ -2379,7 +2379,8 @@ class BlobHandle:
 
 
 class CSVBlobHandle(BlobHandle):
-    def finish_csv_upload(self) -> UploadFilesResponse:
+    def finish_csv_upload(
+            self, filename: Optional[str] = None) -> UploadFilesResponse:
         tmp_uri = self._tmp_uri
         assert tmp_uri is not None
         owner = self.get_owner()
@@ -2388,6 +2389,7 @@ class CSVBlobHandle(BlobHandle):
             "csv_uri": self.get_uri(),
             "owner_dag": owner["owner_dag"],
             "owner_node": owner["owner_node"],
+            "filename": filename,
         }
         return cast(UploadFilesResponse, self._client.request_json(
             METHOD_POST, "/finish_csv", args))
@@ -2411,7 +2413,7 @@ class CSVBlobHandle(BlobHandle):
                     fbuff,
                     ext=ext,
                     progress_bar=progress_bar)
-            return self.finish_csv_upload()
+            return self.finish_csv_upload(filename)
         finally:
             self._clear_upload()
 

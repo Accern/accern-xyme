@@ -1721,7 +1721,7 @@ export class DagHandle {
         postfix = ''
     ): Promise<string[]> {
         const range = Array.from(Array(inputData.length).keys());
-        const names: string[] = range.map((ix) => `file_${ix}`);
+        const names: string[] = range.map((ix) => `file${ix}`);
 
         const files = inputData.reduce(
             (acc, _cV, cIndex) => ({
@@ -2799,7 +2799,7 @@ export class CSVBlobHandle extends BlobHandle {
 
         try {
             await this.uploadFile(fileHandle, ext, progressBar);
-            return await this.finishCSVUpload();
+            return await this.finishCSVUpload(fileName);
         } finally {
             await fileHandle.close();
             await this.clearUpload();
@@ -2825,13 +2825,15 @@ export class CSVBlobHandle extends BlobHandle {
 
         try {
             await this.uploadFileUsingContent(content, ext, progressBar);
-            return await this.finishCSVUpload();
+            return await this.finishCSVUpload(fileName);
         } finally {
             await this.clearUpload();
         }
     }
 
-    public async finishCSVUpload(): Promise<UploadFilesResponse> {
+    public async finishCSVUpload(
+        fileName?: string
+    ): Promise<UploadFilesResponse> {
         const tmpURI = this.tmpURI;
         if (isUndefined(tmpURI)) {
             throw new Error('uri undefined');
@@ -2844,6 +2846,7 @@ export class CSVBlobHandle extends BlobHandle {
                 csv_uri: this.getURI(),
                 owner_dag: await this.getOwnerDag(),
                 owner_node: await this.getOwnerNode(),
+                filename: fileName,
             },
         });
     }
