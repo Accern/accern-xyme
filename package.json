@@ -16,7 +16,8 @@
         "build": "npx tsc -p tsconfig.json",
         "prepare": "cd packages/typescript && tsc --p tsconfig-info.json",
         "clean": "rimraf ./dist && mkdir dist",
-        "prebuild": "yarn run clean"
+        "prebuild": "yarn run clean",
+        "postinstall": "husky install"
     },
     "dependencies": {
         "abort-controller": "^3.0.0",
