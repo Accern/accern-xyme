@@ -99,6 +99,7 @@ from .types import (
     NodeState,
     NodeStatus,
     NodeTiming,
+    NodeTypeResponse,
     NodeTypes,
     NodeUserColumnsResponse,
     PrettyResponse,
@@ -2050,17 +2051,14 @@ class NodeHandle:
 
     # ModelLike Nodes only
 
-    def get_model_info(self) -> ModelInfo:
-        return cast(ModelInfo, self._client.request_json(
-            METHOD_GET, "/node_model_info", {
-                "dag": self.get_dag().get_uri(),
-                "node": self.get_id(),
-            }))
-
     def is_model(self) -> bool:
         if self._is_model is None:
-            model_info = self.get_model_info()
-            self._is_model = len(model_info) > 0
+            self._is_model = cast(NodeTypeResponse, self._client.request_json(
+                METHOD_GET, "/node_type", {
+                    "dag": self.get_dag().get_uri(),
+                    "node": self.get_id(),
+                }))["is_model"]
+
         return self._is_model
 
     def ensure_is_model(self) -> None:

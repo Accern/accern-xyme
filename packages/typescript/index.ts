@@ -69,6 +69,7 @@ import {
     UploadFilesResponse,
     VersionResponse,
     WorkerScale,
+    NodeTypeResponse,
 } from './types';
 import {
     handleError,
@@ -2293,21 +2294,18 @@ export class NodeHandle {
 
     // ModelLike Nodes only
 
-    public async getModelInfo(): Promise<ModelInfo> {
-        return await this.client.requestJSON<ModelInfo>({
-            method: METHOD_PUT,
-            path: '/node_model_info',
-            args: {
-                dag: this.getDag().getURI(),
-                node: this.getId(),
-            },
-        });
-    }
-
     public async isModel(): Promise<boolean> {
         if (this._isModel === null) {
-            const modelInfo = await this.getModelInfo();
-            this._isModel = _.isEmpty(modelInfo);
+            this._isModel = await this.client
+                .requestJSON<NodeTypeResponse>({
+                    method: METHOD_PUT,
+                    path: '/node_type',
+                    args: {
+                        dag: this.getDag().getURI(),
+                        node: this.getId(),
+                    },
+                })
+                .then((response) => response.is_model);
         }
         return this._isModel;
     }
