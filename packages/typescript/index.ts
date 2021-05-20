@@ -5,7 +5,6 @@ import { promises as fpm } from 'fs';
 import fetch, { HeadersInit, Response, RequestInit } from 'node-fetch';
 import { performance } from 'perf_hooks';
 import jsSHA from 'jssha';
-import _ from 'lodash';
 import {
     AllowedCustomImports,
     BlobFilesResponse,
