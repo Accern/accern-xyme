@@ -26,7 +26,7 @@ import textwrap
 import threading
 import contextlib
 from io import BytesIO, StringIO
-from urllib import parse
+from pathlib import PurePath
 from graphviz.backend import ExecutableNotFound
 import pandas as pd
 import requests
@@ -1901,7 +1901,9 @@ class NodeHandle:
             filter_id: bool = True) -> Optional[ByteResponse]:
         content = self.read_blob(key, chunk, force_refresh).get_content()
         if filter_id and isinstance(content, pd.DataFrame):
-            content = content[content["row_id"] >= 0]
+            content = pd.DataFrame(content.iloc[content["row_id"] >= 0])
+            content = content.set_index("index", drop=True)
+            content.index.name = None
         return content
 
     def read_all(
@@ -2144,10 +2146,8 @@ class BlobHandle:
 
     def get_parent(self) -> 'BlobHandle':
         if self._parent is None:
-            parsed = parse.urlparse(self._uri)
-            path = "/".join(parsed.path.split("/")[0:3])
-            parsed = parsed._replace(path=path)
-            uri = parsed.geturl()
+            path = PurePath(self._uri)
+            uri = str(path.parent)
             res = BlobHandle(self._client, uri, is_full=False)
             self._parent = res
         return self._parent
