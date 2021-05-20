@@ -11,9 +11,9 @@ import {
     BlobInit,
     BlobOwner,
     BlobTypeResponse,
+    BlobURIResponse,
     CacheStats,
     CopyBlob,
-    CSVBlobResponse,
     DagCreate,
     DagDef,
     DagInfo,
@@ -37,9 +37,9 @@ import {
     KafkaTopics,
     KnownBlobs,
     MinimalQueueStatsResponse,
+    ModelInfo,
     ModelParamsResponse,
     ModelReleaseResponse,
-    ModelSetupResponse,
     NamespaceUpdateSettings,
     NodeChunk,
     NodeCustomImports,
@@ -64,13 +64,14 @@ import {
     TimingResult,
     Timings,
     TritonModelsResponse,
+    UUIDResponse,
     UploadFilesResponse,
     VersionResponse,
     WorkerScale,
+    NodeTypeResponse,
 } from './types';
 import {
     handleError,
-    HTTPResponseError,
     METHOD_DELETE,
     METHOD_FILE,
     METHOD_GET,
@@ -96,7 +97,7 @@ import {
     safeOptNumber,
     std,
 } from './util';
-import { KeyError } from './errors';
+import { AccessDenied, KeyError, HTTPResponseError } from './errors';
 export * from './errors';
 export * from './request';
 export * from './types';
@@ -115,7 +116,7 @@ const CUSTOM_NODE_TYPES = [
     'custom_json_join_data',
 ];
 const NO_RETRY = [METHOD_POST, METHOD_FILE];
-const NO_RETRY_STATUS_CODE = [403, 404, 500];
+const NO_RETRY_CODE = [403, 404, 500];
 
 export interface XYMEConfig {
     url: string;
@@ -230,8 +231,9 @@ export default class XYMEClient {
                     );
                 } catch (e) {
                     if (
-                        e instanceof HTTPResponseError &&
-                        NO_RETRY_STATUS_CODE.indexOf(e.response.status) > 0
+                        e instanceof AccessDenied ||
+                        (e instanceof HTTPResponseError &&
+                            NO_RETRY_CODE.indexOf(e.response.status) >= 0)
                     ) {
                         retry = MAX_RETRY;
                     }
@@ -276,8 +278,9 @@ export default class XYMEClient {
                     );
                 } catch (e) {
                     if (
-                        e instanceof HTTPResponseError &&
-                        NO_RETRY_STATUS_CODE.indexOf(e.response.status) > 0
+                        e instanceof AccessDenied ||
+                        (e instanceof HTTPResponseError &&
+                            NO_RETRY_CODE.indexOf(e.response.status) >= 0)
                     ) {
                         retry = MAX_RETRY;
                     }
@@ -322,8 +325,9 @@ export default class XYMEClient {
                     );
                 } catch (e) {
                     if (
-                        e instanceof HTTPResponseError &&
-                        NO_RETRY_STATUS_CODE.indexOf(e.response.status) > 0
+                        e instanceof AccessDenied ||
+                        (e instanceof HTTPResponseError &&
+                            NO_RETRY_CODE.indexOf(e.response.status) >= 0)
                     ) {
                         retry = MAX_RETRY;
                     }
@@ -417,7 +421,7 @@ export default class XYMEClient {
                 throw new Error(`unknown method ${method}`);
         }
         if (response) {
-            handleError(response);
+            await handleError(response);
             return [
                 await response.buffer(),
                 response.headers.get('content-type'),
@@ -502,7 +506,7 @@ export default class XYMEClient {
                 throw new Error(`unknown method ${method}`);
         }
         if (response) {
-            handleError(response);
+            await handleError(response);
             return await response.json();
         } else {
             throw new Error('no server response');
@@ -547,7 +551,7 @@ export default class XYMEClient {
                 throw new Error(`unknown method ${method}`);
         }
         if (response) {
-            handleError(response);
+            await handleError(response);
             try {
                 const text = await response.text();
                 return Readable.from(text);
@@ -721,6 +725,24 @@ export default class XYMEClient {
         });
     }
 
+    /**
+     * Usage:
+     * 1. create a blobURI at you desired location, i.e. s3://bucket/csv/buuid
+     * 2. call setBlobOwner('s3://bucer/folder/buuid', null, null, true)
+     * 3. BlobOwner will be an external owner
+     * {
+     *   owner_dag: 'disk://localhost/dag/b00000000000000000000000000000000',
+     *   owner_node: 'n00000000000000000000000000000000'
+     * }
+     * You can use this technique to maintain `external-owned` csv data without
+     * breaking the ownership of the blob. These `external-owned` blobs will be
+     * read-only to other dags.
+     * @param blobURI
+     * @param dagId
+     * @param nodeId
+     * @param externalOwner
+     * @returns BlobOwner
+     */
     public async setBlobOwner(
         blobURI: string,
         dagId: string = undefined,
@@ -768,25 +790,17 @@ export default class XYMEClient {
 
     public async getCSVBlob(blobURI: string): Promise<CSVBlobHandle> {
         const blobType = await this.getBlobType(blobURI);
-        if (blobType.is_csv) {
+        if (!blobType.is_csv) {
             throw new Error(`blob: ${blobURI} is not csv type`);
         }
         return new CSVBlobHandle(this, blobURI, false);
-    }
-
-    public async getModelBlob(blobURI: string): Promise<ModelBlobHandle> {
-        const blobType = await this.getBlobType(blobURI);
-        if (blobType.is_model) {
-            throw new Error(`blob: ${blobURI} is not model type`);
-        }
-        return new ModelBlobHandle(this, blobURI, false);
     }
 
     public async getCustomCodeBlob(
         blobURI: string
     ): Promise<CustomCodeBlobHandle> {
         const blobType = await this.getBlobType(blobURI);
-        if (blobType.is_custom_code) {
+        if (!blobType.is_custom_code) {
             throw new Error(`blob: ${blobURI} is not custom code type`);
         }
         return new CustomCodeBlobHandle(this, blobURI, false);
@@ -794,7 +808,7 @@ export default class XYMEClient {
 
     public async getJSONBlob(blobURI: string): Promise<JSONBlobHandle> {
         const blobType = await this.getBlobType(blobURI);
-        if (blobType.is_json) {
+        if (!blobType.is_json) {
             throw new Error(`blob: ${blobURI} is not json type`);
         }
         return new JSONBlobHandle(this, blobURI, false);
@@ -879,8 +893,8 @@ export default class XYMEClient {
         minimal: boolean,
         dag?: string
     ): Promise<MinimalQueueStatsResponse | MinimalQueueStatsResponse> {
-        let args: { [key: string]: number | string } = {
-            minimal: +minimal,
+        let args: { [key: string]: boolean | string } = {
+            minimal,
         };
         if (!isUndefined(dag)) {
             args = {
@@ -1095,6 +1109,14 @@ export default class XYMEClient {
             args: {},
         }).then((response) => response.models);
     }
+
+    public async getUUID(): Promise<string> {
+        return await this.requestJSON<UUIDResponse>({
+            method: METHOD_GET,
+            path: '/uuid',
+            args: {},
+        }).then((response) => response.uuid);
+    }
 }
 
 export class DagHandle {
@@ -1298,8 +1320,8 @@ export class DagHandle {
         }
     }
 
-    public setDag(defs: DagDef) {
-        this.client.setDag(this.getURI(), defs);
+    public async setDag(defs: DagDef) {
+        await this.client.setDag(this.getURI(), defs);
     }
 
     public async dynamicModel(
@@ -1323,13 +1345,23 @@ export class DagHandle {
 
     public async dynamicList(
         inputs: any[],
-        inputKey: string = undefined,
-        outputKey: string = undefined,
-        splitTh: number | null = 1000,
-        formatMethod: DynamicFormat = 'simple',
-        forceKeys = false,
-        noCache = false
+        fargs: {
+            inputKey?: string;
+            outputKey?: string;
+            splitTh?: number | null;
+            formatMethod?: DynamicFormat;
+            forceKeys?: boolean;
+            noCache?: boolean;
+        }
     ): Promise<any[]> {
+        const {
+            inputKey,
+            outputKey,
+            splitTh = 1000,
+            formatMethod = 'simple',
+            forceKeys = false,
+            noCache = false,
+        } = fargs;
         if (splitTh === null || inputs.length <= splitTh) {
             return await this.client
                 .requestJSON<DynamicResults>({
@@ -1351,15 +1383,14 @@ export class DagHandle {
         const splitNum = splitTh;
         const computeHalf = async (cur: any[], offset: number) => {
             if (cur.length <= splitNum) {
-                const curRes = await this.dynamicList(
-                    cur,
+                const curRes = await this.dynamicList(cur, {
                     inputKey,
                     outputKey,
-                    null,
+                    splitTh: null,
                     formatMethod,
                     forceKeys,
-                    noCache
-                );
+                    noCache,
+                });
                 Array.from(Array(curRes.length).keys()).forEach((ix) => {
                     resArray[offset + ix] = curRes[ix];
                 });
@@ -1547,7 +1578,7 @@ export class DagHandle {
             path: '/dag_def',
             args: {
                 dag: this.getURI(),
-                full: +full,
+                full,
             },
         });
     }
@@ -1600,7 +1631,7 @@ export class DagHandle {
     public async scaleWorker(replicas: number): Promise<boolean> {
         return await this.client
             .requestJSON<WorkerScale>({
-                method: METHOD_POST,
+                method: METHOD_PUT,
                 path: '/worker',
                 args: {
                     dag: this.getURI(),
@@ -1652,17 +1683,27 @@ export class DagHandle {
         return assertString(res);
     }
 
-    public async setKafkaTopicPartitions(
-        numPartitions: number,
-        largeInputRetention = false
-    ): Promise<KafkaTopics> {
+    public async setKafkaTopicPartitions(fargs: {
+        postfix?: string;
+        numPartitions?: number;
+        largeInputRetention?: boolean;
+        noOutput?: boolean;
+    }): Promise<KafkaTopics> {
+        const {
+            postfix = '',
+            numPartitions,
+            largeInputRetention = false,
+            noOutput = false,
+        } = fargs;
         return await this.client.requestJSON<KafkaTopics>({
             method: METHOD_POST,
-            path: '/kafka_to[ics',
+            path: '/kafka_topics',
             args: {
                 dag: this.getURI(),
                 num_partitions: numPartitions,
+                postfix: postfix,
                 large_input_retention: largeInputRetention,
+                no_output: noOutput,
             },
         });
     }
@@ -1675,9 +1716,12 @@ export class DagHandle {
         return await this.postKafkaMsgs(bios);
     }
 
-    public async postKafkaMsgs(inputData: Buffer[]): Promise<string[]> {
+    public async postKafkaMsgs(
+        inputData: Buffer[],
+        postfix = ''
+    ): Promise<string[]> {
         const range = Array.from(Array(inputData.length).keys());
-        const names: string[] = range.map((ix) => `file_${ix}`);
+        const names: string[] = range.map((ix) => `file${ix}`);
 
         const files = inputData.reduce(
             (acc, _cV, cIndex) => ({
@@ -1692,6 +1736,7 @@ export class DagHandle {
                 path: '/kafka_msg',
                 args: {
                     dag: this.getURI(),
+                    postfix,
                 },
                 files,
             })
@@ -1744,18 +1789,23 @@ export class DagHandle {
         return mergeContentType(res, ctype);
     }
 
-    public async getKafkaOffsets(alive: boolean): Promise<KafkaOffsets> {
+    public async getKafkaOffsets(
+        alive: boolean,
+        postfix?: string
+    ): Promise<KafkaOffsets> {
         return await this.client.requestJSON({
             method: METHOD_GET,
             path: '/kafka_offsets',
             args: {
                 dag: this.getURI(),
                 alive: +alive,
+                ...(postfix ? { postfix } : {}),
             },
         });
     }
 
     public async getKafkaThroughput(
+        postfix?: string,
         segmentInterval = 120.0,
         segments = 5
     ): Promise<KafkaThroughput> {
@@ -1765,7 +1815,7 @@ export class DagHandle {
         if (segments <= 0) {
             throw new Error('segments should be > 0');
         }
-        let offsets = await this.getKafkaOffsets(false);
+        let offsets = await this.getKafkaOffsets(false, postfix);
         let now = performance.now();
         let measurements: [number, number, number, number][] = [
             [offsets.input, offsets.output, offsets.error, now],
@@ -1882,6 +1932,7 @@ export class NodeHandle {
     name: string;
     state?: number;
     type: string;
+    _isModel?: boolean;
 
     constructor(
         client: XYMEClient,
@@ -1895,6 +1946,13 @@ export class NodeHandle {
         this.nodeId = nodeId;
         this.name = name;
         this.type = kind;
+    }
+
+    public asOwner(): BlobOwner {
+        return {
+            owner_node: this.getId(),
+            owner_dag: this.getDag().getURI(),
+        };
     }
 
     static fromNodeInfo(
@@ -2119,6 +2177,9 @@ export class NodeHandle {
         return await blob.getContent();
     }
 
+    /**
+     * Read and combine all output chunks.
+     */
     public async readAll(
         key: string,
         forceRefresh = false
@@ -2161,19 +2222,44 @@ export class NodeHandle {
         });
     }
 
-    public async getCSVBlob(): Promise<CSVBlobHandle> {
-        if (this.getType() !== 'csv_reader') {
-            throw new Error('node has no csv blob');
-        }
-        const res = await this.client.requestJSON<CSVBlobResponse>({
+    public async getBlobURI(
+        blobKey: string,
+        blobType: string
+    ): Promise<[string, BlobOwner]> {
+        const res = await this.client.requestJSON<BlobURIResponse>({
             method: METHOD_GET,
-            path: '/csv_blob',
+            path: '/blob_uri',
             args: {
                 dag: this.getDag().getURI(),
                 node: this.getId(),
+                key: blobKey,
+                type: blobType,
             },
         });
-        return new CSVBlobHandle(this.client, res.csv, false);
+        return [res.uri, res.owner];
+    }
+
+    public async getCSVBlob(key = 'orig'): Promise<CSVBlobHandle> {
+        const [uri, owner] = await this.getBlobURI(key, 'csv');
+        const blob = new CSVBlobHandle(this.client, uri, false);
+        blob.setLocalOwner(owner);
+        return blob;
+    }
+
+    public async getJSONBlob(key = 'jsons_in'): Promise<JSONBlobHandle> {
+        const [uri, owner] = await this.getBlobURI(key, 'json');
+        const blob = new JSONBlobHandle(this.client, uri, false);
+        blob.setLocalOwner(owner);
+        return blob;
+    }
+
+    public async getCustomCodeBlob(
+        key = 'custom_code'
+    ): Promise<CustomCodeBlobHandle> {
+        const [uri, owner] = await this.getBlobURI(key, 'custom_code');
+        const blob = new CustomCodeBlobHandle(this.client, uri, false);
+        blob.setLocalOwner(owner);
+        return blob;
     }
 
     public checkCustomCodeNode() {
@@ -2198,6 +2284,53 @@ export class NodeHandle {
         return await this.client.requestJSON<NodeDef>({
             method: METHOD_GET,
             path: '/node_def',
+            args: {
+                dag: this.getDag().getURI(),
+                node: this.getId(),
+            },
+        });
+    }
+
+    // ModelLike Nodes only
+
+    public async isModel(): Promise<boolean> {
+        if (this._isModel === null) {
+            this._isModel = await this.client
+                .requestJSON<NodeTypeResponse>({
+                    method: METHOD_PUT,
+                    path: '/node_type',
+                    args: {
+                        dag: this.getDag().getURI(),
+                        node: this.getId(),
+                    },
+                })
+                .then((response) => response.is_model);
+        }
+        return this._isModel;
+    }
+
+    public ensureIsModel() {
+        if (!this.isModel()) {
+            throw new Error(`${this} is not a model node.`);
+        }
+    }
+
+    public async setupModel(obj: { [key: string]: any }): Promise<ModelInfo> {
+        return await this.client.requestJSON<ModelInfo>({
+            method: METHOD_PUT,
+            path: '/model_setup',
+            args: {
+                dag: this.getDag().getURI(),
+                node: this.getId(),
+                config: obj,
+            },
+        });
+    }
+
+    public async getModelParams(): Promise<ModelParamsResponse> {
+        return await this.client.requestJSON<ModelParamsResponse>({
+            method: METHOD_GET,
+            path: '/model_params',
             args: {
                 dag: this.getDag().getURI(),
                 node: this.getId(),
@@ -2342,6 +2475,10 @@ export class BlobHandle {
         return this.owner;
     }
 
+    public setLocalOwner(owner: BlobOwner) {
+        this.owner = owner;
+    }
+
     public async getOwnerDag(): Promise<string> {
         const owner = await this.getOwner();
         return owner.owner_dag;
@@ -2352,6 +2489,10 @@ export class BlobHandle {
         return owner.owner_node;
     }
 
+    /**
+     * User can pass `externalOwner: true` to set the blob at toURI as
+     * external-owned blob.
+     */
     public async copyTo(
         toURI: string,
         newOwner: NodeHandle | undefined,
@@ -2622,6 +2763,17 @@ export class BlobHandle {
             (blobURI) => new BlobHandle(this.client, blobURI, true)
         );
     }
+
+    public async convertModel(reload = true): Promise<ModelReleaseResponse> {
+        return await this.client.requestJSON<ModelReleaseResponse>({
+            method: METHOD_POST,
+            path: '/convert_model',
+            args: {
+                blob: this.getURI(),
+                reload,
+            },
+        });
+    }
 }
 
 export class CSVBlobHandle extends BlobHandle {
@@ -2644,7 +2796,7 @@ export class CSVBlobHandle extends BlobHandle {
 
         try {
             await this.uploadFile(fileHandle, ext, progressBar);
-            return await this.finishCSVUpload();
+            return await this.finishCSVUpload(fileName);
         } finally {
             await fileHandle.close();
             await this.clearUpload();
@@ -2670,13 +2822,15 @@ export class CSVBlobHandle extends BlobHandle {
 
         try {
             await this.uploadFileUsingContent(content, ext, progressBar);
-            return await this.finishCSVUpload();
+            return await this.finishCSVUpload(fileName);
         } finally {
             await this.clearUpload();
         }
     }
 
-    public async finishCSVUpload(): Promise<UploadFilesResponse> {
+    public async finishCSVUpload(
+        fileName?: string
+    ): Promise<UploadFilesResponse> {
         const tmpURI = this.tmpURI;
         if (isUndefined(tmpURI)) {
             throw new Error('uri undefined');
@@ -2689,6 +2843,7 @@ export class CSVBlobHandle extends BlobHandle {
                 csv_uri: this.getURI(),
                 owner_dag: await this.getOwnerDag(),
                 owner_node: await this.getOwnerNode(),
+                filename: fileName,
             },
         });
     }
@@ -2722,45 +2877,6 @@ export class CustomCodeBlobHandle extends BlobHandle {
 }
 
 // *** CustomCodeBlobHandle ***
-
-export class ModelBlobHandle extends BlobHandle {
-    public async setupModel(obj: {
-        [key: string]: any;
-    }): Promise<ModelSetupResponse> {
-        return await this.client.requestJSON<ModelSetupResponse>({
-            method: METHOD_PUT,
-            path: '/model_setup',
-            args: {
-                dag: await this.getOwnerDag(),
-                node: await this.getOwnerNode(),
-                config: obj,
-            },
-        });
-    }
-
-    public async getModelParams(): Promise<ModelParamsResponse> {
-        return await this.client.requestJSON<ModelParamsResponse>({
-            method: METHOD_GET,
-            path: '/model_params',
-            args: {
-                dag: await this.getOwnerDag(),
-                node: await this.getOwnerNode(),
-            },
-        });
-    }
-
-    public async convertModel(): Promise<ModelReleaseResponse> {
-        return await this.client.requestJSON<ModelReleaseResponse>({
-            method: METHOD_POST,
-            path: '/convert_model',
-            args: {
-                blob: this.getURI(),
-            },
-        });
-    }
-}
-
-// *** ModelBlobHandle ***
 
 export class JSONBlobHandle extends BlobHandle {
     count: number;

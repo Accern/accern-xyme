@@ -5,12 +5,12 @@
     "esModuleInterop": true,
     "module": "commonjs",
     "moduleResolution": "node",
-    "outDir": "dist",
     "sourceMap": true,
+    "outDir": "../types",
     "target": "es5",
     "lib": [
       "es2019"
     ]
   },
-  "include": ["packages/typescript/*"]
+  "include": ["index.ts"]
 }

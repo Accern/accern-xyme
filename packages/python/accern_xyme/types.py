@@ -250,7 +250,7 @@ NodeUserColumnsResponse = TypedDict('NodeUserColumnsResponse', {
 ModelParamsResponse = TypedDict('ModelParamsResponse', {
     "model_params": ModelParamDefs,
 })
-ModelSetupResponse = TypedDict('ModelSetupResponse', {
+ModelInfo = TypedDict('ModelInfo', {
     "model_info": Dict[str, str],
 })
 BlobFilesResponse = TypedDict('BlobFilesResponse', {
@@ -390,6 +390,11 @@ BlobTypeResponse = TypedDict('BlobTypeResponse', {
     "is_csv": bool,
     "is_custom_code": bool,
     "is_json": bool,
-    "is_model": bool,
     "type": str,
+})
+UUIDResponse = TypedDict('UUIDResponse', {
+    "uuid": str,
+})
+NodeTypeResponse = TypedDict('NodeTypeResponse', {
+    "is_model": bool,
 })
