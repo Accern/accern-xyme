@@ -501,3 +501,7 @@ export interface BlobURIResponse {
 export interface UUIDResponse {
     uuid: string;
 }
+
+export interface NodeTypeResponse {
+    is_model: boolean;
+}

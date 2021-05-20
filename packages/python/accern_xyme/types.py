@@ -395,3 +395,6 @@ BlobTypeResponse = TypedDict('BlobTypeResponse', {
 UUIDResponse = TypedDict('UUIDResponse', {
     "uuid": str,
 })
+NodeTypeResponse = TypedDict('NodeTypeResponse', {
+    "is_model": bool,
+})

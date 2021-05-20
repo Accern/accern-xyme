@@ -256,7 +256,6 @@ export declare class NodeHandle {
     checkCustomCodeNode(): void;
     getUserColumn(key: string): Promise<NodeUserColumnsResponse>;
     getDef(): Promise<NodeDef>;
-    getModelInfo(): Promise<ModelInfo>;
     isModel(): Promise<boolean>;
     ensureIsModel(): void;
     setupModel(obj: {
@@ -331,7 +330,7 @@ export declare class BlobHandle {
 export declare class CSVBlobHandle extends BlobHandle {
     addFromFile(fileName: string, progressBar?: WritableStream | undefined): Promise<UploadFilesResponse>;
     addFromContent(fileName: string, content: Buffer, progressBar?: WritableStream | undefined): Promise<UploadFilesResponse>;
-    finishCSVUpload(): Promise<UploadFilesResponse>;
+    finishCSVUpload(fileName?: string): Promise<UploadFilesResponse>;
 }
 export declare class CustomCodeBlobHandle extends BlobHandle {
     setCustomImports(modules: string[][]): Promise<NodeCustomImports>;

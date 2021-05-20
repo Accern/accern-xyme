@@ -99,6 +99,7 @@ from .types import (
     NodeState,
     NodeStatus,
     NodeTiming,
+    NodeTypeResponse,
     NodeTypes,
     NodeUserColumnsResponse,
     PrettyResponse,
@@ -2050,17 +2051,14 @@ class NodeHandle:
 
     # ModelLike Nodes only
 
-    def get_model_info(self) -> ModelInfo:
-        return cast(ModelInfo, self._client.request_json(
-            METHOD_GET, "/node_model_info", {
-                "dag": self.get_dag().get_uri(),
-                "node": self.get_id(),
-            }))
-
     def is_model(self) -> bool:
         if self._is_model is None:
-            model_info = self.get_model_info()
-            self._is_model = len(model_info) > 0
+            self._is_model = cast(NodeTypeResponse, self._client.request_json(
+                METHOD_GET, "/node_type", {
+                    "dag": self.get_dag().get_uri(),
+                    "node": self.get_id(),
+                }))["is_model"]
+
         return self._is_model
 
     def ensure_is_model(self) -> None:
@@ -2379,7 +2377,8 @@ class BlobHandle:
 
 
 class CSVBlobHandle(BlobHandle):
-    def finish_csv_upload(self) -> UploadFilesResponse:
+    def finish_csv_upload(
+            self, filename: Optional[str] = None) -> UploadFilesResponse:
         tmp_uri = self._tmp_uri
         assert tmp_uri is not None
         owner = self.get_owner()
@@ -2388,6 +2387,7 @@ class CSVBlobHandle(BlobHandle):
             "csv_uri": self.get_uri(),
             "owner_dag": owner["owner_dag"],
             "owner_node": owner["owner_node"],
+            "filename": filename,
         }
         return cast(UploadFilesResponse, self._client.request_json(
             METHOD_POST, "/finish_csv", args))
@@ -2411,7 +2411,7 @@ class CSVBlobHandle(BlobHandle):
                     fbuff,
                     ext=ext,
                     progress_bar=progress_bar)
-            return self.finish_csv_upload()
+            return self.finish_csv_upload(filename)
         finally:
             self._clear_upload()
 

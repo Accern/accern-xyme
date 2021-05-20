@@ -1,14 +1,14 @@
 Accern-XYME
 ===========
 
-*accern\_xyme* is a python library for accessing XYME functionality.
+*accern\_xyme* is a python/typescript library for accessing XYME functionality.
 
 |CircleCI|
 
 .. |CircleCI| image:: https://circleci.com/gh/Accern/accern-xyme.svg?style=svg
    :target: https://circleci.com/gh/Accern/accern-xyme
 
-Usage
+Python Usage
 -----
 
 You can install *accern\_xyme* with pip:
@@ -32,3 +32,9 @@ Import it in python via:
 :code:`<URL>` and :code:`<TOKEN>` are the login credentials for XYME.
 
 You will need python3.6 or later.
+
+
+Typescript Developing
+-----
+You can install dependency with `yarn`. Run `yarn postinstall` to configure
+husky pre-commit hooks for your local environment.
