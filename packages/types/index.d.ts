@@ -326,6 +326,7 @@ export declare class BlobHandle {
     uploadFileUsingContent(contentBuffer: Buffer, ext: string, progressBar?: WritableStream): Promise<void>;
     uploadZip(source: string | fpm.FileHandle): Promise<BlobHandle[]>;
     convertModel(reload?: boolean): Promise<ModelReleaseResponse>;
+    modelRelease(): Promise<ModelReleaseResponse>;
 }
 export declare class CSVBlobHandle extends BlobHandle {
     addFromFile(fileName: string, progressBar?: WritableStream | undefined): Promise<UploadFilesResponse>;
