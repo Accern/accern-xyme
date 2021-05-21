@@ -2147,7 +2147,7 @@ class BlobHandle:
     def get_parent(self) -> 'BlobHandle':
         if self._parent is None:
             path = PurePath(self._uri)
-            uri = str(path.parent)
+            uri = "/".join(path.parts[:2])
             res = BlobHandle(self._client, uri, is_full=False)
             self._parent = res
         return self._parent
