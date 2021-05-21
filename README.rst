@@ -36,5 +36,5 @@ You will need python3.6 or later.
 
 Typescript Developing
 -----
-You can install dependency with `yarn`. Run `yarn postinstall` to configure
+You can install dependency with `yarn`. Run `yarn _postinstall` to configure
 husky pre-commit hooks for your local environment.
