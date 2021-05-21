@@ -10,6 +10,8 @@ TODO APIs:
 class BlobHandle
  - uploadFileUsingContent
 
+ - get_parent
+
 # Missing in Typescript
 
 class XYMEClient
@@ -27,6 +29,7 @@ class XYMEClient
 - set_kafka_topic_partitions^
 
 - read_dvc*
+
 
 No js/ts package for dvc api
 
