@@ -9,7 +9,7 @@ Accern-XYME
    :target: https://circleci.com/gh/Accern/accern-xyme
 
 Python Usage
------
+------------
 
 You can install *accern\_xyme* with pip:
 
@@ -35,7 +35,7 @@ You will need python3.6 or later.
 
 
 Typescript Developing
------
+---------------------
 
 You can install dependency with :code:`yarn`. Run :code:`yarn _postinstall`
 to configure husky pre-commit hooks for your local environment.
