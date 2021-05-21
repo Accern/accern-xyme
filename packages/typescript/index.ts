@@ -2775,7 +2775,7 @@ export class BlobHandle {
         });
     }
 
-    public async modelRelease(): Promise<ModelReleaseResponse> {
+    public async getModelRelease(): Promise<ModelReleaseResponse> {
         return await this.client.requestJSON<ModelReleaseResponse>({
             method: METHOD_GET,
             path: '/model_release',

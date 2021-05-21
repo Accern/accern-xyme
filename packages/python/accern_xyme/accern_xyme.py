@@ -2356,7 +2356,7 @@ class BlobHandle:
                 "reload": reload,
             }))
 
-    def model_release(self) -> ModelReleaseResponse:
+    def get_model_release(self) -> ModelReleaseResponse:
         return cast(ModelReleaseResponse, self._client.request_json(
             METHOD_GET, "/model_release", {
                 "blob": self.get_uri(),
