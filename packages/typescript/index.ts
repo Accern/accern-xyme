@@ -2774,6 +2774,16 @@ export class BlobHandle {
             },
         });
     }
+
+    public async getModelRelease(): Promise<ModelReleaseResponse> {
+        return await this.client.requestJSON<ModelReleaseResponse>({
+            method: METHOD_GET,
+            path: '/model_release',
+            args: {
+                blob: this.getURI(),
+            },
+        });
+    }
 }
 
 export class CSVBlobHandle extends BlobHandle {

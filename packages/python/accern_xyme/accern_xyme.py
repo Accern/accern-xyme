@@ -2356,6 +2356,12 @@ class BlobHandle:
                 "reload": reload,
             }))
 
+    def get_model_release(self) -> ModelReleaseResponse:
+        return cast(ModelReleaseResponse, self._client.request_json(
+            METHOD_GET, "/model_release", {
+                "blob": self.get_uri(),
+            }))
+
     def __hash__(self) -> int:
         return hash(self.as_str())
 

@@ -17,7 +17,7 @@
         "prepare": "yarn run prebuild && yarn run build",
         "clean": "rimraf ./dist && mkdir dist",
         "prebuild": "yarn run clean",
-        "postinstall": "husky install"
+        "_postinstall": "husky install"
     },
     "dependencies": {
         "abort-controller": "^3.0.0",
