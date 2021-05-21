@@ -26,7 +26,8 @@ import textwrap
 import threading
 import contextlib
 from io import BytesIO, StringIO
-from pathlib import PurePath
+from urllib.parse import urlparse, urlunparse
+from pathlib import PosixPath, PurePath
 from graphviz.backend import ExecutableNotFound
 import pandas as pd
 import requests
@@ -2146,9 +2147,11 @@ class BlobHandle:
 
     def get_parent(self) -> 'BlobHandle':
         if self._parent is None:
-            path = PurePath(self._uri)
-            uri = str(path.parent)
-            res = BlobHandle(self._client, uri, is_full=False)
+            uri = urlparse(self._uri)
+            path = PurePath(*PosixPath(uri.path).parts[:3])
+            new_uri = urlunparse(
+                (uri.scheme, uri.netloc, path.as_posix(), None, None, None))
+            res = BlobHandle(self._client, new_uri, is_full=False)
             self._parent = res
         return self._parent
 
