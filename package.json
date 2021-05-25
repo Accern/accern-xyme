@@ -1,6 +1,6 @@
 {
     "name": "accern-xyme",
-    "version": "4.0.6",
+    "version": "4.0.7",
     "description": "accern-xyme is a library for easily accessing XYME via typescript.",
     "repository": "https://github.com/Accern/accern-xyme",
     "main": "dist/index.js",
@@ -17,7 +17,7 @@
         "prepare": "yarn run prebuild && yarn run build",
         "clean": "rimraf ./dist && mkdir dist",
         "prebuild": "yarn run clean",
-        "postinstall": "husky install"
+        "_postinstall": "husky install"
     },
     "dependencies": {
         "abort-controller": "^3.0.0",

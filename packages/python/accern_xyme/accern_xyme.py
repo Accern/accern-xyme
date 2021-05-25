@@ -26,6 +26,8 @@ import textwrap
 import threading
 import contextlib
 from io import BytesIO, StringIO
+from urllib.parse import urlparse, urlunparse
+from pathlib import PosixPath, PurePath
 from graphviz.backend import ExecutableNotFound
 import pandas as pd
 import requests
@@ -1905,8 +1907,14 @@ class NodeHandle:
             self,
             key: str,
             chunk: Optional[int],
-            force_refresh: bool = False) -> Optional[ByteResponse]:
-        return self.read_blob(key, chunk, force_refresh).get_content()
+            force_refresh: bool = False,
+            filter_id: bool = True) -> Optional[ByteResponse]:
+        content = self.read_blob(key, chunk, force_refresh).get_content()
+        if filter_id and isinstance(content, pd.DataFrame):
+            content = pd.DataFrame(content[content["row_id"] >= 0])
+            content = content.set_index("index", drop=True)
+            content.index.name = None
+        return content
 
     def read_all(
             self,
@@ -2129,6 +2137,7 @@ class BlobHandle:
         self._tmp_uri: Optional[str] = None
         self._owner: Optional[BlobOwner] = None
         self._info: Optional[Dict[str, Any]] = None
+        self._parent: Optional[BlobHandle] = None
 
     def is_full(self) -> bool:
         return self._is_full
@@ -2144,6 +2153,16 @@ class BlobHandle:
             raise ValueError(f"URI must not be full: {self}")
         return BlobHandle(
             self._client, f"{self._uri}/{'/'.join(path)}", is_full=True)
+
+    def get_parent(self) -> 'BlobHandle':
+        if self._parent is None:
+            uri = urlparse(self._uri)
+            path = PurePath(*PosixPath(uri.path).parts[:3])
+            new_uri = urlunparse(
+                (uri.scheme, uri.netloc, path.as_posix(), None, None, None))
+            res = BlobHandle(self._client, new_uri, is_full=False)
+            self._parent = res
+        return self._parent
 
     def get_ctype(self) -> Optional[str]:
         return self._ctype
@@ -2363,6 +2382,12 @@ class BlobHandle:
             METHOD_POST, "/convert_model", {
                 "blob": self.get_uri(),
                 "reload": reload,
+            }))
+
+    def get_model_release(self) -> ModelReleaseResponse:
+        return cast(ModelReleaseResponse, self._client.request_json(
+            METHOD_GET, "/model_release", {
+                "blob": self.get_uri(),
             }))
 
     def __hash__(self) -> int:
