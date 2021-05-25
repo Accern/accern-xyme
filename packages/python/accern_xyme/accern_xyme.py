@@ -1902,7 +1902,7 @@ class NodeHandle:
             filter_id: bool = True) -> Optional[ByteResponse]:
         content = self.read_blob(key, chunk, force_refresh).get_content()
         if filter_id and isinstance(content, pd.DataFrame):
-            content = pd.DataFrame(content.loc[content["row_id"] >= 0])
+            content = pd.DataFrame(content[content["row_id"] >= 0])
             content = content.set_index("index", drop=True)
             content.index.name = None
         return content
