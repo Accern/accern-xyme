@@ -59,7 +59,7 @@ export default class XYMEClient {
     getNamespaces(): Promise<string[]>;
     getDags(): Promise<string[]>;
     getDagAges(): Promise<[string, string, string][]>;
-    getDagTimes(retrieveTimes: boolean): Promise<[DagList['cur_time'], DagList['dags']]>;
+    getDagTimes(retrieveTimes?: boolean): Promise<[DagList['cur_time'], DagList['dags']]>;
     getDag(dagURI: string): Promise<DagHandle>;
     getBlobHandle(uri: string, isFull?: boolean): BlobHandle;
     getNodeDefs(): Promise<NodeTypes['info']>;
