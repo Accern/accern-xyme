@@ -201,10 +201,15 @@ export interface NodeInfo {
     state?: number;
     config_error?: string;
 }
-
+export interface DagStatus {
+    dag: string;
+    oldest?: number;
+    latest?: number;
+    config_error?: string;
+}
 export interface DagList {
     cur_time: number;
-    dags: [string, number | null, number | null][];
+    dags: DagStatus[];
 }
 
 export interface KnownBlobs {

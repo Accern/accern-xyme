@@ -5,6 +5,7 @@ import { promises as fpm } from 'fs';
 import fetch, { HeadersInit, Response, RequestInit } from 'node-fetch';
 import { performance } from 'perf_hooks';
 import jsSHA from 'jssha';
+import { isNull } from 'lodash';
 import {
     AllowedCustomImports,
     BlobFilesResponse,
@@ -631,39 +632,45 @@ export default class XYMEClient {
 
     public async getDags(): Promise<string[]> {
         const [, dags] = await this.getDagTimes(false);
-        return dags.map((dag) => dag[0]);
+        return dags.map((dag) => dag.dag);
     }
 
     public async getDagAges(): Promise<[string, string, string][]> {
         const [curTime, dags] = await this.getDagTimes(true);
         const sorted = dags.sort((a, b) => {
-            const oldA = safeOptNumber(a[1]);
-            const oldB = safeOptNumber(b[1]);
+            if (isNull(a.config_error)) {
+                return 1;
+            }
+            if (isNull(b.config_error)) {
+                return 0;
+            }
+            const oldA = safeOptNumber(a.oldest);
+            const oldB = safeOptNumber(b.oldest);
             let cmp = +oldA[0] - +oldB[0] || oldA[1] - oldB[1];
             if (cmp !== 0) {
                 return cmp;
             }
-            const latestA = safeOptNumber(a[2]);
-            const latestB = safeOptNumber(b[2]);
+            const latestA = safeOptNumber(a.latest);
+            const latestB = safeOptNumber(b.latest);
             cmp = +latestA[0] - +latestB[0] || latestA[1] - latestB[1];
             if (cmp !== 0) {
                 return cmp;
             }
-            return +(a[0] >= b[0]);
+            return +(a.dag >= b.dag);
         });
         const ages: [string, string, string][] = [];
         sorted.forEach((dag) => {
             ages.push([
-                dag[0],
-                getAge(curTime, dag[1]),
-                getAge(curTime, dag[2]),
+                dag.dag,
+                getAge(curTime, dag.oldest),
+                getAge(curTime, dag.latest),
             ]);
         });
         return ages;
     }
 
     public async getDagTimes(
-        retrieveTimes: boolean
+        retrieveTimes = true
     ): Promise<[DagList['cur_time'], DagList['dags']]> {
         const response: DagList = await this.requestJSON({
             method: METHOD_GET,

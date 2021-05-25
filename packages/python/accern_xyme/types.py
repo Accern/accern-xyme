@@ -170,9 +170,15 @@ NodeInfo = TypedDict('NodeInfo', {
     "state": Optional[int],
     "config_error": Optional[str],
 })
+DagStatus = TypedDict("DagStatus", {
+    "dag": str,
+    "oldest": Optional[float],
+    "latest": Optional[float],
+    "config_error": Optional[str],
+})
 DagList = TypedDict('DagList', {
     "cur_time": float,
-    "dags": List[Tuple[str, Optional[float], Optional[float]]],
+    "dags": List[DagStatus],
 })
 KnownBlobs = TypedDict('KnownBlobs', {
     "cur_time": float,

@@ -70,6 +70,7 @@ from .types import (
     DagList,
     DagPrettyNode,
     DagReload,
+    DagStatus,
     DynamicResults,
     DynamicStatusResponse,
     ESQueryResponse,
@@ -577,20 +578,28 @@ class XYMEClient:
 
     def get_dags(self) -> List[str]:
         return [
-            res[0]
+            res["dag"]
             for res in self.get_dag_times(retrieve_times=False)[1]
         ]
 
-    def get_dag_ages(self) -> List[Tuple[str, str, str]]:
+    def get_dag_ages(self) -> List[Tuple[str, str, str, Optional[str]]]:
         cur_time, dags = self.get_dag_times(retrieve_times=True)
         return [
-            (dag_uri, get_age(cur_time, oldest), get_age(cur_time, latest))
-            for (dag_uri, oldest, latest) in sorted(dags, key=lambda el: (
-                safe_opt_num(el[1]), safe_opt_num(el[2]), el[0]))
+            (
+                dag_status["dag"],
+                get_age(cur_time, dag_status["oldest"]),
+                get_age(cur_time, dag_status["latest"]),
+                dag_status["config_error"],
+            )
+            for dag_status in sorted(dags, key=lambda el: (
+                el["config_error"] is None,
+                safe_opt_num(el["oldest"]),
+                safe_opt_num(el["latest"]),
+                el["dag"]))
         ]
 
-    def get_dag_times(self, retrieve_times: bool) -> Tuple[
-            float, List[Tuple[str, Optional[float], Optional[float]]]]:
+    def get_dag_times(self, retrieve_times: bool = True) -> Tuple[
+            float, List[DagStatus]]:
         res = cast(DagList, self.request_json(
             METHOD_GET, "/dags", {
                 "retrieve_times": int(retrieve_times),
