@@ -1910,8 +1910,10 @@ class NodeHandle:
     def read_all(
             self,
             key: str,
-            force_refresh: bool = False) -> Optional[ByteResponse]:
-        self.read(key, chunk=None, force_refresh=force_refresh)
+            force_refresh: bool = False,
+            filter_id: bool = True) -> Optional[ByteResponse]:
+        self.read(
+            key, chunk=None, force_refresh=force_refresh, filter_id=False)
         res: List[ByteResponse] = []
         ctype: Optional[str] = None
         while True:
@@ -1928,7 +1930,12 @@ class NodeHandle:
             res.append(cur)
         if not res or ctype is None:
             return None
-        return merge_ctype(res, ctype)
+        content = merge_ctype(res, ctype)
+        if filter_id and isinstance(content, pd.DataFrame):
+            content = pd.DataFrame(content[content["row_id"] >= 0])
+            content = content.set_index("index", drop=True)
+            content.index.name = None
+        return content
 
     def clear(self) -> NodeState:
         return cast(NodeState, self._client.request_json(
