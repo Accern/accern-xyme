@@ -1913,7 +1913,7 @@ class NodeHandle:
             force_refresh: bool = False,
             filter_id: bool = True) -> Optional[ByteResponse]:
         self.read(
-            key, chunk=None, force_refresh=force_refresh, filter_id=filter_id)
+            key, chunk=None, force_refresh=force_refresh, filter_id=False)
         res: List[ByteResponse] = []
         ctype: Optional[str] = None
         while True:
