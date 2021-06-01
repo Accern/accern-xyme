@@ -2392,20 +2392,17 @@ class BlobHandle:
                 "reload": reload,
             }))
 
-<<<<<<< HEAD
     def delete(self) -> DeleteBlobResponse:
         return cast(DeleteBlobResponse, self._client.request_json(
             METHOD_DELETE, "/blob", {
                 "blob": self.get_uri(),
             },
         ))
-=======
     def get_model_release(self) -> ModelReleaseResponse:
         return cast(ModelReleaseResponse, self._client.request_json(
             METHOD_GET, "/model_release", {
                 "blob": self.get_uri(),
             }))
->>>>>>> 3d74fb894cfbf6a1f849ad645c5567673c39fd8e
 
     def __hash__(self) -> int:
         return hash(self.as_str())
