@@ -58,7 +58,7 @@ export default class XYMEClient {
     getServerVersion(): Promise<VersionResponse>;
     getNamespaces(): Promise<string[]>;
     getDags(): Promise<string[]>;
-    getDagAges(): Promise<[string, string, string][]>;
+    getDagAges(): Promise<DictStrStr[]>;
     getDagTimes(retrieveTimes?: boolean): Promise<[DagList['cur_time'], DagList['dags']]>;
     getDag(dagURI: string): Promise<DagHandle>;
     getBlobHandle(uri: string, isFull?: boolean): BlobHandle;
@@ -257,7 +257,7 @@ export declare class NodeHandle {
     getUserColumn(key: string): Promise<NodeUserColumnsResponse>;
     getDef(): Promise<NodeDef>;
     isModel(): Promise<boolean>;
-    ensureIsModel(): void;
+    ensureIsModel(): Promise<void>;
     setupModel(obj: {
         [key: string]: any;
     }): Promise<ModelInfo>;
