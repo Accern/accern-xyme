@@ -635,7 +635,7 @@ export default class XYMEClient {
         return dags.map((dag) => dag.dag);
     }
 
-    public async getDagAges(): Promise<[string, string, string][]> {
+    public async getDagAges(): Promise<DictStrStr[]> {
         const [curTime, dags] = await this.getDagTimes(true);
         const sorted = dags.sort((a, b) => {
             if (isNull(a.config_error)) {
@@ -658,13 +658,14 @@ export default class XYMEClient {
             }
             return +(a.dag >= b.dag);
         });
-        const ages: [string, string, string][] = [];
+        const ages: DictStrStr[] = [];
         sorted.forEach((dag) => {
-            ages.push([
-                dag.dag,
-                getAge(curTime, dag.oldest),
-                getAge(curTime, dag.latest),
-            ]);
+            ages.push({
+                dag: dag.dag,
+                oldest: getAge(curTime, dag.oldest),
+                latest: getAge(curTime, dag.latest),
+                configError: dag.config_error,
+            });
         });
         return ages;
     }
@@ -2316,13 +2317,15 @@ export class NodeHandle {
         return this._isModel;
     }
 
-    public ensureIsModel() {
-        if (!this.isModel()) {
+    public async ensureIsModel() {
+        const res = await this.isModel();
+        if (!res) {
             throw new Error(`${this} is not a model node.`);
         }
     }
 
     public async setupModel(obj: { [key: string]: any }): Promise<ModelInfo> {
+        await this.ensureIsModel();
         return await this.client.requestJSON<ModelInfo>({
             method: METHOD_PUT,
             path: '/model_setup',
@@ -2335,6 +2338,7 @@ export class NodeHandle {
     }
 
     public async getModelParams(): Promise<ModelParamsResponse> {
+        await this.ensureIsModel();
         return await this.client.requestJSON<ModelParamsResponse>({
             method: METHOD_GET,
             path: '/model_params',

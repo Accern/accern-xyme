@@ -202,10 +202,12 @@ export interface NodeInfo {
     config_error?: string;
 }
 export interface DagStatus {
-    dag: string;
-    oldest?: number;
-    latest?: number;
     config_error?: string;
+    created?: number;
+    dag: string;
+    delted?: number;
+    latest?: number;
+    oldest?: number;
 }
 export interface DagList {
     cur_time: number;

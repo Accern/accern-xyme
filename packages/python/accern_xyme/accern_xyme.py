@@ -71,6 +71,7 @@ from .types import (
     DagPrettyNode,
     DagReload,
     DagStatus,
+    DeleteBlobResponse,
     DynamicResults,
     DynamicStatusResponse,
     ESQueryResponse,
@@ -582,15 +583,15 @@ class XYMEClient:
             for res in self.get_dag_times(retrieve_times=False)[1]
         ]
 
-    def get_dag_ages(self) -> List[Tuple[str, str, str, Optional[str]]]:
+    def get_dag_ages(self) -> List[Dict[str, Optional[str]]]:
         cur_time, dags = self.get_dag_times(retrieve_times=True)
         return [
-            (
-                dag_status["dag"],
-                get_age(cur_time, dag_status["oldest"]),
-                get_age(cur_time, dag_status["latest"]),
-                dag_status["config_error"],
-            )
+            {
+                "dag": dag_status["dag"],
+                "oldest": get_age(cur_time, dag_status["oldest"]),
+                "latest": get_age(cur_time, dag_status["latest"]),
+                "config_error": dag_status["config_error"],
+            }
             for dag_status in sorted(dags, key=lambda el: (
                 el["config_error"] is None,
                 safe_opt_num(el["oldest"]),
@@ -1705,6 +1706,13 @@ class DagHandle:
                 **kwargs,
             }))
 
+    def delete(self) -> DeleteBlobResponse:
+        return cast(DeleteBlobResponse, self._client.request_json(
+            METHOD_DELETE, "/blob", {
+                "blob": self.get_uri(),
+            },
+        ))
+
     def __hash__(self) -> int:
         return hash(self.get_uri())
 
@@ -2364,6 +2372,13 @@ class BlobHandle:
                 "blob": self.get_uri(),
                 "reload": reload,
             }))
+
+    def delete(self) -> DeleteBlobResponse:
+        return cast(DeleteBlobResponse, self._client.request_json(
+            METHOD_DELETE, "/blob", {
+                "blob": self.get_uri(),
+            },
+        ))
 
     def __hash__(self) -> int:
         return hash(self.as_str())
