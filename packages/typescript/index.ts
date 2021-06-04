@@ -70,6 +70,7 @@ import {
     VersionResponse,
     WorkerScale,
     NodeTypeResponse,
+    DeleteBlobResponse,
 } from './types';
 import {
     handleError,
@@ -1930,6 +1931,16 @@ export class DagHandle {
             },
         });
     }
+
+    public async delete(): Promise<DeleteBlobResponse> {
+        return await this.client.requestJSON<DeleteBlobResponse>({
+            method: METHOD_DELETE,
+            path: '/blob',
+            args: {
+                blob: this.getURI(),
+            },
+        });
+    }
 }
 
 export class NodeHandle {
@@ -2792,6 +2803,16 @@ export class BlobHandle {
         return await this.client.requestJSON<ModelReleaseResponse>({
             method: METHOD_GET,
             path: '/model_release',
+            args: {
+                blob: this.getURI(),
+            },
+        });
+    }
+
+    public async delete(): Promise<DeleteBlobResponse> {
+        return await this.client.requestJSON<DeleteBlobResponse>({
+            method: METHOD_DELETE,
+            path: '/blob',
             args: {
                 blob: this.getURI(),
             },

@@ -512,3 +512,6 @@ export interface UUIDResponse {
 export interface NodeTypeResponse {
     is_model: boolean;
 }
+export interface DeleteBlobResponse {
+    status: string;
+}
