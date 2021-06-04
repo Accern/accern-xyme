@@ -661,10 +661,12 @@ export default class XYMEClient {
         const ages: DictStrStr[] = [];
         sorted.forEach((dag) => {
             ages.push({
-                dag: dag.dag,
-                oldest: getAge(curTime, dag.oldest),
-                latest: getAge(curTime, dag.latest),
                 configError: dag.config_error,
+                created: getAge(curTime, dag.created),
+                dag: dag.dag,
+                deleted: getAge(curTime, dag.deleted),
+                latest: getAge(curTime, dag.latest),
+                oldest: getAge(curTime, dag.oldest),
             });
         });
         return ages;

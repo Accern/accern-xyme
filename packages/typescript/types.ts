@@ -205,7 +205,7 @@ export interface DagStatus {
     config_error?: string;
     created?: number;
     dag: string;
-    delted?: number;
+    deleted?: number;
     latest?: number;
     oldest?: number;
 }

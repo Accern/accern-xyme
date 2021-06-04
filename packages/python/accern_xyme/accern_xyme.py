@@ -589,10 +589,12 @@ class XYMEClient:
         cur_time, dags = self.get_dag_times(retrieve_times=True)
         return [
             {
-                "dag": dag_status["dag"],
-                "oldest": get_age(cur_time, dag_status["oldest"]),
-                "latest": get_age(cur_time, dag_status["latest"]),
                 "config_error": dag_status["config_error"],
+                "created": get_age(cur_time, dag_status["created"]),
+                "dag": dag_status["dag"],
+                "deleted": get_age(cur_time, dag_status["deleted"]),
+                "latest": get_age(cur_time, dag_status["latest"]),
+                "oldest": get_age(cur_time, dag_status["oldest"]),
             }
             for dag_status in sorted(dags, key=lambda el: (
                 el["config_error"] is None,
@@ -2405,6 +2407,7 @@ class BlobHandle:
                 "blob": self.get_uri(),
             },
         ))
+
     def get_model_release(self) -> ModelReleaseResponse:
         return cast(ModelReleaseResponse, self._client.request_json(
             METHOD_GET, "/model_release", {
