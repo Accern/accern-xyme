@@ -117,6 +117,7 @@ export default class XYMEClient {
     getKnonwBlobTimes(retrieveTimes: boolean, blobType?: string, connector?: string): Promise<[KnownBlobs['cur_time'], KnownBlobs['blobs']]>;
     getTritonModels(): Promise<string[]>;
     getUUID(): Promise<string>;
+    deleteBlobs(blobURIs: string[]): Promise<DeleteBlobResponse>;
 }
 export declare class DagHandle {
     client: XYMEClient;
