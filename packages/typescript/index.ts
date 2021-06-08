@@ -1128,6 +1128,16 @@ export default class XYMEClient {
             args: {},
         }).then((response) => response.uuid);
     }
+
+    public async deleteBlobs(blobURIs: string[]): Promise<DeleteBlobResponse> {
+        return await this.requestJSON<DeleteBlobResponse>({
+            method: METHOD_DELETE,
+            path: '/blob',
+            args: {
+                blob_uris: blobURIs,
+            },
+        });
+    }
 }
 
 export class DagHandle {
@@ -1937,7 +1947,7 @@ export class DagHandle {
             method: METHOD_DELETE,
             path: '/blob',
             args: {
-                blob: this.getURI(),
+                blob_uris: [this.getURI()],
             },
         });
     }
@@ -2814,7 +2824,7 @@ export class BlobHandle {
             method: METHOD_DELETE,
             path: '/blob',
             args: {
-                blob: this.getURI(),
+                blob_uris: [this.getURI()],
             },
         });
     }

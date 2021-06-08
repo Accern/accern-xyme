@@ -956,6 +956,13 @@ class XYMEClient:
         return cast(UUIDResponse, self.request_json(
             METHOD_GET, "/uuid", {}))["uuid"]
 
+    def delete_blobs(self, blob_uris: List[str]) -> DeleteBlobResponse:
+        return cast(DeleteBlobResponse, self.request_json(
+            METHOD_DELETE, "/blob", {
+                "blob_uris": blob_uris,
+            },
+        ))
+
 # *** XYMEClient ***
 
 
@@ -1713,7 +1720,7 @@ class DagHandle:
     def delete(self) -> DeleteBlobResponse:
         return cast(DeleteBlobResponse, self._client.request_json(
             METHOD_DELETE, "/blob", {
-                "blob": self.get_uri(),
+                "blob_uris": [self.get_uri()],
             },
         ))
 
@@ -2404,7 +2411,7 @@ class BlobHandle:
     def delete(self) -> DeleteBlobResponse:
         return cast(DeleteBlobResponse, self._client.request_json(
             METHOD_DELETE, "/blob", {
-                "blob": self.get_uri(),
+                "blob_uris": [self.get_uri()],
             },
         ))
 

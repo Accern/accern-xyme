@@ -407,5 +407,5 @@ NodeTypeResponse = TypedDict('NodeTypeResponse', {
     "is_model": bool,
 })
 DeleteBlobResponse = TypedDict('DeleteBlobResponse', {
-    "status": str,
+    "status": List[Dict[str, str]],
 })
