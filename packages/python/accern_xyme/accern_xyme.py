@@ -17,6 +17,7 @@ from typing import (
 )
 import io
 import os
+import pickle
 import sys
 import json
 import time
@@ -2402,7 +2403,7 @@ class BlobHandle:
 
     def upload_sklike_model(
             self,
-            source: Union[str, io.BytesIO],
+            model_obj: io.BytesIO,
             xcols: List[str],
             is_clf: bool,
             model_name: str,
@@ -2410,11 +2411,7 @@ class BlobHandle:
             maybe_range: Optional[Tuple[Optional[float], Optional[float]]],
             full_init: bool = True) -> UploadFilesResponse:
         try:
-            if isinstance(source, str) or not hasattr(source, "read"):
-                with open(f"{source}", "rb") as fin:
-                    self._upload_file(fin, ext="pkl")
-            else:
-                self._upload_file(source, ext="pkl")
+            self._upload_file(model_obj, ext="pkl")
             output_range = (None, None) if maybe_range is None else maybe_range
             return self._finish_upload_sklike(
                 model_name=model_name,
@@ -2425,6 +2422,25 @@ class BlobHandle:
                 full_init=full_init)
         finally:
             self._clear_upload()
+
+    def upload_raw_sklike_model(
+            self,
+            model: Any,
+            xcols: List[str],
+            is_clf: bool,
+            model_name: str,
+            maybe_classes: Optional[List[str]],
+            maybe_range: Optional[Tuple[Optional[float], Optional[float]]],
+            full_init: bool = True) -> UploadFilesResponse:
+        buffer = io.BytesIO(pickle.dumps(model, pickle.HIGHEST_PROTOCOL))
+        return self.upload_sklike_model(
+            buffer,
+            xcols,
+            is_clf,
+            model_name,
+            maybe_classes,
+            maybe_range,
+            full_init)
 
     def convert_model(self, reload: bool = True) -> ModelReleaseResponse:
         return cast(ModelReleaseResponse, self._client.request_json(
