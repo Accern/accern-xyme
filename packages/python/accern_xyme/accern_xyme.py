@@ -2401,9 +2401,9 @@ class BlobHandle:
             for blob_uri in files
         ]
 
-    def upload_sklike_model(
+    def upload_sklike_model_file(
             self,
-            model_obj: io.BytesIO,
+            model_obj: IO[bytes],
             xcols: List[str],
             is_clf: bool,
             model_name: str,
@@ -2423,24 +2423,33 @@ class BlobHandle:
         finally:
             self._clear_upload()
 
-    def upload_raw_sklike_model(
+    def upload_sklike_model(
             self,
             model: Any,
             xcols: List[str],
             is_clf: bool,
-            model_name: str,
             maybe_classes: Optional[List[str]],
             maybe_range: Optional[Tuple[Optional[float], Optional[float]]],
             full_init: bool = True) -> UploadFilesResponse:
-        buffer = io.BytesIO(pickle.dumps(model, pickle.HIGHEST_PROTOCOL))
-        return self.upload_sklike_model(
-            buffer,
-            xcols,
-            is_clf,
-            model_name,
-            maybe_classes,
-            maybe_range,
-            full_init)
+        try:
+            model_name = type(model).__name__
+        except Exception as e:
+            raise ValueError(f"can not infer model name {model}") from e
+        try:
+            if is_clf and maybe_classes is None:
+                maybe_classes = model.classes_
+        except Exception as e:
+            raise ValueError(f"can not infer classes from {model}") from e
+        dump = pickle.dumps(model, pickle.HIGHEST_PROTOCOL)
+        with io.BytesIO(dump) as buffer:
+            return self.upload_sklike_model_file(
+                buffer,
+                xcols,
+                is_clf,
+                model_name,
+                maybe_classes,
+                maybe_range,
+                full_init)
 
     def convert_model(self, reload: bool = True) -> ModelReleaseResponse:
         return cast(ModelReleaseResponse, self._client.request_json(
