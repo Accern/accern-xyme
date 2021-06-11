@@ -120,7 +120,7 @@ const NO_RETRY = [METHOD_POST, METHOD_FILE];
 const NO_RETRY_CODE = [403, 404, 500];
 const formCustomCode = (func: string, funcName: string) => `
 ${func}
-result = ${funcName}(*data)
+result = ${funcName}(*data, **kwargs)
 if result is None:
     raise ValueError("${funcName} must return a value")
 `;
@@ -2901,8 +2901,8 @@ export class CustomCodeBlobHandle extends BlobHandle {
             method: METHOD_PUT,
             path: '/custom_code',
             args: {
-                dag: this.getOwnerDag(),
-                node: this.getOwnerNode(),
+                dag: await this.getOwnerDag(),
+                node: await this.getOwnerNode(),
                 code: rawCode,
             },
         });
@@ -2913,8 +2913,8 @@ export class CustomCodeBlobHandle extends BlobHandle {
             method: METHOD_GET,
             path: '/custom_code',
             args: {
-                dag: this.getOwnerDag(),
-                node: this.getOwnerNode(),
+                dag: await this.getOwnerDag(),
+                node: await this.getOwnerNode(),
             },
         });
     }
