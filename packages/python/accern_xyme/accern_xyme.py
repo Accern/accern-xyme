@@ -2407,8 +2407,9 @@ class BlobHandle:
             xcols: List[str],
             is_clf: bool,
             model_name: str,
-            maybe_classes: Optional[List[str]],
-            maybe_range: Optional[Tuple[Optional[float], Optional[float]]],
+            maybe_classes: Optional[List[str]] = None,
+            maybe_range: Optional[
+                Tuple[Optional[float], Optional[float]]] = None,
             full_init: bool = True) -> UploadFilesResponse:
         try:
             self._upload_file(model_obj, ext="pkl")
@@ -2428,8 +2429,9 @@ class BlobHandle:
             model: Any,
             xcols: List[str],
             is_clf: bool,
-            maybe_classes: Optional[List[str]],
-            maybe_range: Optional[Tuple[Optional[float], Optional[float]]],
+            maybe_classes: Optional[List[str]] = None,
+            maybe_range: Optional[
+                Tuple[Optional[float], Optional[float]]] = None,
             full_init: bool = True) -> UploadFilesResponse:
         try:
             model_name = type(model).__name__
