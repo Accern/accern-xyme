@@ -2540,7 +2540,7 @@ class CustomCodeBlobHandle(BlobHandle):
         def fn_as_str(fun: FUNC) -> str:
             body = textwrap.dedent(inspect.getsource(fun))
             res = body + textwrap.dedent(f"""
-            result = {fun.__name__}(*data)
+            result = {fun.__name__}(*data, **kwargs)
             if result is None:
                 raise ValueError("{fun.__name__} must return a value")
             """)
