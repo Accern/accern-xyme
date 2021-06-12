@@ -69,6 +69,7 @@ import {
     VersionResponse,
     WorkerScale,
     NodeTypeResponse,
+    NodeCustomCode,
 } from './types';
 import {
     handleError,
@@ -117,6 +118,12 @@ const CUSTOM_NODE_TYPES = [
 ];
 const NO_RETRY = [METHOD_POST, METHOD_FILE];
 const NO_RETRY_CODE = [403, 404, 500];
+const formCustomCode = (func: string, funcName: string) => `
+${func}
+result = ${funcName}(*data, **kwargs)
+if result is None:
+    raise ValueError("${funcName} must return a value")
+`;
 
 export interface XYMEConfig {
     url: string;
@@ -2878,6 +2885,33 @@ export class CustomCodeBlobHandle extends BlobHandle {
         return await this.client.requestJSON({
             method: METHOD_GET,
             path: '/custom_imports',
+            args: {
+                dag: await this.getOwnerDag(),
+                node: await this.getOwnerNode(),
+            },
+        });
+    }
+
+    public async setCustomCode(
+        func: string,
+        funcName: string
+    ): Promise<NodeCustomCode> {
+        const rawCode = formCustomCode(func, funcName);
+        return await this.client.requestJSON({
+            method: METHOD_PUT,
+            path: '/custom_code',
+            args: {
+                dag: await this.getOwnerDag(),
+                node: await this.getOwnerNode(),
+                code: rawCode,
+            },
+        });
+    }
+
+    public async getCustomCode(): Promise<NodeCustomCode> {
+        return await this.client.requestJSON({
+            method: METHOD_GET,
+            path: '/custom_code',
             args: {
                 dag: await this.getOwnerDag(),
                 node: await this.getOwnerNode(),
