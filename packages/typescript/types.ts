@@ -512,6 +512,11 @@ export interface UUIDResponse {
 export interface NodeTypeResponse {
     is_model: boolean;
 }
+export interface DeleteBlobStatus {
+    uri: string,
+    status: string,
+    deletion_time: number | null,
+}
 export interface DeleteBlobResponse {
     status: DictStrStr[];
 }

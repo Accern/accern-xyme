@@ -406,6 +406,11 @@ UUIDResponse = TypedDict('UUIDResponse', {
 NodeTypeResponse = TypedDict('NodeTypeResponse', {
     "is_model": bool,
 })
+DeleteBlobStatus = TypedDict('DeleteBlobStatus', {
+    "uri": str,
+    "status": str,
+    "deletion_time": Optional[float],
+})
 DeleteBlobResponse = TypedDict('DeleteBlobResponse', {
-    "status": List[Dict[str, str]],
+    "status": List[DeleteBlobStatus],
 })
