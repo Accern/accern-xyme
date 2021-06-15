@@ -412,5 +412,5 @@ DeleteBlobStatus = TypedDict('DeleteBlobStatus', {
     "deletion_time": Optional[float],
 })
 DeleteBlobResponse = TypedDict('DeleteBlobResponse', {
-    "status": List[DeleteBlobStatus],
+    "blobs": List[DeleteBlobStatus],
 })

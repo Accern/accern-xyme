@@ -518,5 +518,5 @@ export interface DeleteBlobStatus {
     deletion_time: number | null;
 }
 export interface DeleteBlobResponse {
-    status: DictStrStr[];
+    blobs: DeleteBlobStatus;
 }
