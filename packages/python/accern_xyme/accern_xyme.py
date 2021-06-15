@@ -17,6 +17,7 @@ from typing import (
 )
 import io
 import os
+import pickle
 import sys
 import json
 import time
@@ -2351,6 +2352,31 @@ class BlobHandle:
             METHOD_POST, "/finish_zip", {"uri": uri}))
         return res["files"]
 
+    def _finish_upload_sklike(
+            self,
+            xcols: List[str],
+            is_clf: bool,
+            model_name: str,
+            maybe_classes: Optional[List[str]],
+            maybe_range: Tuple[Optional[float], Optional[float]],
+            full_init: bool) -> UploadFilesResponse:
+        uri = self._tmp_uri
+        if uri is None:
+            raise ValueError("tmp_uri is None")
+        return cast(UploadFilesResponse, self._client.request_json(
+            METHOD_POST, "/finish_sklike", {
+                "classes": maybe_classes,
+                "full_init": full_init,
+                "is_clf": is_clf,
+                "model_uri": self.get_uri(),
+                "model_name": model_name,
+                "output_range": maybe_range,
+                "owner_dag": self.get_owner_dag(),
+                "owner_node": self.get_owner_node(),
+                "tmp_uri": uri,
+                "xcols": xcols,
+            }))
+
     def _clear_upload(self) -> None:
         uri = self._tmp_uri
         if uri is None:
@@ -2401,6 +2427,58 @@ class BlobHandle:
             for blob_uri in files
         ]
 
+    def upload_sklike_model_file(
+            self,
+            model_obj: IO[bytes],
+            xcols: List[str],
+            is_clf: bool,
+            model_name: str,
+            maybe_classes: Optional[List[str]] = None,
+            maybe_range: Optional[
+                Tuple[Optional[float], Optional[float]]] = None,
+            full_init: bool = True) -> UploadFilesResponse:
+        try:
+            self._upload_file(model_obj, ext="pkl")
+            output_range = (None, None) if maybe_range is None else maybe_range
+            return self._finish_upload_sklike(
+                model_name=model_name,
+                maybe_classes=maybe_classes,
+                maybe_range=output_range,
+                xcols=xcols,
+                is_clf=is_clf,
+                full_init=full_init)
+        finally:
+            self._clear_upload()
+
+    def upload_sklike_model(
+            self,
+            model: Any,
+            xcols: List[str],
+            is_clf: bool,
+            maybe_classes: Optional[List[str]] = None,
+            maybe_range: Optional[
+                Tuple[Optional[float], Optional[float]]] = None,
+            full_init: bool = True) -> UploadFilesResponse:
+        try:
+            model_name = type(model).__name__
+        except Exception as e:
+            raise ValueError(f"can not infer model name {model}") from e
+        try:
+            if is_clf and maybe_classes is None:
+                maybe_classes = model.classes_
+        except Exception as e:
+            raise ValueError(f"can not infer classes from {model}") from e
+        dump = pickle.dumps(model, pickle.HIGHEST_PROTOCOL)
+        with io.BytesIO(dump) as buffer:
+            return self.upload_sklike_model_file(
+                buffer,
+                xcols,
+                is_clf,
+                model_name,
+                maybe_classes,
+                maybe_range,
+                full_init)
+
     def convert_model(self, reload: bool = True) -> ModelReleaseResponse:
         return cast(ModelReleaseResponse, self._client.request_json(
             METHOD_POST, "/convert_model", {
@@ -2445,13 +2523,13 @@ class CSVBlobHandle(BlobHandle):
     def finish_csv_upload(
             self, filename: Optional[str] = None) -> UploadFilesResponse:
         tmp_uri = self._tmp_uri
-        assert tmp_uri is not None
-        owner = self.get_owner()
+        if tmp_uri is None:
+            raise ValueError("tmp_uri is None")
         args: Dict[str, Optional[Union[str, int]]] = {
             "tmp_uri": tmp_uri,
             "csv_uri": self.get_uri(),
-            "owner_dag": owner["owner_dag"],
-            "owner_node": owner["owner_node"],
+            "owner_dag": self.get_owner_dag(),
+            "owner_node": self.get_owner_node(),
             "filename": filename,
         }
         return cast(UploadFilesResponse, self._client.request_json(
@@ -2573,7 +2651,7 @@ class CustomCodeBlobHandle(BlobHandle):
         def fn_as_str(fun: FUNC) -> str:
             body = textwrap.dedent(inspect.getsource(fun))
             res = body + textwrap.dedent(f"""
-            result = {fun.__name__}(*data)
+            result = {fun.__name__}(*data, **kwargs)
             if result is None:
                 raise ValueError("{fun.__name__} must return a value")
             """)
