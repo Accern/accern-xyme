@@ -5,6 +5,7 @@ import { promises as fpm } from 'fs';
 import fetch, { HeadersInit, Response, RequestInit } from 'node-fetch';
 import { performance } from 'perf_hooks';
 import jsSHA from 'jssha';
+import { isNull } from 'lodash';
 import {
     AllowedCustomImports,
     BlobFilesResponse,
@@ -69,6 +70,8 @@ import {
     VersionResponse,
     WorkerScale,
     NodeTypeResponse,
+    DeleteBlobResponse,
+    NodeCustomCode,
 } from './types';
 import {
     handleError,
@@ -117,6 +120,12 @@ const CUSTOM_NODE_TYPES = [
 ];
 const NO_RETRY = [METHOD_POST, METHOD_FILE];
 const NO_RETRY_CODE = [403, 404, 500];
+const formCustomCode = (func: string, funcName: string) => `
+${func}
+result = ${funcName}(*data, **kwargs)
+if result is None:
+    raise ValueError("${funcName} must return a value")
+`;
 
 export interface XYMEConfig {
     url: string;
@@ -631,39 +640,48 @@ export default class XYMEClient {
 
     public async getDags(): Promise<string[]> {
         const [, dags] = await this.getDagTimes(false);
-        return dags.map((dag) => dag[0]);
+        return dags.map((dag) => dag.dag);
     }
 
-    public async getDagAges(): Promise<[string, string, string][]> {
+    public async getDagAges(): Promise<DictStrStr[]> {
         const [curTime, dags] = await this.getDagTimes(true);
         const sorted = dags.sort((a, b) => {
-            const oldA = safeOptNumber(a[1]);
-            const oldB = safeOptNumber(b[1]);
+            if (isNull(a.config_error)) {
+                return 1;
+            }
+            if (isNull(b.config_error)) {
+                return 0;
+            }
+            const oldA = safeOptNumber(a.oldest);
+            const oldB = safeOptNumber(b.oldest);
             let cmp = +oldA[0] - +oldB[0] || oldA[1] - oldB[1];
             if (cmp !== 0) {
                 return cmp;
             }
-            const latestA = safeOptNumber(a[2]);
-            const latestB = safeOptNumber(b[2]);
+            const latestA = safeOptNumber(a.latest);
+            const latestB = safeOptNumber(b.latest);
             cmp = +latestA[0] - +latestB[0] || latestA[1] - latestB[1];
             if (cmp !== 0) {
                 return cmp;
             }
-            return +(a[0] >= b[0]);
+            return +(a.dag >= b.dag);
         });
-        const ages: [string, string, string][] = [];
+        const ages: DictStrStr[] = [];
         sorted.forEach((dag) => {
-            ages.push([
-                dag[0],
-                getAge(curTime, dag[1]),
-                getAge(curTime, dag[2]),
-            ]);
+            ages.push({
+                configError: dag.config_error,
+                created: getAge(curTime, dag.created),
+                dag: dag.dag,
+                deleted: getAge(curTime, dag.deleted),
+                latest: getAge(curTime, dag.latest),
+                oldest: getAge(curTime, dag.oldest),
+            });
         });
         return ages;
     }
 
     public async getDagTimes(
-        retrieveTimes: boolean
+        retrieveTimes = true
     ): Promise<[DagList['cur_time'], DagList['dags']]> {
         const response: DagList = await this.requestJSON({
             method: METHOD_GET,
@@ -1116,6 +1134,16 @@ export default class XYMEClient {
             path: '/uuid',
             args: {},
         }).then((response) => response.uuid);
+    }
+
+    public async deleteBlobs(blobURIs: string[]): Promise<DeleteBlobResponse> {
+        return await this.requestJSON<DeleteBlobResponse>({
+            method: METHOD_DELETE,
+            path: '/blob',
+            args: {
+                blob_uris: blobURIs,
+            },
+        });
     }
 }
 
@@ -1920,6 +1948,16 @@ export class DagHandle {
             },
         });
     }
+
+    public async delete(): Promise<DeleteBlobResponse> {
+        return await this.client.requestJSON<DeleteBlobResponse>({
+            method: METHOD_DELETE,
+            path: '/blob',
+            args: {
+                blob_uris: [this.getURI()],
+            },
+        });
+    }
 }
 
 export class NodeHandle {
@@ -2309,13 +2347,15 @@ export class NodeHandle {
         return this._isModel;
     }
 
-    public ensureIsModel() {
-        if (!this.isModel()) {
+    public async ensureIsModel() {
+        const res = await this.isModel();
+        if (!res) {
             throw new Error(`${this} is not a model node.`);
         }
     }
 
     public async setupModel(obj: { [key: string]: any }): Promise<ModelInfo> {
+        await this.ensureIsModel();
         return await this.client.requestJSON<ModelInfo>({
             method: METHOD_PUT,
             path: '/model_setup',
@@ -2328,6 +2368,7 @@ export class NodeHandle {
     }
 
     public async getModelParams(): Promise<ModelParamsResponse> {
+        await this.ensureIsModel();
         return await this.client.requestJSON<ModelParamsResponse>({
             method: METHOD_GET,
             path: '/model_params',
@@ -2784,6 +2825,16 @@ export class BlobHandle {
             },
         });
     }
+
+    public async delete(): Promise<DeleteBlobResponse> {
+        return await this.client.requestJSON<DeleteBlobResponse>({
+            method: METHOD_DELETE,
+            path: '/blob',
+            args: {
+                blob_uris: [this.getURI()],
+            },
+        });
+    }
 }
 
 export class CSVBlobHandle extends BlobHandle {
@@ -2878,6 +2929,33 @@ export class CustomCodeBlobHandle extends BlobHandle {
         return await this.client.requestJSON({
             method: METHOD_GET,
             path: '/custom_imports',
+            args: {
+                dag: await this.getOwnerDag(),
+                node: await this.getOwnerNode(),
+            },
+        });
+    }
+
+    public async setCustomCode(
+        func: string,
+        funcName: string
+    ): Promise<NodeCustomCode> {
+        const rawCode = formCustomCode(func, funcName);
+        return await this.client.requestJSON({
+            method: METHOD_PUT,
+            path: '/custom_code',
+            args: {
+                dag: await this.getOwnerDag(),
+                node: await this.getOwnerNode(),
+                code: rawCode,
+            },
+        });
+    }
+
+    public async getCustomCode(): Promise<NodeCustomCode> {
+        return await this.client.requestJSON({
+            method: METHOD_GET,
+            path: '/custom_code',
             args: {
                 dag: await this.getOwnerDag(),
                 node: await this.getOwnerNode(),

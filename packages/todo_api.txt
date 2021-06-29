@@ -12,6 +12,10 @@ class BlobHandle
 
  - get_parent
 
+ - upload_sklike_model
+
+ - upload_raw_sklike_model
+
 # Missing in Typescript
 
 class XYMEClient
@@ -56,9 +60,5 @@ class NodeHandle
 - set_es_query
 
 - get_es_query
-
-- set_custom_code
-
-- get_custom_code
 
 - get_input_example

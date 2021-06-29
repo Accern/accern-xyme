@@ -170,9 +170,17 @@ NodeInfo = TypedDict('NodeInfo', {
     "state": Optional[int],
     "config_error": Optional[str],
 })
+DagStatus = TypedDict("DagStatus", {
+    "config_error": Optional[str],
+    "created": Optional[float],
+    "dag": str,
+    "deleted": Optional[float],
+    "latest": Optional[float],
+    "oldest": Optional[float],
+})
 DagList = TypedDict('DagList', {
     "cur_time": float,
-    "dags": List[Tuple[str, Optional[float], Optional[float]]],
+    "dags": List[DagStatus],
 })
 KnownBlobs = TypedDict('KnownBlobs', {
     "cur_time": float,
@@ -397,4 +405,12 @@ UUIDResponse = TypedDict('UUIDResponse', {
 })
 NodeTypeResponse = TypedDict('NodeTypeResponse', {
     "is_model": bool,
+})
+DeleteBlobStatus = TypedDict('DeleteBlobStatus', {
+    "uri": str,
+    "status": str,
+    "deletion_time": Optional[float],
+})
+DeleteBlobResponse = TypedDict('DeleteBlobResponse', {
+    "blobs": List[DeleteBlobStatus],
 })

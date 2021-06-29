@@ -201,10 +201,17 @@ export interface NodeInfo {
     state?: number;
     config_error?: string;
 }
-
+export interface DagStatus {
+    config_error?: string;
+    created?: number;
+    dag: string;
+    deleted?: number;
+    latest?: number;
+    oldest?: number;
+}
 export interface DagList {
     cur_time: number;
-    dags: [string, number | null, number | null][];
+    dags: DagStatus[];
 }
 
 export interface KnownBlobs {
@@ -504,4 +511,12 @@ export interface UUIDResponse {
 
 export interface NodeTypeResponse {
     is_model: boolean;
+}
+export interface DeleteBlobStatus {
+    uri: string;
+    status: string;
+    deletion_time: number | null;
+}
+export interface DeleteBlobResponse {
+    blobs: DeleteBlobStatus;
 }

@@ -17,6 +17,7 @@ from typing import (
 )
 import io
 import os
+import pickle
 import sys
 import json
 import time
@@ -72,6 +73,8 @@ from .types import (
     DagList,
     DagPrettyNode,
     DagReload,
+    DagStatus,
+    DeleteBlobResponse,
     DynamicResults,
     DynamicStatusResponse,
     ESQueryResponse,
@@ -579,20 +582,30 @@ class XYMEClient:
 
     def get_dags(self) -> List[str]:
         return [
-            res[0]
+            res["dag"]
             for res in self.get_dag_times(retrieve_times=False)[1]
         ]
 
-    def get_dag_ages(self) -> List[Tuple[str, str, str]]:
+    def get_dag_ages(self) -> List[Dict[str, Optional[str]]]:
         cur_time, dags = self.get_dag_times(retrieve_times=True)
         return [
-            (dag_uri, get_age(cur_time, oldest), get_age(cur_time, latest))
-            for (dag_uri, oldest, latest) in sorted(dags, key=lambda el: (
-                safe_opt_num(el[1]), safe_opt_num(el[2]), el[0]))
+            {
+                "config_error": dag_status["config_error"],
+                "created": get_age(cur_time, dag_status["created"]),
+                "dag": dag_status["dag"],
+                "deleted": get_age(cur_time, dag_status["deleted"]),
+                "latest": get_age(cur_time, dag_status["latest"]),
+                "oldest": get_age(cur_time, dag_status["oldest"]),
+            }
+            for dag_status in sorted(dags, key=lambda el: (
+                el["config_error"] is None,
+                safe_opt_num(el["oldest"]),
+                safe_opt_num(el["latest"]),
+                el["dag"]))
         ]
 
-    def get_dag_times(self, retrieve_times: bool) -> Tuple[
-            float, List[Tuple[str, Optional[float], Optional[float]]]]:
+    def get_dag_times(self, retrieve_times: bool = True) -> Tuple[
+            float, List[DagStatus]]:
         res = cast(DagList, self.request_json(
             METHOD_GET, "/dags", {
                 "retrieve_times": int(retrieve_times),
@@ -943,6 +956,13 @@ class XYMEClient:
     def get_uuid(self) -> str:
         return cast(UUIDResponse, self.request_json(
             METHOD_GET, "/uuid", {}))["uuid"]
+
+    def delete_blobs(self, blob_uris: List[str]) -> DeleteBlobResponse:
+        return cast(DeleteBlobResponse, self.request_json(
+            METHOD_DELETE, "/blob", {
+                "blob_uris": blob_uris,
+            },
+        ))
 
 # *** XYMEClient ***
 
@@ -1698,6 +1718,13 @@ class DagHandle:
                 **kwargs,
             }))
 
+    def delete(self) -> DeleteBlobResponse:
+        return cast(DeleteBlobResponse, self._client.request_json(
+            METHOD_DELETE, "/blob", {
+                "blob_uris": [self.get_uri()],
+            },
+        ))
+
     def __hash__(self) -> int:
         return hash(self.get_uri())
 
@@ -1913,7 +1940,7 @@ class NodeHandle:
             force_refresh: bool = False,
             filter_id: bool = True) -> Optional[ByteResponse]:
         self.read(
-            key, chunk=None, force_refresh=force_refresh, filter_id=filter_id)
+            key, chunk=None, force_refresh=force_refresh, filter_id=False)
         res: List[ByteResponse] = []
         ctype: Optional[str] = None
         while True:
@@ -2325,6 +2352,31 @@ class BlobHandle:
             METHOD_POST, "/finish_zip", {"uri": uri}))
         return res["files"]
 
+    def _finish_upload_sklike(
+            self,
+            xcols: List[str],
+            is_clf: bool,
+            model_name: str,
+            maybe_classes: Optional[List[str]],
+            maybe_range: Tuple[Optional[float], Optional[float]],
+            full_init: bool) -> UploadFilesResponse:
+        uri = self._tmp_uri
+        if uri is None:
+            raise ValueError("tmp_uri is None")
+        return cast(UploadFilesResponse, self._client.request_json(
+            METHOD_POST, "/finish_sklike", {
+                "classes": maybe_classes,
+                "full_init": full_init,
+                "is_clf": is_clf,
+                "model_uri": self.get_uri(),
+                "model_name": model_name,
+                "output_range": maybe_range,
+                "owner_dag": self.get_owner_dag(),
+                "owner_node": self.get_owner_node(),
+                "tmp_uri": uri,
+                "xcols": xcols,
+            }))
+
     def _clear_upload(self) -> None:
         uri = self._tmp_uri
         if uri is None:
@@ -2375,12 +2427,71 @@ class BlobHandle:
             for blob_uri in files
         ]
 
+    def upload_sklike_model_file(
+            self,
+            model_obj: IO[bytes],
+            xcols: List[str],
+            is_clf: bool,
+            model_name: str,
+            maybe_classes: Optional[List[str]] = None,
+            maybe_range: Optional[
+                Tuple[Optional[float], Optional[float]]] = None,
+            full_init: bool = True) -> UploadFilesResponse:
+        try:
+            self._upload_file(model_obj, ext="pkl")
+            output_range = (None, None) if maybe_range is None else maybe_range
+            return self._finish_upload_sklike(
+                model_name=model_name,
+                maybe_classes=maybe_classes,
+                maybe_range=output_range,
+                xcols=xcols,
+                is_clf=is_clf,
+                full_init=full_init)
+        finally:
+            self._clear_upload()
+
+    def upload_sklike_model(
+            self,
+            model: Any,
+            xcols: List[str],
+            is_clf: bool,
+            maybe_classes: Optional[List[str]] = None,
+            maybe_range: Optional[
+                Tuple[Optional[float], Optional[float]]] = None,
+            full_init: bool = True) -> UploadFilesResponse:
+        try:
+            model_name = type(model).__name__
+        except Exception as e:
+            raise ValueError(f"can not infer model name {model}") from e
+        try:
+            if is_clf and maybe_classes is None:
+                maybe_classes = model.classes_
+        except Exception as e:
+            raise ValueError(f"can not infer classes from {model}") from e
+        dump = pickle.dumps(model, pickle.HIGHEST_PROTOCOL)
+        with io.BytesIO(dump) as buffer:
+            return self.upload_sklike_model_file(
+                buffer,
+                xcols,
+                is_clf,
+                model_name,
+                maybe_classes,
+                maybe_range,
+                full_init)
+
     def convert_model(self, reload: bool = True) -> ModelReleaseResponse:
         return cast(ModelReleaseResponse, self._client.request_json(
             METHOD_POST, "/convert_model", {
                 "blob": self.get_uri(),
                 "reload": reload,
             }))
+
+    def delete(self) -> DeleteBlobResponse:
+        return cast(DeleteBlobResponse, self._client.request_json(
+            METHOD_DELETE, "/blob", {
+                "blob_uris": [self.get_uri()],
+            },
+        ))
 
     def get_model_release(self) -> ModelReleaseResponse:
         return cast(ModelReleaseResponse, self._client.request_json(
@@ -2412,13 +2523,13 @@ class CSVBlobHandle(BlobHandle):
     def finish_csv_upload(
             self, filename: Optional[str] = None) -> UploadFilesResponse:
         tmp_uri = self._tmp_uri
-        assert tmp_uri is not None
-        owner = self.get_owner()
+        if tmp_uri is None:
+            raise ValueError("tmp_uri is None")
         args: Dict[str, Optional[Union[str, int]]] = {
             "tmp_uri": tmp_uri,
             "csv_uri": self.get_uri(),
-            "owner_dag": owner["owner_dag"],
-            "owner_node": owner["owner_node"],
+            "owner_dag": self.get_owner_dag(),
+            "owner_node": self.get_owner_node(),
             "filename": filename,
         }
         return cast(UploadFilesResponse, self._client.request_json(
@@ -2540,7 +2651,7 @@ class CustomCodeBlobHandle(BlobHandle):
         def fn_as_str(fun: FUNC) -> str:
             body = textwrap.dedent(inspect.getsource(fun))
             res = body + textwrap.dedent(f"""
-            result = {fun.__name__}(*data)
+            result = {fun.__name__}(*data, **kwargs)
             if result is None:
                 raise ValueError("{fun.__name__} must return a value")
             """)

@@ -2,7 +2,7 @@
 /// <reference lib="dom" />
 import { Readable } from 'stream';
 import { promises as fpm } from 'fs';
-import { AllowedCustomImports, BlobOwner, BlobTypeResponse, CacheStats, DagDef, DagInfo, DagList, DagPrettyNode, DictStrStr, DynamicFormat, InstanceStatus, KafkaGroup, KafkaOffsets, KafkaThroughput, KafkaTopics, KnownBlobs, MinimalQueueStatsResponse, ModelInfo, ModelParamsResponse, ModelReleaseResponse, NodeCustomImports, NodeDef, NodeDefInfo, NodeInfo, NodeState, NodeTypes, NodeUserColumnsResponse, QueueStatsResponse, QueueStatus, SettingsObj, TaskStatus, Timing, TimingResult, UploadFilesResponse, VersionResponse } from './types';
+import { AllowedCustomImports, BlobOwner, BlobTypeResponse, CacheStats, DagDef, DagInfo, DagList, DagPrettyNode, DictStrStr, DynamicFormat, InstanceStatus, KafkaGroup, KafkaOffsets, KafkaThroughput, KafkaTopics, KnownBlobs, MinimalQueueStatsResponse, ModelInfo, ModelParamsResponse, ModelReleaseResponse, NodeCustomImports, NodeDef, NodeDefInfo, NodeInfo, NodeState, NodeTypes, NodeUserColumnsResponse, QueueStatsResponse, QueueStatus, SettingsObj, TaskStatus, Timing, TimingResult, UploadFilesResponse, VersionResponse, DeleteBlobResponse, NodeCustomCode } from './types';
 import { RetryOptions } from './request';
 import { ByteResponse } from './util';
 export * from './errors';
@@ -58,8 +58,8 @@ export default class XYMEClient {
     getServerVersion(): Promise<VersionResponse>;
     getNamespaces(): Promise<string[]>;
     getDags(): Promise<string[]>;
-    getDagAges(): Promise<[string, string, string][]>;
-    getDagTimes(retrieveTimes: boolean): Promise<[DagList['cur_time'], DagList['dags']]>;
+    getDagAges(): Promise<DictStrStr[]>;
+    getDagTimes(retrieveTimes?: boolean): Promise<[DagList['cur_time'], DagList['dags']]>;
     getDag(dagURI: string): Promise<DagHandle>;
     getBlobHandle(uri: string, isFull?: boolean): BlobHandle;
     getNodeDefs(): Promise<NodeTypes['info']>;
@@ -117,6 +117,7 @@ export default class XYMEClient {
     getKnonwBlobTimes(retrieveTimes: boolean, blobType?: string, connector?: string): Promise<[KnownBlobs['cur_time'], KnownBlobs['blobs']]>;
     getTritonModels(): Promise<string[]>;
     getUUID(): Promise<string>;
+    deleteBlobs(blobURIs: string[]): Promise<DeleteBlobResponse>;
 }
 export declare class DagHandle {
     client: XYMEClient;
@@ -200,6 +201,7 @@ export declare class DagHandle {
     getKafkaThroughput(postfix?: string, segmentInterval?: number, segments?: number): Promise<KafkaThroughput>;
     getKafkaGroup(): Promise<KafkaGroup>;
     setKafkaGroup(groupId: string | undefined, reset: string | undefined, ...kwargs: any[]): Promise<KafkaGroup>;
+    delete(): Promise<DeleteBlobResponse>;
 }
 export declare class NodeHandle {
     blobs: {
@@ -257,7 +259,7 @@ export declare class NodeHandle {
     getUserColumn(key: string): Promise<NodeUserColumnsResponse>;
     getDef(): Promise<NodeDef>;
     isModel(): Promise<boolean>;
-    ensureIsModel(): void;
+    ensureIsModel(): Promise<void>;
     setupModel(obj: {
         [key: string]: any;
     }): Promise<ModelInfo>;
@@ -327,6 +329,7 @@ export declare class BlobHandle {
     uploadZip(source: string | fpm.FileHandle): Promise<BlobHandle[]>;
     convertModel(reload?: boolean): Promise<ModelReleaseResponse>;
     getModelRelease(): Promise<ModelReleaseResponse>;
+    delete(): Promise<DeleteBlobResponse>;
 }
 export declare class CSVBlobHandle extends BlobHandle {
     addFromFile(fileName: string, progressBar?: WritableStream | undefined): Promise<UploadFilesResponse>;
@@ -336,6 +339,8 @@ export declare class CSVBlobHandle extends BlobHandle {
 export declare class CustomCodeBlobHandle extends BlobHandle {
     setCustomImports(modules: string[][]): Promise<NodeCustomImports>;
     getCustomImports(): Promise<NodeCustomImports>;
+    setCustomCode(func: string, funcName: string): Promise<NodeCustomCode>;
+    getCustomCode(): Promise<NodeCustomCode>;
 }
 export declare class JSONBlobHandle extends BlobHandle {
     count: number;
