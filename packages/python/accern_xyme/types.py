@@ -372,7 +372,7 @@ DagPrettyNode = TypedDict('DagPrettyNode', {
     "id": str,
     "name": str,
     "kind": str,
-    "chunk": int,
+    "chunk": int,  # FIXME!!!!!
     "high_ixs": Dict[str, int],
     "status": 'TaskStatus',
     "out_edges": List[DagPrettyEdge],
