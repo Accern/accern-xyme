@@ -1376,6 +1376,7 @@ class DagHandle:
             nodes_only: bool,
             allow_unicode: bool,
             method: Optional[str] = "accern") -> PrettyResponse:
+        # FIXME: !!!!!!!! fields + ts
         return cast(PrettyResponse, self._client.request_json(
             METHOD_GET, "/pretty", {
                 "dag": self.get_uri(),
