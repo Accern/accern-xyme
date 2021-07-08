@@ -1,7 +1,7 @@
 -r requirements.txt
 darglint==1.5.8
 flake8-commas==2.0.0
-flake8==3.8.4
+flake8==3.9.2
 ipython==7.20.0
 matplotlib==3.3.3
 mypy==0.790
