@@ -6,6 +6,6 @@ ipython==7.20.0
 matplotlib==3.3.3
 mypy==0.790
 pep8==1.7.1
-pycodestyle==2.6.0
+pycodestyle==2.7.0
 pylint==2.6.0
 pytest==6.2.1

@@ -870,12 +870,16 @@ export default class XYMEClient {
         return this.getDag(uri);
     }
 
-    public async setSettings(settings: SettingsObj): Promise<SettingsObj> {
+    public async setSettings(
+        configToken: string,
+        settings: SettingsObj
+    ): Promise<SettingsObj> {
         return await this.requestJSON<NamespaceUpdateSettings>({
             method: METHOD_POST,
             path: '/settings',
             args: {
                 settings,
+                config_token: configToken,
             },
         }).then((response) => response.settings);
     }
@@ -1044,18 +1048,24 @@ export default class XYMEClient {
     }
 
     public async getNamedSecrets(
+        configToken: string | null = null,
         showValues = false
     ): Promise<{ [key: string]: string | null }> {
+        if (showValues && !configToken) {
+            throw new Error('configToken must be set for showValues');
+        }
         return await this.requestJSON<{ [key: string]: string | null }>({
             method: METHOD_GET,
             path: '/named_secrets',
             args: {
                 show: +showValues,
+                config_token: configToken,
             },
         });
     }
 
     public async setNamedSecrets(
+        configToken: string,
         key: string,
         value: string
     ): Promise<boolean> {
@@ -1065,6 +1075,7 @@ export default class XYMEClient {
             args: {
                 key,
                 value,
+                config_token: configToken,
             },
         }).then((response) => response.replaced);
     }

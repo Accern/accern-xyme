@@ -735,10 +735,12 @@ class XYMEClient:
                 warnings_io.flush()
         return self.get_dag(dag_uri)
 
-    def set_settings(self, settings: SettingsObj) -> SettingsObj:
+    def set_settings(
+            self, config_token: str, settings: SettingsObj) -> SettingsObj:
         return cast(NamespaceUpdateSettings, self.request_json(
             METHOD_POST, "/settings", {
                 "settings": settings,
+                "config_token": config_token,
             }))["settings"]
 
     def get_settings(self) -> SettingsObj:
@@ -851,17 +853,24 @@ class XYMEClient:
             }))
 
     def get_named_secrets(
-            self, show_values: bool = False) -> Dict[str, Optional[str]]:
+            self,
+            config_token: Optional[str] = None,
+            show_values: bool = False) -> Dict[str, Optional[str]]:
+        if show_values and config_token is None:
+            raise ValueError("config_token must be set to show_values")
         return cast(Dict[str, Optional[str]], self.request_json(
             METHOD_GET, "/named_secrets", {
                 "show": int(bool(show_values)),
+                "config_token": config_token,
             }))
 
-    def set_named_secret(self, key: str, value: str) -> bool:
+    def set_named_secret(
+            self, config_token: str, key: str, value: str) -> bool:
         return cast(SetNamedSecret, self.request_json(
             METHOD_PUT, "/named_secrets", {
                 "key": key,
                 "value": value,
+                "config_token": config_token,
             }))["replaced"]
 
     def get_error_logs(self) -> str:
