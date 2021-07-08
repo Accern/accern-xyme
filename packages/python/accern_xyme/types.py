@@ -368,6 +368,10 @@ ModelReleaseResponse = TypedDict('ModelReleaseResponse', {
 ESQueryResponse = TypedDict('ESQueryResponse', {
     "query": Dict[str, Any],
 })
+
+PrettyField = Literal[
+    "chunk",
+]
 DagPrettyEdge = TypedDict('DagPrettyEdge', {
     "out_name": str,
     "in_node": str,
@@ -380,7 +384,7 @@ DagPrettyNode = TypedDict('DagPrettyNode', {
     "id": str,
     "name": str,
     "kind": str,
-    "chunk": int,  # FIXME!!!!!
+    "info": Dict[PrettyField, Union[str, int]],
     "high_ixs": Dict[str, int],
     "status": 'TaskStatus',
     "out_edges": List[DagPrettyEdge],
@@ -390,6 +394,7 @@ PrettyResponse = TypedDict('PrettyResponse', {
     "pretty": str,
     "nodes": List[DagPrettyNode],
 })
+
 BlobURIResponse = TypedDict('BlobURIResponse', {
     "uri": str,
     "owner": BlobOwner,
