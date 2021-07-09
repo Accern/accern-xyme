@@ -365,6 +365,10 @@ QueueMode = TypedDict('QueueMode', {
 ModelReleaseResponse = TypedDict('ModelReleaseResponse', {
     "release": Optional[int],
 })
+ModelVersionResponse = TypedDict('ModelVersionResponse', {
+    "max_version": Optional[int],
+    "all_versions": List[str],
+})
 ESQueryResponse = TypedDict('ESQueryResponse', {
     "query": Dict[str, Any],
 })

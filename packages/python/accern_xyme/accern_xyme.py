@@ -93,6 +93,7 @@ from .types import (
     ModelInfo,
     ModelParamsResponse,
     ModelReleaseResponse,
+    ModelVersionResponse,
     NamespaceList,
     NamespaceUpdateSettings,
     NodeChunk,
@@ -2497,6 +2498,25 @@ class BlobHandle:
         return cast(ModelReleaseResponse, self._client.request_json(
             METHOD_GET, "/model_release", {
                 "blob": self.get_uri(),
+            }))
+
+    def get_model_version(self) -> ModelVersionResponse:
+        return cast(ModelVersionResponse, self._client.request_json(
+            METHOD_GET, "/model_version", {
+                "model_uri": self.get_uri(),
+            }))
+
+    def copy_model_version(
+            self,
+            write_version: int,
+            read_version: Optional[int],
+            overwrite: bool) -> ModelVersionResponse:
+        return cast(ModelVersionResponse, self._client.request_json(
+            METHOD_PUT, "/model_version", {
+                "model_uri": self.get_uri(),
+                "write_version": write_version,
+                "read_version": read_version,
+                "overwrite": overwrite,
             }))
 
     def __hash__(self) -> int:
