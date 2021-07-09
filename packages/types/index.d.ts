@@ -2,7 +2,7 @@
 /// <reference lib="dom" />
 import { Readable } from 'stream';
 import { promises as fpm } from 'fs';
-import { AllowedCustomImports, BlobOwner, BlobTypeResponse, CacheStats, DagDef, DagInfo, DagList, DagPrettyNode, DictStrStr, DynamicFormat, InstanceStatus, KafkaGroup, KafkaOffsets, KafkaThroughput, KafkaTopics, KnownBlobs, MinimalQueueStatsResponse, ModelInfo, ModelParamsResponse, ModelReleaseResponse, NodeCustomImports, NodeDef, NodeDefInfo, NodeInfo, NodeState, NodeTypes, NodeUserColumnsResponse, QueueStatsResponse, QueueStatus, SettingsObj, TaskStatus, Timing, TimingResult, UploadFilesResponse, VersionResponse, DeleteBlobResponse, NodeCustomCode } from './types';
+import { AllowedCustomImports, BlobOwner, BlobTypeResponse, CacheStats, DagDef, DagInfo, DagList, DagPrettyNode, DictStrStr, DynamicFormat, InstanceStatus, KafkaGroup, KafkaOffsets, KafkaThroughput, KafkaTopics, KnownBlobs, MinimalQueueStatsResponse, ModelInfo, ModelParamsResponse, ModelReleaseResponse, ModelVersionResponse, NodeCustomImports, NodeDef, NodeDefInfo, NodeInfo, NodeState, NodeTypes, NodeUserColumnsResponse, QueueStatsResponse, QueueStatus, SettingsObj, TaskStatus, Timing, TimingResult, UploadFilesResponse, VersionResponse, DeleteBlobResponse, NodeCustomCode } from './types';
 import { RetryOptions } from './request';
 import { ByteResponse } from './util';
 export * from './errors';
@@ -91,7 +91,7 @@ export default class XYMEClient {
     getJSONBlob(blobURI: string): Promise<JSONBlobHandle>;
     duplicateDag(dagURI: string, destURI?: string, copyNonownedBlobs?: boolean): Promise<string>;
     setDag(dagURI: string, defs: DagDef): Promise<DagHandle>;
-    setSettings(settings: SettingsObj): Promise<SettingsObj>;
+    setSettings(configToken: string, settings: SettingsObj): Promise<SettingsObj>;
     getSettings(): Promise<SettingsObj>;
     getAllowedCustomImports(): Promise<AllowedCustomImports>;
     checkQueueStats(minimal: false, dag?: string): Promise<QueueStatsResponse>;
@@ -108,10 +108,10 @@ export default class XYMEClient {
     getKafkaErrorTopic(): Promise<string>;
     deleteKafkaErrorTopic(): Promise<KafkaTopics>;
     readKafkaErrors(offset: string): Promise<string[]>;
-    getNamedSecrets(showValues?: boolean): Promise<{
+    getNamedSecrets(configToken?: string | null, showValues?: boolean): Promise<{
         [key: string]: string | null;
     }>;
-    setNamedSecrets(key: string, value: string): Promise<boolean>;
+    setNamedSecrets(configToken: string, key: string, value: string): Promise<boolean>;
     getErrorLogs(): Promise<string>;
     getKnownBlobAges(blobType?: string, connector?: string): Promise<[string, string][]>;
     getKnonwBlobTimes(retrieveTimes: boolean, blobType?: string, connector?: string): Promise<[KnownBlobs['cur_time'], KnownBlobs['blobs']]>;
@@ -173,8 +173,8 @@ export declare class DagHandle {
         [key: string]: QueueStatus;
     }>;
     private _pretty;
-    pretty(nodesOnly?: boolean, allowUnicode?: boolean, method?: string, display?: boolean): Promise<string | undefined>;
-    prettyObj(nodesOnly?: boolean, allowUnicode?: boolean): Promise<DagPrettyNode[]>;
+    pretty(nodesOnly?: boolean, allowUnicode?: boolean, method?: string, fields?: string[] | null, display?: boolean): Promise<string | undefined>;
+    prettyObj(nodesOnly?: boolean, allowUnicode?: boolean, fields?: string[] | null): Promise<DagPrettyNode[]>;
     getDef(full?: boolean): Promise<DagDef>;
     setAttr(attr: string, value: any): Promise<void>;
     setName(value: string): Promise<void>;
@@ -329,6 +329,9 @@ export declare class BlobHandle {
     uploadZip(source: string | fpm.FileHandle): Promise<BlobHandle[]>;
     convertModel(reload?: boolean): Promise<ModelReleaseResponse>;
     getModelRelease(): Promise<ModelReleaseResponse>;
+    getModelVersion(): Promise<ModelVersionResponse>;
+    copyModelVersion(readVersion: number, writeVersion: number, overwrite: boolean): Promise<ModelVersionResponse>;
+    deleteModelVersion(version: number): Promise<ModelVersionResponse>;
     delete(): Promise<DeleteBlobResponse>;
 }
 export declare class CSVBlobHandle extends BlobHandle {
