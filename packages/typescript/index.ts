@@ -1676,7 +1676,7 @@ export class DagHandle {
         }
     }
 
-    public async scaleWorker(replicas: number): Promise<boolean> {
+    public async scaleWorker(replicas: number): Promise<number> {
         return await this.client
             .requestJSON<WorkerScale>({
                 method: METHOD_PUT,
@@ -1687,7 +1687,7 @@ export class DagHandle {
                     task: undefined,
                 },
             })
-            .then((res) => res.success);
+            .then((res) => res.num_replicas);
     }
 
     public async reload(timestamp: number | undefined): Promise<number> {

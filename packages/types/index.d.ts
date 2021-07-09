@@ -184,7 +184,7 @@ export declare class DagHandle {
     setQueueMng(value: string | undefined): Promise<void>;
     checkQueueStats(minimal: false): Promise<QueueStatsResponse>;
     checkQueueStats(minimal: true): Promise<MinimalQueueStatsResponse>;
-    scaleWorker(replicas: number): Promise<boolean>;
+    scaleWorker(replicas: number): Promise<number>;
     reload(timestamp: number | undefined): Promise<number>;
     getKafkaInputTopic(postfix?: string): Promise<string>;
     getKafkaOutputTopic(): Promise<string>;

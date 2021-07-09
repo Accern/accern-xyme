@@ -350,7 +350,7 @@ export interface FlushAllQueuesResponse {
 }
 
 export interface WorkerScale {
-    success: boolean;
+    num_replicas: number;
 }
 
 export interface SetNamedSecret {

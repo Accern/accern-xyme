@@ -1527,13 +1527,13 @@ class DagHandle:
             MinimalQueueStatsResponse, QueueStatsResponse]:
         return self._client.check_queue_stats(self.get_uri(), minimal=minimal)
 
-    def scale_worker(self, replicas: int) -> bool:
+    def scale_worker(self, replicas: int) -> int:
         return cast(WorkerScale, self._client.request_json(
             METHOD_PUT, "/worker", {
                 "dag": self.get_uri(),
                 "replicas": replicas,
                 "task": None,
-            }))["success"]
+            }))["num_replicas"]
 
     def reload(self, timestamp: Optional[float] = None) -> float:
         return cast(DagReload, self._client.request_json(

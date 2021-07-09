@@ -276,7 +276,7 @@ FlushAllQueuesResponse = TypedDict('FlushAllQueuesResponse', {
     "success": bool,
 })
 WorkerScale = TypedDict('WorkerScale', {
-    "success": bool,
+    "num_replicas": int,
 })
 SetNamedSecret = TypedDict('SetNamedSecret', {
     "replaced": bool,
