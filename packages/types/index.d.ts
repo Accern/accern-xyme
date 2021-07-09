@@ -2,7 +2,7 @@
 /// <reference lib="dom" />
 import { Readable } from 'stream';
 import { promises as fpm } from 'fs';
-import { AllowedCustomImports, BlobOwner, BlobTypeResponse, CacheStats, DagDef, DagInfo, DagList, DagPrettyNode, DictStrStr, DynamicFormat, InstanceStatus, KafkaGroup, KafkaOffsets, KafkaThroughput, KafkaTopics, KnownBlobs, MinimalQueueStatsResponse, ModelInfo, ModelParamsResponse, ModelReleaseResponse, NodeCustomImports, NodeDef, NodeDefInfo, NodeInfo, NodeState, NodeTypes, NodeUserColumnsResponse, QueueStatsResponse, QueueStatus, SettingsObj, TaskStatus, Timing, TimingResult, UploadFilesResponse, VersionResponse, DeleteBlobResponse, NodeCustomCode } from './types';
+import { AllowedCustomImports, BlobOwner, BlobTypeResponse, CacheStats, DagDef, DagInfo, DagList, DagPrettyNode, DictStrStr, DynamicFormat, InstanceStatus, KafkaGroup, KafkaOffsets, KafkaThroughput, KafkaTopics, KnownBlobs, MinimalQueueStatsResponse, ModelInfo, ModelParamsResponse, ModelReleaseResponse, ModelVersionResponse, NodeCustomImports, NodeDef, NodeDefInfo, NodeInfo, NodeState, NodeTypes, NodeUserColumnsResponse, QueueStatsResponse, QueueStatus, SettingsObj, TaskStatus, Timing, TimingResult, UploadFilesResponse, VersionResponse, DeleteBlobResponse, NodeCustomCode } from './types';
 import { RetryOptions } from './request';
 import { ByteResponse } from './util';
 export * from './errors';
@@ -329,6 +329,9 @@ export declare class BlobHandle {
     uploadZip(source: string | fpm.FileHandle): Promise<BlobHandle[]>;
     convertModel(reload?: boolean): Promise<ModelReleaseResponse>;
     getModelRelease(): Promise<ModelReleaseResponse>;
+    getModelVersion(): Promise<ModelVersionResponse>;
+    copyModelVersion(readVersion: number, writeVersion: number, overwrite: boolean): Promise<ModelVersionResponse>;
+    deleteModelVersion(version: number): Promise<ModelVersionResponse>;
     delete(): Promise<DeleteBlobResponse>;
 }
 export declare class CSVBlobHandle extends BlobHandle {
