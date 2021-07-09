@@ -459,6 +459,11 @@ export interface ModelReleaseResponse {
     release?: number;
 }
 
+export interface ModelVersionResponse {
+    max_version?: number;
+    all_versions: string[];
+}
+
 export interface ESQueryResponse {
     query: { [key: string]: any };
 }
