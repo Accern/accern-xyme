@@ -41,6 +41,7 @@ import {
     ModelInfo,
     ModelParamsResponse,
     ModelReleaseResponse,
+    ModelVersionResponse,
     NamespaceUpdateSettings,
     NodeChunk,
     NodeCustomImports,
@@ -2822,6 +2823,48 @@ export class BlobHandle {
             path: '/model_release',
             args: {
                 blob: this.getURI(),
+            },
+        });
+    }
+
+    public async getModelVersion(): Promise<ModelVersionResponse> {
+        return await this.client.requestJSON<ModelVersionResponse>({
+            method: METHOD_GET,
+            path: '/model_version',
+            args: {
+                model_uri: this.getURI(),
+            },
+        });
+    }
+
+    public async copyModelVersion(
+        readVersion: number,
+        writeVersion: number,
+        overwrite: boolean
+    ): Promise<ModelVersionResponse> {
+        return await this.client.requestJSON<ModelVersionResponse>({
+            method: METHOD_PUT,
+            path: '/model_version',
+            args: {
+                model_uri: this.getURI(),
+                read_version: readVersion,
+                write_version: writeVersion,
+                overwrite: overwrite,
+            },
+        });
+    }
+
+    public async deleteModelVersion(
+        version: number
+    ): Promise<ModelVersionResponse> {
+        return await this.client.requestJSON<ModelVersionResponse>({
+            method: METHOD_PUT,
+            path: '/model_version',
+            args: {
+                model_uri: this.getURI(),
+                read_version: null,
+                write_version: version,
+                overwrite: true,
             },
         });
     }
