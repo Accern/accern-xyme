@@ -476,7 +476,7 @@ export interface DagPrettyNode {
     id: string;
     name: string;
     kind: string;
-    chunk: number;
+    info: { [key: string]: number | string };
     high_ixs: { [key: string]: number };
     status: TaskStatus;
     out_edges: DagPrettyEdge[];

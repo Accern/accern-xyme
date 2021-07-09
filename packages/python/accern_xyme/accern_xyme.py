@@ -1375,21 +1375,25 @@ class DagHandle:
             self,
             nodes_only: bool,
             allow_unicode: bool,
-            method: Optional[str] = "accern") -> PrettyResponse:
-        # FIXME: !!!!!!!! fields + ts
+            method: Optional[str] = "accern",
+            fields: Optional[List[str]] = None) -> PrettyResponse:
+        args = {
+            "dag": self.get_uri(),
+            "nodes_only": nodes_only,
+            "allow_unicode": allow_unicode,
+            "method": method,
+        }
+        if fields is not None:
+            args["fields"] = ",".join(fields)
         return cast(PrettyResponse, self._client.request_json(
-            METHOD_GET, "/pretty", {
-                "dag": self.get_uri(),
-                "nodes_only": nodes_only,
-                "allow_unicode": allow_unicode,
-                "method": method,
-            }))
+            METHOD_GET, "/pretty", args))
 
     def pretty(
             self,
             nodes_only: bool = False,
             allow_unicode: bool = True,
             method: Optional[str] = "dot",
+            fields: Optional[List[str]] = None,
             output_format: Optional[str] = "png",
             display: Optional[IO[Any]] = sys.stdout) -> Optional[str]:
 
@@ -1403,7 +1407,8 @@ class DagHandle:
         graph_str = self._pretty(
             nodes_only=nodes_only,
             allow_unicode=allow_unicode,
-            method=method)["pretty"]
+            method=method,
+            fields=fields)["pretty"]
         if method == "accern":
             return render(graph_str)
         if method == "dot":
@@ -1467,9 +1472,12 @@ class DagHandle:
     def pretty_obj(
             self,
             nodes_only: bool = False,
-            allow_unicode: bool = True) -> List[DagPrettyNode]:
+            allow_unicode: bool = True,
+            fields: Optional[List[str]] = None) -> List[DagPrettyNode]:
         return self._pretty(
-            nodes_only=nodes_only, allow_unicode=allow_unicode)["nodes"]
+            nodes_only=nodes_only,
+            allow_unicode=allow_unicode,
+            fields=fields)["nodes"]
 
     def get_def(self, full: bool = True) -> DagDef:
         return cast(DagDef, self._client.request_json(

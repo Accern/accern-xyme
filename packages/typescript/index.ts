@@ -1565,7 +1565,8 @@ export class DagHandle {
     private async _pretty(
         nodesOnly: boolean,
         allowUnicode: boolean,
-        method = 'accern'
+        method = 'accern',
+        fields: string[] | null = null,
     ): Promise<PrettyResponse> {
         return await this.client.requestJSON<PrettyResponse>({
             method: METHOD_GET,
@@ -1575,6 +1576,7 @@ export class DagHandle {
                 nodes_only: nodesOnly,
                 allow_unicode: allowUnicode,
                 method: method,
+                fields: fields === null ? undefined : fields.join(','),
             },
         });
     }
@@ -1583,6 +1585,7 @@ export class DagHandle {
         nodesOnly = false,
         allowUnicode = true,
         method = 'accern',
+        fields: string[] | null = null,
         display = true
     ): Promise<string | undefined> {
         // FIXME: add dot output and allow file like display
@@ -1597,18 +1600,22 @@ export class DagHandle {
         const graphStr = await this._pretty(
             nodesOnly,
             allowUnicode,
-            method
+            method,
+            fields,
         ).then((res) => res.pretty);
         return render(graphStr);
     }
 
     public async prettyObj(
         nodesOnly = false,
-        allowUnicode = true
+        allowUnicode = true,
+        fields: string[] | null = null,
     ): Promise<DagPrettyNode[]> {
-        return await this._pretty(nodesOnly, allowUnicode).then(
-            (res) => res.nodes
-        );
+        return await this._pretty(
+            nodesOnly,
+            allowUnicode,
+            'accern',
+            fields).then((res) => res.nodes);
     }
 
     public async getDef(full = true): Promise<DagDef> {
