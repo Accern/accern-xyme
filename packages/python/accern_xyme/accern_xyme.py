@@ -2506,18 +2506,37 @@ class BlobHandle:
                 "model_uri": self.get_uri(),
             }))
 
-    def copy_model_version(
+    def _copy_model_version(
             self,
-            write_version: int,
+            model_uri: str,
             read_version: Optional[int],
+            write_version: int,
             overwrite: bool) -> ModelVersionResponse:
         return cast(ModelVersionResponse, self._client.request_json(
             METHOD_PUT, "/model_version", {
-                "model_uri": self.get_uri(),
-                "write_version": write_version,
+                "model_uri": model_uri,
                 "read_version": read_version,
+                "write_version": write_version,
                 "overwrite": overwrite,
             }))
+
+    def copy_model_version(
+            self,
+            read_version: int,
+            write_version: int,
+            overwrite: bool) -> ModelVersionResponse:
+        return self._copy_model_version(
+            model_uri=self.get_uri(),
+            read_version=read_version,
+            write_version=write_version,
+            overwrite=overwrite)
+
+    def delete_model_version(self, version: int) -> ModelVersionResponse:
+        return self._copy_model_version(
+            model_uri=self.get_uri(),
+            read_version=None,
+            write_version=version,
+            overwrite=True)
 
     def __hash__(self) -> int:
         return hash(self.as_str())
