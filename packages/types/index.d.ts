@@ -173,8 +173,8 @@ export declare class DagHandle {
         [key: string]: QueueStatus;
     }>;
     private _pretty;
-    pretty(nodesOnly?: boolean, allowUnicode?: boolean, method?: string, display?: boolean): Promise<string | undefined>;
-    prettyObj(nodesOnly?: boolean, allowUnicode?: boolean): Promise<DagPrettyNode[]>;
+    pretty(nodesOnly?: boolean, allowUnicode?: boolean, method?: string, fields?: string[] | null, display?: boolean): Promise<string | undefined>;
+    prettyObj(nodesOnly?: boolean, allowUnicode?: boolean, fields?: string[] | null): Promise<DagPrettyNode[]>;
     getDef(full?: boolean): Promise<DagDef>;
     setAttr(attr: string, value: any): Promise<void>;
     setName(value: string): Promise<void>;
