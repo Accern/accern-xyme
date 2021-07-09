@@ -736,10 +736,12 @@ class XYMEClient:
                 warnings_io.flush()
         return self.get_dag(dag_uri)
 
-    def set_settings(self, settings: SettingsObj) -> SettingsObj:
+    def set_settings(
+            self, config_token: str, settings: SettingsObj) -> SettingsObj:
         return cast(NamespaceUpdateSettings, self.request_json(
             METHOD_POST, "/settings", {
                 "settings": settings,
+                "config_token": config_token,
             }))["settings"]
 
     def get_settings(self) -> SettingsObj:
@@ -852,17 +854,24 @@ class XYMEClient:
             }))
 
     def get_named_secrets(
-            self, show_values: bool = False) -> Dict[str, Optional[str]]:
+            self,
+            config_token: Optional[str] = None,
+            show_values: bool = False) -> Dict[str, Optional[str]]:
+        if show_values and config_token is None:
+            raise ValueError("config_token must be set to show_values")
         return cast(Dict[str, Optional[str]], self.request_json(
             METHOD_GET, "/named_secrets", {
                 "show": int(bool(show_values)),
+                "config_token": config_token,
             }))
 
-    def set_named_secret(self, key: str, value: str) -> bool:
+    def set_named_secret(
+            self, config_token: str, key: str, value: str) -> bool:
         return cast(SetNamedSecret, self.request_json(
             METHOD_PUT, "/named_secrets", {
                 "key": key,
                 "value": value,
+                "config_token": config_token,
             }))["replaced"]
 
     def get_error_logs(self) -> str:
@@ -1367,20 +1376,25 @@ class DagHandle:
             self,
             nodes_only: bool,
             allow_unicode: bool,
-            method: Optional[str] = "accern") -> PrettyResponse:
+            method: Optional[str] = "accern",
+            fields: Optional[List[str]] = None) -> PrettyResponse:
+        args = {
+            "dag": self.get_uri(),
+            "nodes_only": nodes_only,
+            "allow_unicode": allow_unicode,
+            "method": method,
+        }
+        if fields is not None:
+            args["fields"] = ",".join(fields)
         return cast(PrettyResponse, self._client.request_json(
-            METHOD_GET, "/pretty", {
-                "dag": self.get_uri(),
-                "nodes_only": nodes_only,
-                "allow_unicode": allow_unicode,
-                "method": method,
-            }))
+            METHOD_GET, "/pretty", args))
 
     def pretty(
             self,
             nodes_only: bool = False,
             allow_unicode: bool = True,
             method: Optional[str] = "dot",
+            fields: Optional[List[str]] = None,
             output_format: Optional[str] = "png",
             display: Optional[IO[Any]] = sys.stdout) -> Optional[str]:
 
@@ -1394,7 +1408,8 @@ class DagHandle:
         graph_str = self._pretty(
             nodes_only=nodes_only,
             allow_unicode=allow_unicode,
-            method=method)["pretty"]
+            method=method,
+            fields=fields)["pretty"]
         if method == "accern":
             return render(graph_str)
         if method == "dot":
@@ -1458,9 +1473,12 @@ class DagHandle:
     def pretty_obj(
             self,
             nodes_only: bool = False,
-            allow_unicode: bool = True) -> List[DagPrettyNode]:
+            allow_unicode: bool = True,
+            fields: Optional[List[str]] = None) -> List[DagPrettyNode]:
         return self._pretty(
-            nodes_only=nodes_only, allow_unicode=allow_unicode)["nodes"]
+            nodes_only=nodes_only,
+            allow_unicode=allow_unicode,
+            fields=fields)["nodes"]
 
     def get_def(self, full: bool = True) -> DagDef:
         return cast(DagDef, self._client.request_json(
