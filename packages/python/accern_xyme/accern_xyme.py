@@ -2374,6 +2374,7 @@ class BlobHandle:
     def _finish_upload_sklike(
             self,
             xcols: List[str],
+            ycols: Optional[List[str]],
             is_clf: bool,
             model_name: str,
             maybe_classes: Optional[List[str]],
@@ -2394,6 +2395,7 @@ class BlobHandle:
                 "owner_node": self.get_owner_node(),
                 "tmp_uri": uri,
                 "xcols": xcols,
+                "ycols": ycols,
             }))
 
     def _clear_upload(self) -> None:
@@ -2450,6 +2452,7 @@ class BlobHandle:
             self,
             model_obj: IO[bytes],
             xcols: List[str],
+            ycols: Optional[List[str]],
             is_clf: bool,
             model_name: str,
             maybe_classes: Optional[List[str]] = None,
@@ -2464,6 +2467,7 @@ class BlobHandle:
                 maybe_classes=maybe_classes,
                 maybe_range=output_range,
                 xcols=xcols,
+                ycols=ycols,
                 is_clf=is_clf,
                 full_init=full_init)
         finally:
@@ -2473,6 +2477,7 @@ class BlobHandle:
             self,
             model: Any,
             xcols: List[str],
+            ycols: Optional[List[str]],
             is_clf: bool,
             maybe_classes: Optional[List[str]] = None,
             maybe_range: Optional[
@@ -2492,6 +2497,7 @@ class BlobHandle:
             return self.upload_sklike_model_file(
                 buffer,
                 xcols,
+                ycols,
                 is_clf,
                 model_name,
                 maybe_classes,
