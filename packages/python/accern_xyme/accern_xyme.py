@@ -2376,8 +2376,10 @@ class BlobHandle:
             xcols: List[str],
             is_clf: bool,
             model_name: str,
+            version: int,
             maybe_classes: Optional[List[str]],
             maybe_range: Tuple[Optional[float], Optional[float]],
+            delete_later_versions: bool,
             full_init: bool) -> UploadFilesResponse:
         uri = self._tmp_uri
         if uri is None:
@@ -2389,11 +2391,13 @@ class BlobHandle:
                 "is_clf": is_clf,
                 "model_uri": self.get_uri(),
                 "model_name": model_name,
+                "version": version,
                 "output_range": maybe_range,
                 "owner_dag": self.get_owner_dag(),
                 "owner_node": self.get_owner_node(),
                 "tmp_uri": uri,
                 "xcols": xcols,
+                "delete_later_versions": delete_later_versions,
             }))
 
     def _clear_upload(self) -> None:
@@ -2452,19 +2456,23 @@ class BlobHandle:
             xcols: List[str],
             is_clf: bool,
             model_name: str,
+            version: int = -1,
             maybe_classes: Optional[List[str]] = None,
             maybe_range: Optional[
                 Tuple[Optional[float], Optional[float]]] = None,
+            delete_later_versions: bool = False,
             full_init: bool = True) -> UploadFilesResponse:
         try:
             self._upload_file(model_obj, ext="pkl")
             output_range = (None, None) if maybe_range is None else maybe_range
             return self._finish_upload_sklike(
                 model_name=model_name,
+                version=version,
                 maybe_classes=maybe_classes,
                 maybe_range=output_range,
                 xcols=xcols,
                 is_clf=is_clf,
+                delete_later_versions=delete_later_versions,
                 full_init=full_init)
         finally:
             self._clear_upload()
@@ -2474,9 +2482,11 @@ class BlobHandle:
             model: Any,
             xcols: List[str],
             is_clf: bool,
+            version: int = -1,
             maybe_classes: Optional[List[str]] = None,
             maybe_range: Optional[
                 Tuple[Optional[float], Optional[float]]] = None,
+            delete_later_versions: bool = False,
             full_init: bool = True) -> UploadFilesResponse:
         try:
             model_name = type(model).__name__
@@ -2494,8 +2504,10 @@ class BlobHandle:
                 xcols,
                 is_clf,
                 model_name,
+                version,
                 maybe_classes,
                 maybe_range,
+                delete_later_versions,
                 full_init)
 
     def convert_model(self, reload: bool = True) -> ModelReleaseResponse:
