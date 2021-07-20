@@ -94,6 +94,7 @@ from .types import (
     ModelParamsResponse,
     ModelReleaseResponse,
     ModelVersionResponse,
+    ModelVersionTagsResponse,
     NamespaceList,
     NamespaceUpdateSettings,
     NodeChunk,
@@ -2567,6 +2568,45 @@ class BlobHandle:
             read_version=None,
             write_version=version,
             overwrite=True)
+
+    def get_model_version_tags(self) -> ModelVersionTagsResponse:
+        return cast(ModelVersionTagsResponse, self._client.request_json(
+            METHOD_GET, "/model_version_tags", {
+                "model_uri": self.get_uri(),
+            }))
+
+    def _set_model_version_tag(
+            self,
+            model_uri: str,
+            version: Optional[int],
+            name: str) -> ModelVersionTagsResponse:
+        return cast(ModelVersionTagsResponse, self._client.request_json(
+            METHOD_PUT, "/model_version_tags", {
+                "model_uri": model_uri,
+                "version": version,
+                "name": name,
+            }))
+
+    def set_model_version_tag(
+            self,
+            version: int,
+            name: str) -> ModelVersionTagsResponse:
+        return self._set_model_version_tag(
+            model_uri=self.get_uri(),
+            version=version,
+            name=name)
+
+    def delete_model_version_tag(self, name: str) -> ModelVersionTagsResponse:
+        return self._set_model_version_tag(
+            model_uri=self.get_uri(),
+            version=None,
+            name=name)
+
+    def get_model_version_tags(self) -> ModelVersionTagsResponse:
+        return cast(ModelVersionResponse, self._client.request_json(
+            METHOD_GET, "/model_version_tags", {
+                "model_uri": self.get_uri(),
+            }))
 
     def __hash__(self) -> int:
         return hash(self.as_str())
