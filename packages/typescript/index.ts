@@ -2749,9 +2749,10 @@ export class BlobHandle {
             await uploadNextChunk(blobHandle, chunk, read);
         }
 
-        await uploadNextChunk(this, getFileUploadChunkSize(), read).finally(
-            () => {
+        await uploadNextChunk(this, getFileUploadChunkSize(), read).catch(
+            (error) => {
                 this.clearUpload();
+                throw error;
             }
         );
     }
