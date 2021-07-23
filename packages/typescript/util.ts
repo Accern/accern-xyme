@@ -130,7 +130,7 @@ export async function getReaderHash(
         if (!nread) {
             return;
         }
-        shaObj.update(buffer.toString());
+        shaObj.update(buffer);
         await readNextChunk(chunkSize, read);
     }
 
