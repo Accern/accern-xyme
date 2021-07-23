@@ -318,6 +318,7 @@ export declare class BlobHandle {
      * @returns
      */
     updateBuffer(curSize: number, buffer: Buffer, nread: number, chunk: number, blobHandle: BlobHandle): Promise<number>;
+    uploadReader(read: (pos: number, size: number) => Promise<Buffer>, ext: string, progressBar?: WritableStream, method?: string): Promise<void>;
     uploadFile(fileContent: fpm.FileHandle, ext: string, progressBar?: WritableStream): Promise<void>;
     /**
      * This prototype method allows you to upload the file using content Buffer
