@@ -1,5 +1,5 @@
+import crypto from 'crypto';
 import { promises as fpm } from 'fs';
-import jsSHA from 'jssha';
 import { DictStrStr } from './types';
 import { KeyError, ServerSideError } from './errors';
 
@@ -113,34 +113,29 @@ export function getQueryURL(args: DictStrStr, inURL: string): string {
     return url;
 }
 
-export async function getFileHash(
-    fileHandle: fpm.FileHandle
-): Promise<string> {
-    const shaObj = new jsSHA('SHA-224', 'BYTES');
+export async function getReaderHash(
+    read: (pos: number, size: number) => Promise<Buffer>
+): Promise<[string, number]> {
+    const hashObj = crypto.createHash('sha224');
     const chunkSize = FILE_HASH_CHUNK_SIZE;
     let curPos = 0;
+
     async function readNextChunk(
         chunkSize: number,
-        fileHandle: fpm.FileHandle
+        read: (pos: number, size: number) => Promise<Buffer>
     ): Promise<void> {
-        const buffer = Buffer.alloc(chunkSize);
-        const response = await fileHandle.read(buffer, 0, chunkSize, curPos);
-        const nread = response.bytesRead;
+        const buffer = await read(curPos, chunkSize);
+        const nread = buffer.byteLength;
         curPos += nread;
-        if (nread === 0) {
+        if (!nread) {
             return;
         }
-        let data: Buffer;
-        if (nread < chunkSize) {
-            data = buffer.slice(0, nread);
-        } else {
-            data = buffer;
-        }
-        shaObj.update(data.toString());
-        await readNextChunk(chunkSize, fileHandle);
+        hashObj.update(buffer);
+        await readNextChunk(chunkSize, read);
     }
-    await readNextChunk(chunkSize, fileHandle);
-    return shaObj.getHash('HEX');
+
+    await readNextChunk(chunkSize, read);
+    return [hashObj.digest('hex'), curPos];
 }
 
 export function getFileUploadChunkSize(): number {

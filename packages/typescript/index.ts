@@ -4,7 +4,6 @@ import FormData from 'form-data';
 import { promises as fpm } from 'fs';
 import fetch, { HeadersInit, Response, RequestInit } from 'node-fetch';
 import { performance } from 'perf_hooks';
-import jsSHA from 'jssha';
 import { isNull } from 'lodash';
 import {
     AllowedCustomImports,
@@ -91,9 +90,9 @@ import {
     ByteResponse,
     forceKey,
     getAge,
-    getFileHash,
     getFileUploadChunkSize,
     getQueryURL,
+    getReaderHash,
     interpretContentType,
     isUndefined,
     mergeContentType,
@@ -2711,18 +2710,19 @@ export class BlobHandle {
         return newSize;
     }
 
-    public async uploadFile(
-        fileContent: fpm.FileHandle,
+    public async uploadReader(
+        read: (pos: number, size: number) => Promise<Buffer>,
         ext: string,
-        progressBar?: WritableStream
+        progressBar?: WritableStream,
+        method?: string
     ): Promise<void> {
-        const totalSize = (await fileContent.stat()).size;
         if (progressBar !== undefined) {
-            progressBar.getWriter().write('Uploading file:\n');
+            const methodStr = method !== undefined ? ` ${method}` : '';
+            progressBar.getWriter().write(`Uploading${methodStr}:\n`);
         }
-        const fileHash = await getFileHash(fileContent);
 
-        const tmpURI = await this.startUpload(totalSize, fileHash, ext);
+        const [hash, totalSize] = await getReaderHash(read);
+        const tmpURI = await this.startUpload(totalSize, hash, ext);
         this.tmpURI = tmpURI;
         let curPos = 0;
         let curSize = 0;
@@ -2730,12 +2730,10 @@ export class BlobHandle {
         async function uploadNextChunk(
             blobHandle: BlobHandle,
             chunk: number,
-            fileHandle: fpm.FileHandle
+            read: (pos: number, size: number) => Promise<Buffer>
         ): Promise<void> {
-            const buffer = Buffer.alloc(chunk);
-            await fileHandle.read(buffer, 0, 0, 0);
-            const response = await fileHandle.read(buffer, 0, chunk, curPos);
-            const nread = response.bytesRead;
+            const buffer = await read(curPos, chunk);
+            const nread = buffer.byteLength;
             if (!nread) {
                 return;
             }
@@ -2748,10 +2746,30 @@ export class BlobHandle {
                 blobHandle
             );
             curSize = newSize;
-            await uploadNextChunk(blobHandle, chunk, fileHandle);
+            await uploadNextChunk(blobHandle, chunk, read);
         }
 
-        await uploadNextChunk(this, getFileUploadChunkSize(), fileContent);
+        await uploadNextChunk(this, getFileUploadChunkSize(), read).catch(
+            (error) => {
+                this.clearUpload();
+                throw error;
+            }
+        );
+    }
+
+    public async uploadFile(
+        fileContent: fpm.FileHandle,
+        ext: string,
+        progressBar?: WritableStream
+    ): Promise<void> {
+        async function readFile(pos: number, size: number): Promise<Buffer> {
+            const buffer = Buffer.alloc(size);
+            const response = await fileContent.read(buffer, 0, size, pos);
+            const nread = response.bytesRead;
+            return buffer.slice(0, nread);
+        }
+
+        return await this.uploadReader(readFile, ext, progressBar, 'File');
     }
 
     /**
@@ -2765,44 +2783,11 @@ export class BlobHandle {
         ext: string,
         progressBar?: WritableStream
     ): Promise<void> {
-        if (progressBar !== undefined) {
-            progressBar.getWriter().write('Uploading file:\n');
-        }
-        const totalSize = contentBuffer.byteLength;
-        const shaObj = new jsSHA('SHA-224', 'BYTES');
-        shaObj.update(contentBuffer.toString());
-        const fileHash = shaObj.getHash('HEX');
-        const tmpURI = await this.startUpload(totalSize, fileHash, ext);
-        this.tmpURI = tmpURI;
-        let curPos = 0;
-        let curSize = 0;
-        async function uploadNextBufferChunk(
-            that: BlobHandle,
-            chunk: number,
-            contentBuffer: Buffer
-        ): Promise<void> {
-            const buffer = contentBuffer.slice(curPos, chunk);
-            const nread = buffer.byteLength;
-            if (!nread) {
-                return;
-            }
-            curPos += nread;
-            const newSize = await that.updateBuffer(
-                curSize,
-                buffer,
-                nread,
-                chunk,
-                that
-            );
-            curSize = newSize;
-            await uploadNextBufferChunk(that, chunk, contentBuffer);
+        async function readBuffer(pos: number, size: number): Promise<Buffer> {
+            return contentBuffer.slice(pos, pos + size);
         }
 
-        await uploadNextBufferChunk(
-            this,
-            getFileUploadChunkSize(),
-            contentBuffer
-        );
+        return await this.uploadReader(readBuffer, ext, progressBar, 'Buffer');
     }
 
     public async uploadZip(
