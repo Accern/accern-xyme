@@ -1,5 +1,5 @@
+import crypto from 'crypto';
 import { promises as fpm } from 'fs';
-import jsSHA from 'jssha';
 import { DictStrStr } from './types';
 import { KeyError, ServerSideError } from './errors';
 
@@ -116,7 +116,7 @@ export function getQueryURL(args: DictStrStr, inURL: string): string {
 export async function getReaderHash(
     read: (pos: number, size: number) => Promise<Buffer>
 ): Promise<[string, number]> {
-    const shaObj = new jsSHA('SHA-224', 'BYTES');
+    const hashObj = crypto.createHash('sha224');
     const chunkSize = FILE_HASH_CHUNK_SIZE;
     let curPos = 0;
 
@@ -130,12 +130,12 @@ export async function getReaderHash(
         if (!nread) {
             return;
         }
-        shaObj.update(buffer);
+        hashObj.update(buffer);
         await readNextChunk(chunkSize, read);
     }
 
     await readNextChunk(chunkSize, read);
-    return [shaObj.getHash('HEX'), curPos];
+    return [hashObj.digest('hex'), curPos];
 }
 
 export function getFileUploadChunkSize(): number {
