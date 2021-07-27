@@ -2354,7 +2354,7 @@ export class NodeHandle {
         if (this._isModel === null) {
             this._isModel = await this.client
                 .requestJSON<NodeTypeResponse>({
-                    method: METHOD_PUT,
+                    method: METHOD_GET,
                     path: '/node_type',
                     args: {
                         dag: this.getDag().getURI(),
