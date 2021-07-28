@@ -369,6 +369,9 @@ ModelVersionResponse = TypedDict('ModelVersionResponse', {
     "max_version": Optional[int],
     "all_versions": List[str],
 })
+ModelVersionTagsResponse = TypedDict('ModelVersionTagsResponse', {
+    "version_tags": Optional[Dict[str, int]],
+})
 ESQueryResponse = TypedDict('ESQueryResponse', {
     "query": Dict[str, Any],
 })
