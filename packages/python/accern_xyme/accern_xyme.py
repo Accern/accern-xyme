@@ -93,6 +93,7 @@ from .types import (
     ModelInfo,
     ModelParamsResponse,
     ModelReleaseResponse,
+    ModelThreshold,
     ModelVersionResponse,
     NamespaceList,
     NamespaceUpdateSettings,
@@ -657,6 +658,22 @@ class XYMEClient:
                 "owner_dag": dag_id,
                 "owner_node": node_id,
                 "external_owner": external_owner,
+            }))
+
+    def set_model_threshold(
+            self,
+            blob_uri: str,
+            threshold: float) -> ModelThreshold:
+        return cast(ModelThreshold, self.request_json(
+            METHOD_PUT, "/threshold", {
+                "blob": blob_uri,
+                "threshold": threshold,
+            }))
+
+    def get_model_threshold(self, blob_uri: str) -> ModelThreshold:
+        return cast(ModelThreshold, self.request_json(
+            METHOD_GET, "/threshold", {
+                "blob": blob_uri,
             }))
 
     def create_new_dag(
@@ -2272,6 +2289,19 @@ class BlobHandle:
                 "blob": self.get_uri(),
                 "owner_dag": owner.get_dag().get_uri(),
                 "owner_node": owner.get_id(),
+            }))
+
+    def set_model_threshold(self, threshold: float) -> ModelThreshold:
+        return cast(ModelThreshold, self._client.request_json(
+            METHOD_PUT, "/threshold", {
+                "blob": self.get_uri(),
+                "threshold": threshold,
+            }))
+
+    def get_model_threshold(self) -> ModelThreshold:
+        return cast(ModelThreshold, self._client.request_json(
+            METHOD_GET, "/threshold", {
+                "blob": self.get_uri(),
             }))
 
     def get_owner(self) -> BlobOwner:
