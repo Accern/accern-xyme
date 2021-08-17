@@ -2304,6 +2304,12 @@ class BlobHandle:
                 "blob": self.get_uri(),
             }))
 
+    def get_model_info(self) -> ModelInfo:
+        return cast(ModelInfo, self._client.request_json(
+            METHOD_GET, "/model_info", {
+                "blob": self.get_uri(),
+            }))
+
     def get_owner(self) -> BlobOwner:
         if self._owner is None:
             self._owner = self._client.get_blob_owner(self.get_uri())
