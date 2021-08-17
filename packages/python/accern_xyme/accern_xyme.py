@@ -2291,17 +2291,12 @@ class BlobHandle:
                 "owner_node": owner.get_id(),
             }))
 
-    def set_model_threshold(self, threshold: float) -> ModelThreshold:
-        return cast(ModelThreshold, self._client.request_json(
+    def set_model_threshold(self, threshold: float, pos_label: str) -> ModelInfo:
+        return cast(ModelInfo, self._client.request_json(
             METHOD_PUT, "/threshold", {
                 "blob": self.get_uri(),
                 "threshold": threshold,
-            }))
-
-    def get_model_threshold(self) -> ModelThreshold:
-        return cast(ModelThreshold, self._client.request_json(
-            METHOD_GET, "/threshold", {
-                "blob": self.get_uri(),
+                "pos_label": pos_label,
             }))
 
     def get_model_info(self) -> ModelInfo:

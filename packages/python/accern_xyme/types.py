@@ -327,9 +327,6 @@ BlobOwner = TypedDict('BlobOwner', {
     "owner_dag": Optional[str],
     "owner_node": str,
 })
-ModelThreshold = TypedDict('ModelThreshold', {
-    "threshold": Optional[float],
-})
 CopyBlob = TypedDict('CopyBlob', {
     "new_uri": str,
 })
