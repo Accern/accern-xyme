@@ -660,18 +660,6 @@ class XYMEClient:
                 "external_owner": external_owner,
             }))
 
-    def set_model_threshold(
-            self,
-            blob_uri: str,
-            threshold: float,
-            pos_label: str) -> ModelInfo:
-        return cast(ModelInfo, self.request_json(
-            METHOD_PUT, "/threshold", {
-                "blob": blob_uri,
-                "threshold": threshold,
-                "pos_label": pos_label,
-            }))
-
     def create_new_dag(
             self,
             username: Optional[str] = None,
@@ -2296,6 +2284,12 @@ class BlobHandle:
                 "blob": self.get_uri(),
                 "threshold": threshold,
                 "pos_label": pos_label,
+            }))
+
+    def del_model_threshold(self) -> ModelInfo:
+        return cast(ModelInfo, self._client.request_json(
+            METHOD_PUT, "/del_threshold", {
+                "blob": self.get_uri(),
             }))
 
     def get_model_info(self) -> ModelInfo:
