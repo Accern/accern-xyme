@@ -154,7 +154,7 @@ INPUT_ZIP_EXT = ".zip"
 INPUT_EXT = [INPUT_ZIP_EXT, INPUT_CSV_EXT, INPUT_TSV_EXT]
 
 
-FUNC = Callable[[Any], Any]
+FUNC = Callable[..., Any]
 CUSTOM_NODE_TYPES = {
     "custom_data",
     "custom_json",
