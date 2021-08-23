@@ -975,12 +975,14 @@ class XYMEClient:
             return maybe_parse
         return res
 
+    @staticmethod
+    def load_s3_config(config_path: str) -> S3Config:
+        with open(config_path) as fin:
+            return cast(S3Config, json.load(fin))
+
     @classmethod
     def download_s3_from_file(cls, dest_path: str, config_path: str) -> None:
-        with open(config_path) as fin:
-            config = cast(S3Config, json.load(fin))
-
-        cls.download_s3(dest_path, config)
+        cls.download_s3(dest_path, cls.load_s3_config(config_path))
 
     @staticmethod
     def download_s3(dest_path: str, config: S3Config) -> None:
