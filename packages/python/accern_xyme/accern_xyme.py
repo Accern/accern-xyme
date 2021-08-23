@@ -700,7 +700,18 @@ class XYMEClient:
             self,
             dag_uri: str,
             dest_uri: Optional[str] = None,
-            copy_nonowned_blobs: bool = True) -> str:
+            copy_nonowned_blobs: Optional[bool] = None,
+            retain_nonowned_blobs: bool = False,
+            warnings_io: Optional[IO[Any]] = sys.stderr) -> str:
+        if copy_nonowned_blobs is None:
+            copy_nonowned_blobs = not retain_nonowned_blobs
+        elif warnings_io is not None:
+            warnings_io.write(
+                "copy_nonowned_blobs is deprecated; "
+                "use retain_nonowned_blobs instead\n")
+            warnings_io.flush()
+        # FIXME: !!!xyme-backend bug!!!
+        copy_nonowned_blobs = not copy_nonowned_blobs
         args = {
             "dag": dag_uri,
             "copy_nonowned_blobs": copy_nonowned_blobs,

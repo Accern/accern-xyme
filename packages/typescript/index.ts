@@ -842,7 +842,25 @@ export default class XYMEClient {
             path: '/dag_dup',
             args: {
                 dag: dagURI,
-                copy_nonowned_blobs: copyNonownedBlobs,
+                // FIXME: !!!xyme-backend bug!!!
+                copy_nonowned_blobs: !copyNonownedBlobs,
+                ...(destURI ? { dest: destURI } : {}),
+            },
+        }).then((response) => response.dag);
+    }
+
+    public async duplicateDagNew(
+        dagURI: string,
+        destURI?: string,
+        retainNonownedBlobs = false
+    ): Promise<string> {
+        return await this.requestJSON<DagCreate>({
+            method: METHOD_POST,
+            path: '/dag_dup',
+            args: {
+                dag: dagURI,
+                // FIXME: !!!rename in xyme-backend!!!
+                copy_nonowned_blobs: retainNonownedBlobs,
                 ...(destURI ? { dest: destURI } : {}),
             },
         }).then((response) => response.dag);

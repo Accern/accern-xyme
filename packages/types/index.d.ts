@@ -90,6 +90,7 @@ export default class XYMEClient {
     getCustomCodeBlob(blobURI: string): Promise<CustomCodeBlobHandle>;
     getJSONBlob(blobURI: string): Promise<JSONBlobHandle>;
     duplicateDag(dagURI: string, destURI?: string, copyNonownedBlobs?: boolean): Promise<string>;
+    duplicateDagNew(dagURI: string, destURI?: string, retainNonownedBlobs?: boolean): Promise<string>;
     setDag(dagURI: string, defs: DagDef): Promise<DagHandle>;
     setSettings(configToken: string, settings: SettingsObj): Promise<SettingsObj>;
     getSettings(): Promise<SettingsObj>;
