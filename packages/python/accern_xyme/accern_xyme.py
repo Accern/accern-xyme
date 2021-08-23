@@ -114,6 +114,7 @@ from .types import (
     QueueStatsResponse,
     QueueStatus,
     ReadNode,
+    S3Config,
     SetNamedSecret,
     SettingsObj,
     TaskStatus,
@@ -973,6 +974,26 @@ class XYMEClient:
         if maybe_parse is not None:
             return maybe_parse
         return res
+
+    @classmethod
+    def download_s3_from_file(cls, dest_path: str, config_path: str) -> None:
+        with open(config_path) as fin:
+            config = cast(S3Config, json.load(fin))
+
+        cls.download_s3(dest_path, config)
+
+    @staticmethod
+    def download_s3(dest_path: str, config: S3Config) -> None:
+        import boto3
+
+        s3 = boto3.client(
+            "s3",
+            aws_access_key_id=config["accern_aws_key"],
+            aws_secret_access_key=config["accern_aws_access_key"])
+        s3.download_file(
+            config["model_download_bucket"],
+            config["model_download_path"],
+            dest_path)
 
     def get_uuid(self) -> str:
         return cast(UUIDResponse, self.request_json(
