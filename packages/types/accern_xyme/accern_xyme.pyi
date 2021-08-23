@@ -1,7 +1,7 @@
 import io
 import pandas as pd
 from .types import AllowedCustomImports as AllowedCustomImports, BlobFilesResponse as BlobFilesResponse, BlobInit as BlobInit, BlobOwner as BlobOwner, BlobTypeResponse as BlobTypeResponse, BlobURIResponse as BlobURIResponse, CacheStats as CacheStats, CopyBlob as CopyBlob, DagCreate as DagCreate, DagDef as DagDef, DagDupResponse as DagDupResponse, DagInfo as DagInfo, DagInit as DagInit, DagList as DagList, DagPrettyNode as DagPrettyNode, DagReload as DagReload, DagStatus as DagStatus, DeleteBlobResponse as DeleteBlobResponse, DynamicResults as DynamicResults, DynamicStatusResponse as DynamicStatusResponse, ESQueryResponse as ESQueryResponse, FlushAllQueuesResponse as FlushAllQueuesResponse, InCursors as InCursors, InstanceStatus as InstanceStatus, JSONBlobAppendResponse as JSONBlobAppendResponse, KafkaGroup as KafkaGroup, KafkaMessage as KafkaMessage, KafkaOffsets as KafkaOffsets, KafkaThroughput as KafkaThroughput, KafkaTopicNames as KafkaTopicNames, KafkaTopics as KafkaTopics, KnownBlobs as KnownBlobs, MinimalQueueStatsResponse as MinimalQueueStatsResponse, ModelInfo as ModelInfo, ModelParamsResponse as ModelParamsResponse, ModelReleaseResponse as ModelReleaseResponse, ModelVersionResponse as ModelVersionResponse, NamespaceList as NamespaceList, NamespaceUpdateSettings as NamespaceUpdateSettings, NodeChunk as NodeChunk, NodeCustomCode as NodeCustomCode, NodeCustomImports as NodeCustomImports, NodeDef as NodeDef, NodeDefInfo as NodeDefInfo, NodeInfo as NodeInfo, NodeState as NodeState, NodeStatus as NodeStatus, NodeTiming as NodeTiming, NodeTypeResponse as NodeTypeResponse, NodeTypes as NodeTypes, NodeUserColumnsResponse as NodeUserColumnsResponse, PrettyResponse as PrettyResponse, PutNodeBlob as PutNodeBlob, QueueMode as QueueMode, QueueStatsResponse as QueueStatsResponse, QueueStatus as QueueStatus, ReadNode as ReadNode, S3Config as S3Config, SetNamedSecret as SetNamedSecret, SettingsObj as SettingsObj, TaskStatus as TaskStatus, Timing as Timing, TimingResult as TimingResult, Timings as Timings, TritonModelsResponse as TritonModelsResponse, UUIDResponse as UUIDResponse, UploadFilesResponse as UploadFilesResponse, VersionResponse as VersionResponse, WorkerScale as WorkerScale
-from .util import ByteResponse as ByteResponse, ServerSideError as ServerSideError, async_compute as async_compute, content_to_csv_bytes as content_to_csv_bytes, df_to_csv_bytes as df_to_csv_bytes, get_age as get_age, get_file_hash as get_file_hash, get_file_upload_chunk_size as get_file_upload_chunk_size, get_max_retry as get_max_retry, get_progress_bar as get_progress_bar, get_retry_sleep as get_retry_sleep, has_graph_easy as has_graph_easy, interpret_ctype as interpret_ctype, is_jupyter as is_jupyter, maybe_json_loads as maybe_json_loads, merge_ctype as merge_ctype, safe_opt_num as safe_opt_num
+from .util import ByteResponse as ByteResponse, ServerSideError as ServerSideError, async_compute as async_compute, content_to_csv_bytes as content_to_csv_bytes, df_to_csv_bytes as df_to_csv_bytes, get_age as get_age, get_file_hash as get_file_hash, get_file_upload_chunk_size as get_file_upload_chunk_size, get_max_retry as get_max_retry, get_progress_bar as get_progress_bar, get_retry_sleep as get_retry_sleep, has_graph_easy as has_graph_easy, interpret_ctype as interpret_ctype, is_jupyter as is_jupyter, maybe_json_loads as maybe_json_loads, merge_ctype as merge_ctype, safe_opt_num as safe_opt_num, to_bool as to_bool
 from io import BytesIO
 from requests import Response as Response
 from typing import Any, Callable, Dict, IO, Iterable, Iterator, List, Optional, Set, Tuple, Union, overload
@@ -86,6 +86,12 @@ class XYMEClient:
     def get_triton_models(self) -> List[str]: ...
     @staticmethod
     def read_dvc(path: str, repo: str, rev: Optional[str] = ..., warnings_io: Optional[IO[Any]] = ...) -> Any: ...
+    @staticmethod
+    def get_env_str(key: str, default: Optional[str] = ...) -> str: ...
+    @staticmethod
+    def get_env_int(key: str, default: Optional[int] = ...) -> int: ...
+    @staticmethod
+    def get_env_bool(key: str, default: Optional[bool] = ...) -> bool: ...
     @staticmethod
     def load_json(json_path: str) -> Dict[str, Any]: ...
     @classmethod
