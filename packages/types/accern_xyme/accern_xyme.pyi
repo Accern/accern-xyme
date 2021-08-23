@@ -21,7 +21,7 @@ INPUT_CSV_EXT: str
 INPUT_TSV_EXT: str
 INPUT_ZIP_EXT: str
 INPUT_EXT: Any
-FUNC = Callable[[Any], Any]
+FUNC = Callable[..., Any]
 CUSTOM_NODE_TYPES: Any
 NO_RETRY: Any
 
