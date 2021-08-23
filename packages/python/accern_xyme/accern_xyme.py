@@ -55,6 +55,7 @@ from .util import (
     merge_ctype,
     safe_opt_num,
     ServerSideError,
+    to_bool,
 )
 from .types import (
     AllowedCustomImports,
@@ -974,6 +975,27 @@ class XYMEClient:
         if maybe_parse is not None:
             return maybe_parse
         return res
+
+    @staticmethod
+    def get_env_str(key: str, default: Optional[str] = None) -> str:
+        res = os.getenv(key, default=default)
+        if res is None:
+            raise ValueError(f"environment variable {key} is not set")
+        return f"{res}"
+
+    @staticmethod
+    def get_env_int(key: str, default: Optional[int] = None) -> int:
+        res = os.getenv(key, default=default)
+        if res is None:
+            raise ValueError(f"environment variable {key} is not set")
+        return int(res)
+
+    @staticmethod
+    def get_env_bool(key: str, default: Optional[bool] = None) -> bool:
+        res = os.getenv(key, default=default)
+        if res is None:
+            raise ValueError(f"environment variable {key} is not set")
+        return to_bool(res)
 
     @staticmethod
     def load_json(json_path: str) -> Dict[str, Any]:
