@@ -977,7 +977,7 @@ class XYMEClient:
 
     @staticmethod
     def load_s3_config(config_path: str) -> S3Config:
-        with open(config_path) as fin:
+        with open(config_path, "r") as fin:
             return cast(S3Config, json.load(fin))
 
     @classmethod
