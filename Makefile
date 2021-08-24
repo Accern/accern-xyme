@@ -73,7 +73,7 @@ CUR_TAG=`git describe --abbrev=10 --tags HEAD`
 git-check:
 	@git diff --exit-code 2>&1 >/dev/null && git diff --cached --exit-code 2>&1 >/dev/null || (echo "working copy is not clean" && exit 1)
 	@test -z `git ls-files --other --exclude-standard --directory` || (echo "there are untracked files" && exit 1)
-	@test `git rev-parse --abbrev-ref HEAD` = "master" || (grep -q "a|b|rc" <<< "$(VERSION)") || (echo "not on master" && exit 1)
+	@test `git rev-parse --abbrev-ref HEAD` = "master" || (grep -q -e "a|b|rc" <<< "$(VERSION)") || (echo "not on master" && exit 1)
 
 version-sync:
 	@test "${VERSION}" = "$(TS_VERSION)" || (echo "version not matching. VERSION=$(VERSION), TS_VERSION=$(TS_VERSION)" && exit 1)
