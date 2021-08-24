@@ -6,7 +6,7 @@ S3Config = TypedDict('S3Config', {
     "accern_aws_key": str,
     "accern_aws_access_key": str,
     "model_download_bucket": str,
-    "model_download_path": str,
+    "model_download_path": List[str],
 })
 DagDef = TypedDict('DagDef', {
     "company": str,

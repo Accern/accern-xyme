@@ -1007,21 +1007,21 @@ class XYMEClient:
         return cast(S3Config, cls.load_json(config_path))
 
     @classmethod
-    def download_s3_from_file(cls, dest_path: str, config_path: str) -> None:
+    def download_s3_from_file(
+            cls, dest_path: List[str], config_path: str) -> None:
         cls.download_s3(dest_path, cls.load_s3_config(config_path))
 
     @staticmethod
-    def download_s3(dest_path: str, config: S3Config) -> None:
+    def download_s3(dest_path: List[str], config: S3Config) -> None:
         import boto3
 
         s3 = boto3.client(
             "s3",
             aws_access_key_id=config["accern_aws_key"],
             aws_secret_access_key=config["accern_aws_access_key"])
-        s3.download_file(
-            config["model_download_bucket"],
-            config["model_download_path"],
-            dest_path)
+        assert len(dest_path) == len(config["model_download_path"])
+        for (dest, path) in zip(dest_path, config["model_download_path"]):
+            s3.download_file(config["model_download_bucket"], path, dest)
 
     def get_uuid(self) -> str:
         return cast(UUIDResponse, self.request_json(
