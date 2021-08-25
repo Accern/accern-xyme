@@ -2558,7 +2558,7 @@ export class BlobHandle {
         threshold: number,
         pos_label: string
     ): Promise<ModelInfo> {
-        return this.client.requestJSON<ModelInfo>({
+        return await this.client.requestJSON<ModelInfo>({
             method: METHOD_PUT,
             path: 'threshold',
             args: {
@@ -2570,7 +2570,7 @@ export class BlobHandle {
     }
 
     public async delModelThreshold(): Promise<ModelInfo> {
-        return this.client.requestJSON<ModelInfo>({
+        return await this.client.requestJSON<ModelInfo>({
             method: METHOD_PUT,
             path: 'del_threshold',
             args: {
