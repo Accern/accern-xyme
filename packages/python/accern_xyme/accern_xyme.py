@@ -93,7 +93,6 @@ from .types import (
     ModelInfo,
     ModelParamsResponse,
     ModelReleaseResponse,
-    ModelThreshold,
     ModelVersionResponse,
     NamespaceList,
     NamespaceUpdateSettings,
