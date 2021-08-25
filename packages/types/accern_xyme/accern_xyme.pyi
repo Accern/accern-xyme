@@ -9,6 +9,7 @@ from typing_extensions import Literal as Literal
 
 WVD: Any
 API_VERSION: int
+DEFAULT_URL: str
 DEFAULT_NAMESPACE: str
 METHOD_DELETE: str
 METHOD_FILE: str
@@ -277,4 +278,5 @@ class ComputationHandle:
     def __eq__(self, other: object) -> bool: ...
     def __ne__(self, other: object) -> bool: ...
 
+def default_xyme_client() -> XYMEClient: ...
 def create_xyme_client(url: str, token: Optional[str] = ..., namespace: str = ...) -> XYMEClient: ...
