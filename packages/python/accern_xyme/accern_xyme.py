@@ -136,6 +136,7 @@ else:
 
 
 API_VERSION = 4
+DEFAULT_URL = "http://localhost:8080"
 DEFAULT_NAMESPACE = "default"
 
 
@@ -2848,6 +2849,13 @@ class ComputationHandle:
         return not self.__eq__(other)
 
 # *** ComputationHandle ***
+
+
+def default_xyme_client() -> XYMEClient:
+    return create_xyme_client(
+        url=DEFAULT_URL,
+        token=os.getenv("XYME_SERVER_TOKEN"),
+        namespace=DEFAULT_NAMESPACE)
 
 
 def create_xyme_client(
