@@ -2553,6 +2553,42 @@ export class BlobHandle {
      * User can pass `externalOwner: true` to set the blob at toURI as
      * external-owned blob.
      */
+
+    public async setModelThreshold(
+        threshold: number,
+        pos_label: string
+    ): Promise<ModelInfo> {
+        return this.client.requestJSON<ModelInfo>({
+            method: METHOD_PUT,
+            path: 'threshold',
+            args: {
+                blob: this.uri,
+                threshold: threshold,
+                pos_label: pos_label,
+            },
+        });
+    }
+
+    public async delModelThreshold(): Promise<ModelInfo> {
+        return this.client.requestJSON<ModelInfo>({
+            method: METHOD_PUT,
+            path: 'del_threshold',
+            args: {
+                blob: this.uri,
+            },
+        });
+    }
+
+    public async getModelInfo(): Promise<ModelInfo> {
+        return await this.client.requestJSON<ModelInfo>({
+            method: METHOD_GET,
+            path: '/model_info',
+            args: {
+                blob: this.getURI(),
+            },
+        });
+    }
+
     public async copyTo(
         toURI: string,
         newOwner: NodeHandle | undefined,

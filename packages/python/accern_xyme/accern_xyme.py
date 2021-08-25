@@ -2274,29 +2274,6 @@ class BlobHandle:
                 "owner_node": owner.get_id(),
             }))
 
-    def set_model_threshold(
-            self,
-            threshold: float,
-            pos_label: str) -> ModelInfo:
-        return cast(ModelInfo, self._client.request_json(
-            METHOD_PUT, "/threshold", {
-                "blob": self.get_uri(),
-                "threshold": threshold,
-                "pos_label": pos_label,
-            }))
-
-    def del_model_threshold(self) -> ModelInfo:
-        return cast(ModelInfo, self._client.request_json(
-            METHOD_PUT, "/del_threshold", {
-                "blob": self.get_uri(),
-            }))
-
-    def get_model_info(self) -> ModelInfo:
-        return cast(ModelInfo, self._client.request_json(
-            METHOD_GET, "/model_info", {
-                "blob": self.get_uri(),
-            }))
-
     def get_owner(self) -> BlobOwner:
         if self._owner is None:
             self._owner = self._client.get_blob_owner(self.get_uri())
@@ -2312,6 +2289,29 @@ class BlobHandle:
     def get_owner_node(self) -> str:
         owner = self.get_owner()
         return owner["owner_node"]
+
+    def set_model_threshold(
+        self,
+        threshold: float,
+        pos_label: str) -> ModelInfo:
+    return cast(ModelInfo, self._client.request_json(
+        METHOD_PUT, "/threshold", {
+            "blob": self.get_uri(),
+            "threshold": threshold,
+            "pos_label": pos_label,
+        }))
+
+    def del_model_threshold(self) -> ModelInfo:
+        return cast(ModelInfo, self._client.request_json(
+            METHOD_PUT, "/del_threshold", {
+                "blob": self.get_uri(),
+            }))
+
+    def get_model_info(self) -> ModelInfo:
+        return cast(ModelInfo, self._client.request_json(
+            METHOD_GET, "/model_info", {
+                "blob": self.get_uri(),
+            }))
 
     def copy_to(
             self,
