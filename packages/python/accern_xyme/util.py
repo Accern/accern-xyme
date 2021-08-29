@@ -54,6 +54,19 @@ def is_verbose() -> bool:
     return VERBOSE
 
 
+def to_bool(value: Union[bool, float, int, str]) -> bool:
+    value = f"{value}".lower()
+    if value == "true":
+        return True
+    if value == "false":
+        return False
+    try:
+        return bool(int(float(value)))
+    except ValueError:
+        pass
+    raise ValueError(f"{value} cannot be interpreted as bool")
+
+
 MINUTE = 60.0
 HOUR = 60.0 * MINUTE
 DAY = 24.0 * HOUR
