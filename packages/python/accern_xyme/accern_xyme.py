@@ -2378,8 +2378,7 @@ class BlobHandle:
             is_clf: bool,
             model_name: str,
             version: int,
-            maybe_classes: Optional[List[str]],
-            maybe_range: Tuple[Optional[float], Optional[float]],
+            model_params: Dict[str, Any],
             delete_later_versions: bool,
             full_init: bool) -> UploadFilesResponse:
         uri = self._tmp_uri
@@ -2387,13 +2386,12 @@ class BlobHandle:
             raise ValueError("tmp_uri is None")
         return cast(UploadFilesResponse, self._client.request_json(
             METHOD_POST, "/finish_sklike", {
-                "classes": maybe_classes,
+                "model_params": model_params,
                 "full_init": full_init,
                 "is_clf": is_clf,
                 "model_uri": self.get_uri(),
                 "model_name": model_name,
                 "version": version,
-                "output_range": maybe_range,
                 "owner_dag": self.get_owner_dag(),
                 "owner_node": self.get_owner_node(),
                 "tmp_uri": uri,
@@ -2458,19 +2456,15 @@ class BlobHandle:
             is_clf: bool,
             model_name: str,
             version: int = -1,
-            maybe_classes: Optional[List[str]] = None,
-            maybe_range: Optional[
-                Tuple[Optional[float], Optional[float]]] = None,
+            model_params: Dict[str, Any] = {},
             delete_later_versions: bool = False,
             full_init: bool = True) -> UploadFilesResponse:
         try:
             self._upload_file(model_obj, ext="pkl")
-            output_range = (None, None) if maybe_range is None else maybe_range
             return self._finish_upload_sklike(
                 model_name=model_name,
                 version=version,
-                maybe_classes=maybe_classes,
-                maybe_range=output_range,
+                model_params=model_params,
                 xcols=xcols,
                 is_clf=is_clf,
                 delete_later_versions=delete_later_versions,
@@ -2483,19 +2477,19 @@ class BlobHandle:
             model: Any,
             xcols: List[str],
             is_clf: bool,
+            model_name: str = None,
             version: int = -1,
-            maybe_classes: Optional[List[str]] = None,
-            maybe_range: Optional[
-                Tuple[Optional[float], Optional[float]]] = None,
+            model_params: Dict[str, Any] = {},
             delete_later_versions: bool = False,
             full_init: bool = True) -> UploadFilesResponse:
+        if model_name is None:
+            try:
+                model_name = type(model).__name__
+            except Exception as e:
+                raise ValueError(f"can not infer model name {model}") from e
         try:
-            model_name = type(model).__name__
-        except Exception as e:
-            raise ValueError(f"can not infer model name {model}") from e
-        try:
-            if is_clf and maybe_classes is None:
-                maybe_classes = model.classes_
+            if is_clf and "classes" not in model_params:
+                model_params["classes"] = model.classes_
         except Exception as e:
             raise ValueError(f"can not infer classes from {model}") from e
         dump = pickle.dumps(model, pickle.HIGHEST_PROTOCOL)
@@ -2506,15 +2500,18 @@ class BlobHandle:
                 is_clf,
                 model_name,
                 version,
-                maybe_classes,
-                maybe_range,
+                model_params,
                 delete_later_versions,
                 full_init)
 
-    def convert_model(self, reload: bool = True) -> ModelReleaseResponse:
+    def convert_model(
+            self,
+            version: Optional[int] = None,
+            reload: bool = True) -> ModelReleaseResponse:
         return cast(ModelReleaseResponse, self._client.request_json(
             METHOD_POST, "/convert_model", {
                 "blob": self.get_uri(),
+                "version": version,
                 "reload": reload,
             }))
 
@@ -2603,7 +2600,7 @@ class BlobHandle:
             name=name)
 
     def get_model_version_tags(self) -> ModelVersionTagsResponse:
-        return cast(ModelVersionResponse, self._client.request_json(
+        return cast(ModelVersionTagsResponse, self._client.request_json(
             METHOD_GET, "/model_version_tags", {
                 "model_uri": self.get_uri(),
             }))
