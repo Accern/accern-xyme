@@ -345,6 +345,7 @@ export declare class CustomCodeBlobHandle extends BlobHandle {
     setCustomImports(modules: string[][]): Promise<NodeCustomImports>;
     getCustomImports(): Promise<NodeCustomImports>;
     setCustomCode(func: string, funcName: string): Promise<NodeCustomCode>;
+    setRawCustomCode(rawCode: string): Promise<NodeCustomCode>;
     getCustomCode(): Promise<NodeCustomCode>;
 }
 export declare class JSONBlobHandle extends BlobHandle {
