@@ -246,6 +246,7 @@ export declare class NodeHandle {
     getLogs(): Promise<string>;
     getTiming(): Promise<Timing[]>;
     readBlob(key: string, chunk: number | undefined, forceRefresh?: boolean): Promise<BlobHandle>;
+    readBlobNonblocking(key: string, chunk: number | undefined, forceRefresh?: boolean): Promise<string>;
     read(key: string, chunk: number | null, forceRefresh?: boolean): Promise<ByteResponse | null>;
     /**
      * Read and combine all output chunks.
