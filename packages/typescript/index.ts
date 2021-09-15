@@ -3017,9 +3017,7 @@ export class CustomCodeBlobHandle extends BlobHandle {
         });
     }
 
-    public async setRawCustomCode(
-        rawCode: string
-    ): Promise<NodeCustomCode> {
+    public async setRawCustomCode(rawCode: string): Promise<NodeCustomCode> {
         return await this.client.requestJSON({
             method: METHOD_PUT,
             path: '/custom_code',
