@@ -2243,6 +2243,28 @@ export class NodeHandle {
         return new BlobHandle(this.client, uri, true);
     }
 
+    public async readBlobNonblocking(
+        key: string,
+        chunk: number | undefined,
+        forceRefresh?: boolean
+    ): Promise<string> {
+        const redis_key = await this.client
+            .requestJSON<ReadNode>({
+                method: METHOD_POST,
+                path: '/read_node',
+                args: {
+                    dag: this.getDag().getURI(),
+                    node: this.getId(),
+                    key,
+                    chunk,
+                    is_blocking: false,
+                    force_refresh: forceRefresh || false,
+                },
+            })
+            .then((response) => response.redis_key);
+        return redis_key;
+    }
+
     public async read(
         key: string,
         chunk: number | null,
@@ -3006,6 +3028,18 @@ export class CustomCodeBlobHandle extends BlobHandle {
         funcName: string
     ): Promise<NodeCustomCode> {
         const rawCode = formCustomCode(func, funcName);
+        return await this.client.requestJSON({
+            method: METHOD_PUT,
+            path: '/custom_code',
+            args: {
+                dag: await this.getOwnerDag(),
+                node: await this.getOwnerNode(),
+                code: rawCode,
+            },
+        });
+    }
+
+    public async setRawCustomCode(rawCode: string): Promise<NodeCustomCode> {
         return await this.client.requestJSON({
             method: METHOD_PUT,
             path: '/custom_code',

@@ -246,6 +246,7 @@ export declare class NodeHandle {
     getLogs(): Promise<string>;
     getTiming(): Promise<Timing[]>;
     readBlob(key: string, chunk: number | undefined, forceRefresh?: boolean): Promise<BlobHandle>;
+    readBlobNonblocking(key: string, chunk: number | undefined, forceRefresh?: boolean): Promise<string>;
     read(key: string, chunk: number | null, forceRefresh?: boolean): Promise<ByteResponse | null>;
     /**
      * Read and combine all output chunks.
@@ -345,6 +346,7 @@ export declare class CustomCodeBlobHandle extends BlobHandle {
     setCustomImports(modules: string[][]): Promise<NodeCustomImports>;
     getCustomImports(): Promise<NodeCustomImports>;
     setCustomCode(func: string, funcName: string): Promise<NodeCustomCode>;
+    setRawCustomCode(rawCode: string): Promise<NodeCustomCode>;
     getCustomCode(): Promise<NodeCustomCode>;
 }
 export declare class JSONBlobHandle extends BlobHandle {
