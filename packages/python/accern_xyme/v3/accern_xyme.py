@@ -1779,7 +1779,13 @@ class PipelineHandle:
             self,
             group_id: Optional[str] = None,
             reset: Optional[str] = None,
+            warnings_io: Optional[IO[Any]] = sys.stderr,
             **kwargs: Any) -> KafkaGroup:
+        if kwargs and warnings_io is not None:
+            warnings_io.write(
+                f"WARNING: the provided kwargs {kwargs} will "
+                "get ignored on the server side.")
+            warnings_io.flush()
         return cast(KafkaGroup, self._client._request_json(
             METHOD_PUT, "/kafka_group", {
                 "pipeline": self._pipe_id,

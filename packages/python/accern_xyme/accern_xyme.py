@@ -55,6 +55,7 @@ from .util import (
     merge_ctype,
     safe_opt_num,
     ServerSideError,
+    to_bool,
 )
 from .types import (
     AllowedCustomImports,
@@ -114,6 +115,7 @@ from .types import (
     QueueStatsResponse,
     QueueStatus,
     ReadNode,
+    S3Config,
     SetNamedSecret,
     SettingsObj,
     TaskStatus,
@@ -134,6 +136,7 @@ else:
 
 
 API_VERSION = 4
+DEFAULT_URL = "http://localhost:8080"
 DEFAULT_NAMESPACE = "default"
 
 
@@ -152,7 +155,7 @@ INPUT_ZIP_EXT = ".zip"
 INPUT_EXT = [INPUT_ZIP_EXT, INPUT_CSV_EXT, INPUT_TSV_EXT]
 
 
-FUNC = Callable[[Any], Any]
+FUNC = Callable[..., Any]
 CUSTOM_NODE_TYPES = {
     "custom_data",
     "custom_json",
@@ -700,7 +703,18 @@ class XYMEClient:
             self,
             dag_uri: str,
             dest_uri: Optional[str] = None,
-            copy_nonowned_blobs: bool = True) -> str:
+            copy_nonowned_blobs: Optional[bool] = None,
+            retain_nonowned_blobs: bool = False,
+            warnings_io: Optional[IO[Any]] = sys.stderr) -> str:
+        if copy_nonowned_blobs is None:
+            copy_nonowned_blobs = not retain_nonowned_blobs
+        elif warnings_io is not None:
+            warnings_io.write(
+                "copy_nonowned_blobs is deprecated; "
+                "use retain_nonowned_blobs instead\n")
+            warnings_io.flush()
+        # FIXME: !!!xyme-backend bug!!!
+        copy_nonowned_blobs = not copy_nonowned_blobs
         args = {
             "dag": dag_uri,
             "copy_nonowned_blobs": copy_nonowned_blobs,
@@ -962,6 +976,53 @@ class XYMEClient:
         if maybe_parse is not None:
             return maybe_parse
         return res
+
+    @staticmethod
+    def get_env_str(key: str, default: Optional[str] = None) -> str:
+        res = os.getenv(key, default=default)
+        if res is None:
+            raise ValueError(f"environment variable {key} is not set")
+        return f"{res}"
+
+    @staticmethod
+    def get_env_int(key: str, default: Optional[int] = None) -> int:
+        res = os.getenv(key, default=default)
+        if res is None:
+            raise ValueError(f"environment variable {key} is not set")
+        return int(res)
+
+    @staticmethod
+    def get_env_bool(key: str, default: Optional[bool] = None) -> bool:
+        res = os.getenv(key, default=default)
+        if res is None:
+            raise ValueError(f"environment variable {key} is not set")
+        return to_bool(res)
+
+    @staticmethod
+    def load_json(json_path: str) -> Dict[str, Any]:
+        with open(json_path, "r") as fin:
+            return json.load(fin)
+
+    @classmethod
+    def load_s3_config(cls, config_path: str) -> S3Config:
+        return cast(S3Config, cls.load_json(config_path))
+
+    @classmethod
+    def download_s3_from_file(
+            cls, dest_path: List[str], config_path: str) -> None:
+        cls.download_s3(dest_path, cls.load_s3_config(config_path))
+
+    @staticmethod
+    def download_s3(dest_path: List[str], config: S3Config) -> None:
+        import boto3
+
+        s3 = boto3.client(
+            "s3",
+            aws_access_key_id=config["accern_aws_key"],
+            aws_secret_access_key=config["accern_aws_access_key"])
+        assert len(dest_path) == len(config["model_download_path"])
+        for (dest, path) in zip(dest_path, config["model_download_path"]):
+            s3.download_file(config["model_download_bucket"], path, dest)
 
     def get_uuid(self) -> str:
         return cast(UUIDResponse, self.request_json(
@@ -2811,6 +2872,13 @@ class ComputationHandle:
         return not self.__eq__(other)
 
 # *** ComputationHandle ***
+
+
+def default_xyme_client() -> XYMEClient:
+    return create_xyme_client(
+        url=DEFAULT_URL,
+        token=os.getenv("XYME_SERVER_TOKEN"),
+        namespace=DEFAULT_NAMESPACE)
 
 
 def create_xyme_client(
