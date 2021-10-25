@@ -41,10 +41,16 @@ ESConnectorSettings = TypedDict('ESConnectorSettings', {
     "host": str,
     "password": str,
 })
+DremioConnectorSettings = TypedDict('DremioConnectorSettings', {
+    "host": str,
+    "user": str,
+    "password": str,
+})
 SettingsObj = TypedDict('SettingsObj', {
     "s3": Dict[str, S3BucketSettings],
     "triton": Dict[str, S3BucketSettings],
     "es": Dict[str, ESConnectorSettings],
+    "dremio": Dict[str, DremioConnectorSettings],
 }, total=False)
 TaskType = Literal[
     "node:cpubig",
