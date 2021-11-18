@@ -2010,7 +2010,7 @@ class NodeHandle:
         content = self.read_blob(key, chunk, force_refresh).get_content()
         if filter_id and isinstance(content, pd.DataFrame):
             content = pd.DataFrame(content[content["_row_id"] >= 0])
-            content = content.set_index("index", drop=True)
+            content = content.set_index("_index", drop=True)
             content.index.name = None
         return content
 
@@ -2040,7 +2040,7 @@ class NodeHandle:
         content = merge_ctype(res, ctype)
         if filter_id and isinstance(content, pd.DataFrame):
             content = pd.DataFrame(content[content["_row_id"] >= 0])
-            content = content.set_index("index", drop=True)
+            content = content.set_index("_index", drop=True)
             content.index.name = None
         return content
 
