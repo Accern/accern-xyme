@@ -158,6 +158,7 @@ export type BlobType =
 
 export interface VersionResponse {
     api_version: number;
+    api_version_minor: number;
     backends?: Backends;
     caller_api_version: number;
     time: string;

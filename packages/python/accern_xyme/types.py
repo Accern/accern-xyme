@@ -139,6 +139,7 @@ Backends = TypedDict('Backends', {
 })
 VersionResponse = TypedDict('VersionResponse', {
     "api_version": int,
+    "api_version_minor": int,
     "backends": Optional[Backends],
     "caller_api_version": int,
     "time": str,
