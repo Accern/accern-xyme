@@ -540,7 +540,7 @@ class StdoutWrapper:
 # *** StdoutWrapper ***
 
 
-class MetricWrapper(collections.abc.Sequence):
+class MetricWrapper(collections.Sequence):
     def get_xaxis(self) -> str:
         raise NotImplementedError()
 
@@ -2335,7 +2335,7 @@ class JobHandle:
 InspectValue = Union['InspectPath', bool, int, float, str, None]
 
 
-class InspectPath(collections.abc.Mapping):
+class InspectPath(collections.Mapping):
     def __init__(
             self,
             clazz: str,
