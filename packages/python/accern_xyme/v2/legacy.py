@@ -21,13 +21,6 @@ import time
 import threading
 import contextlib
 import collections
-if TYPE_CHECKING:
-    cabc = collections
-else:
-    try:
-        cabc = collections.abc
-    except AttributeError:
-        cabc = collections
 from io import BytesIO
 import requests
 import pandas as pd
@@ -44,6 +37,15 @@ from accern_xyme.v2.util import (
     get_progress_bar,
     get_file_hash,
 )
+
+
+if TYPE_CHECKING:
+    cabc = collections
+else:
+    try:
+        cabc = collections.abc
+    except AttributeError:
+        cabc = collections
 
 
 API_VERSION = 2
