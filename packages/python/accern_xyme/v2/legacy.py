@@ -9,6 +9,7 @@ from typing import (
     Optional,
     Set,
     Tuple,
+    TYPE_CHECKING,
     Union,
 )
 import io
@@ -20,6 +21,13 @@ import time
 import threading
 import contextlib
 import collections
+if TYPE_CHECKING:
+    cabc = collections
+else:
+    try:
+        cabc = collections.abc
+    except AttributeError:
+        cabc = collections
 from io import BytesIO
 import requests
 import pandas as pd
@@ -540,7 +548,7 @@ class StdoutWrapper:
 # *** StdoutWrapper ***
 
 
-class MetricWrapper(collections.Sequence):
+class MetricWrapper(cabc.Sequence):
     def get_xaxis(self) -> str:
         raise NotImplementedError()
 
@@ -2335,7 +2343,7 @@ class JobHandle:
 InspectValue = Union['InspectPath', bool, int, float, str, None]
 
 
-class InspectPath(collections.Mapping):
+class InspectPath(cabc.Mapping):
     def __init__(
             self,
             clazz: str,

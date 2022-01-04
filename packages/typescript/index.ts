@@ -186,7 +186,7 @@ export default class XYMEClient {
 
     public async getAPIVersionMinor(): Promise<number> {
         if (isUndefined(this.apiVersionMinor)) {
-            this.getAPIVersion();
+            await this.getAPIVersion();
             if (isUndefined(this.apiVersionMinor)) {
                 throw new Error('error initializing apiVersionMinor');
             }
