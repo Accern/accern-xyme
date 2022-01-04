@@ -146,6 +146,7 @@ interface XYMERequestArgument {
 
 export default class XYMEClient {
     apiVersion?: number;
+    apiVersionMinor?: number;
     autoRefresh = true;
     dagCache: WeakMap<{ ['uri']: string }, DagHandle>;
     namespace: string;
@@ -170,11 +171,36 @@ export default class XYMEClient {
                 );
             }
             this.apiVersion = serverVersions.api_version;
-        }
-        if (isUndefined(this.apiVersion)) {
-            throw new Error('no apiVersion');
+            const apiVersionMinor = serverVersions.api_version_minor;
+            if (isUndefined(apiVersionMinor)) {
+                this.apiVersionMinor = 0;
+            } else {
+                this.apiVersionMinor = apiVersionMinor;
+            }
+            if (isUndefined(this.apiVersion)) {
+                throw new Error('no apiVersion');
+            }
         }
         return this.apiVersion;
+    }
+
+    public async getAPIVersionMinor(): Promise<number> {
+        if (isUndefined(this.apiVersionMinor)) {
+            this.getAPIVersion();
+            if (isUndefined(this.apiVersionMinor)) {
+                throw new Error('error initializing apiVersionMinor');
+            }
+        }
+        return this.apiVersionMinor;
+    }
+
+    public async hasVersion(major: number, minor: number): Promise<boolean> {
+        const apiVersion = await this.getAPIVersion();
+        const apiVersionMinor = await this.getAPIVersionMinor();
+        if (apiVersion > major) {
+            return true;
+        }
+        return apiVersion == major && apiVersionMinor >= minor;
     }
 
     private setAutoRefresh(autoRefresh: boolean) {
@@ -2263,6 +2289,14 @@ export class NodeHandle {
             })
             .then((response) => response.redis_key);
         return redis_key;
+    }
+
+    public async getIndexCol(): Promise<string> {
+        return (await this.client.hasVersion(4, 1)) ? '_index' : 'index';
+    }
+
+    public async getRowIdCol(): Promise<string> {
+        return (await this.client.hasVersion(4, 1)) ? '_row_id' : 'row_id';
     }
 
     public async read(
