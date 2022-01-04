@@ -29,6 +29,7 @@ interface XYMERequestArgument {
 }
 export default class XYMEClient {
     apiVersion?: number;
+    apiVersionMinor?: number;
     autoRefresh: boolean;
     dagCache: WeakMap<{
         ['uri']: string;
@@ -41,6 +42,8 @@ export default class XYMEClient {
     url: string;
     constructor(config: XYMEConfig);
     getAPIVersion(): Promise<number>;
+    getAPIVersionMinor(): Promise<number>;
+    hasVersion(major: number, minor: number): Promise<boolean>;
     private setAutoRefresh;
     isAutoRefresh(): boolean;
     refresh(): void;
@@ -247,6 +250,8 @@ export declare class NodeHandle {
     getTiming(): Promise<Timing[]>;
     readBlob(key: string, chunk: number | undefined, forceRefresh?: boolean): Promise<BlobHandle>;
     readBlobNonblocking(key: string, chunk: number | undefined, forceRefresh?: boolean): Promise<string>;
+    getIndexCol(): Promise<string>;
+    getRowIdCol(): Promise<string>;
     read(key: string, chunk: number | null, forceRefresh?: boolean): Promise<ByteResponse | null>;
     /**
      * Read and combine all output chunks.
