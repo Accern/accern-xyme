@@ -2364,7 +2364,7 @@ class BlobHandle:
 
     def del_model_threshold(self) -> ModelInfo:
         return cast(ModelInfo, self._client.request_json(
-            METHOD_PUT, "/del_threshold", {
+            METHOD_DELETE, "/threshold", {
                 "blob": self.get_uri(),
             }))
 
