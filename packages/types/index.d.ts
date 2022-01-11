@@ -300,6 +300,9 @@ export declare class BlobHandle {
      * User can pass `externalOwner: true` to set the blob at toURI as
      * external-owned blob.
      */
+    setModelThreshold(threshold: number, pos_label: string): Promise<ModelInfo>;
+    delModelThreshold(): Promise<ModelInfo>;
+    getModelInfo(): Promise<ModelInfo>;
     copyTo(toURI: string, newOwner: NodeHandle | undefined, externalOwner?: boolean): Promise<BlobHandle>;
     downloadZip(toPath?: string): Promise<Buffer | undefined>;
     performUploadAction(action: string, additional: {
