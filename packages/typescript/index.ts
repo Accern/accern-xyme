@@ -2611,8 +2611,8 @@ export class BlobHandle {
 
     public async delModelThreshold(): Promise<ModelInfo> {
         return await this.client.requestJSON<ModelInfo>({
-            method: METHOD_PUT,
-            path: 'del_threshold',
+            method: METHOD_DELETE,
+            path: 'threshold',
             args: {
                 blob: this.uri,
             },
