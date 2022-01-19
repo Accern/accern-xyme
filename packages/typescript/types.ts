@@ -1,8 +1,12 @@
+export interface URIPrefix {
+    connector: string;
+    address: string;
+}
 export interface DagDef {
     name: string;
     company: string;
     nodes: Partial<NodeDef>[];
-    state: string;
+    uri_prefix?: URIPrefix;
     high_priority: boolean;
     queue_mng?: string;
     default_input_key?: string;
