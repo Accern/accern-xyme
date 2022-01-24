@@ -9,6 +9,7 @@ from typing import (
     Optional,
     Set,
     Tuple,
+    TYPE_CHECKING,
     Union,
 )
 import io
@@ -36,6 +37,15 @@ from accern_xyme.v2.util import (
     get_progress_bar,
     get_file_hash,
 )
+
+
+if TYPE_CHECKING:
+    cabc = collections
+else:
+    try:
+        cabc = collections.abc
+    except AttributeError:
+        cabc = collections
 
 
 API_VERSION = 2
@@ -540,7 +550,7 @@ class StdoutWrapper:
 # *** StdoutWrapper ***
 
 
-class MetricWrapper(collections.abc.Sequence):
+class MetricWrapper(cabc.Sequence):
     def get_xaxis(self) -> str:
         raise NotImplementedError()
 
@@ -2335,7 +2345,7 @@ class JobHandle:
 InspectValue = Union['InspectPath', bool, int, float, str, None]
 
 
-class InspectPath(collections.abc.Mapping):
+class InspectPath(cabc.Mapping):
     def __init__(
             self,
             clazz: str,

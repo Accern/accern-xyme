@@ -35,10 +35,17 @@ export interface ESConnectorSettings {
     password: string;
 }
 
+export interface DremioAuthSettings {
+    host: string;
+    user: string;
+    password: string;
+}
+
 export interface SettingsObj {
     es?: { [key: string]: ESConnectorSettings };
     s3?: { [key: string]: S3BucketSettings };
     triton?: { [key: string]: S3BucketSettings };
+    dremio?: { [key: string]: DremioAuthSettings };
 }
 
 export type TaskType = 'node:cpubig' | 'node:cpusmall';
@@ -151,6 +158,7 @@ export type BlobType =
 
 export interface VersionResponse {
     api_version: number;
+    api_version_minor: number;
     backends?: Backends;
     caller_api_version: number;
     time: string;
