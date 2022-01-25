@@ -41,10 +41,16 @@ ESConnectorSettings = TypedDict('ESConnectorSettings', {
     "host": str,
     "password": str,
 })
+DremioAuthSettings = TypedDict('DremioAuthSettings', {
+    "host": str,
+    "user": str,
+    "password": str,
+})
 SettingsObj = TypedDict('SettingsObj', {
     "s3": Dict[str, S3BucketSettings],
     "triton": Dict[str, S3BucketSettings],
     "es": Dict[str, ESConnectorSettings],
+    "dremio": Dict[str, DremioAuthSettings],
 }, total=False)
 TaskType = Literal[
     "node:cpubig",
@@ -133,6 +139,7 @@ Backends = TypedDict('Backends', {
 })
 VersionResponse = TypedDict('VersionResponse', {
     "api_version": int,
+    "api_version_minor": int,
     "backends": Optional[Backends],
     "caller_api_version": int,
     "time": str,
