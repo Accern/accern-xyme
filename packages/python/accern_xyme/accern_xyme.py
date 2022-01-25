@@ -198,32 +198,20 @@ class XYMEClient:
         self._dag_cache: WVD = weakref.WeakValueDictionary()
         self._node_defs: Optional[Dict[str, NodeDefInfo]] = None
 
-        def get_version() -> Tuple[int, int]:
+        def get_version() -> int:
             server_version = self.get_server_version()
             try:
-                return (
-                    int(server_version["api_version"]),
-                    int(server_version.get("api_version_minor", 0)),
-                )
+                return int(server_version["api_version"])
             except (ValueError, KeyError) as e:
                 raise LegacyVersion(1) from e
 
-        api_version, api_version_minor = get_version()
+        api_version = get_version()
         if api_version < API_VERSION:
             raise LegacyVersion(api_version)
         self._api_version = api_version
-        self._api_version_minor = api_version_minor
 
     def get_api_version(self) -> int:
         return self._api_version
-
-    def get_api_version_minor(self) -> int:
-        return self._api_version_minor
-
-    def has_version(self, major: int, minor: int) -> bool:
-        if self._api_version > major:
-            return True
-        return self._api_version == major and self._api_version_minor >= minor
 
     def set_auto_refresh(self, is_auto_refresh: bool) -> None:
         self._auto_refresh = is_auto_refresh
@@ -2013,12 +2001,6 @@ class NodeHandle:
             raise ValueError(f"uri is None: {res}")
         return BlobHandle(self._client, uri, is_full=True)
 
-    def get_index_col(self) -> str:
-        return "_index" if self._client.has_version(4, 1) else "index"
-
-    def get_row_id_col(self) -> str:
-        return "_row_id" if self._client.has_version(4, 1) else "row_id"
-
     def read(
             self,
             key: str,
@@ -2027,11 +2009,9 @@ class NodeHandle:
             filter_id: bool = True) -> Optional[ByteResponse]:
         content = self.read_blob(key, chunk, force_refresh).get_content()
         if filter_id and isinstance(content, pd.DataFrame):
-            df: pd.DataFrame = content
-            df = df[df[self.get_row_id_col()] >= 0]
-            df = df.set_index(self.get_index_col(), drop=True)
-            df.index.name = None
-            content = df.copy()
+            content = pd.DataFrame(content[content["_row_id"] >= 0])
+            content = content.set_index("index", drop=True)
+            content.index.name = None
         return content
 
     def read_all(
@@ -2059,11 +2039,9 @@ class NodeHandle:
             return None
         content = merge_ctype(res, ctype)
         if filter_id and isinstance(content, pd.DataFrame):
-            df: pd.DataFrame = content
-            df = df[df[self.get_row_id_col()] >= 0]
-            df = df.set_index(self.get_index_col(), drop=True)
-            df.index.name = None
-            content = df.copy()
+            content = pd.DataFrame(content[content["row_id"] >= 0])
+            content = content.set_index("index", drop=True)
+            content.index.name = None
         return content
 
     def clear(self) -> NodeState:
