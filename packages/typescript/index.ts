@@ -2648,7 +2648,7 @@ export class BlobHandle {
             method: METHOD_DELETE,
             path: '/threshold',
             args: {
-                blob: this.uri,
+                blob: this.getURI(),
             },
         });
     }
