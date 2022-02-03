@@ -2373,6 +2373,29 @@ class BlobHandle:
         owner = self.get_owner()
         return owner["owner_node"]
 
+    def set_model_threshold(
+            self,
+            threshold: float,
+            pos_label: str) -> ModelInfo:
+        return cast(ModelInfo, self._client.request_json(
+            METHOD_PUT, "/threshold", {
+                "blob": self.get_uri(),
+                "threshold": threshold,
+                "pos_label": pos_label,
+            }))
+
+    def del_model_threshold(self) -> ModelInfo:
+        return cast(ModelInfo, self._client.request_json(
+            METHOD_DELETE, "/threshold", {
+                "blob": self.get_uri(),
+            }))
+
+    def get_model_info(self) -> ModelInfo:
+        return cast(ModelInfo, self._client.request_json(
+            METHOD_GET, "/model_info", {
+                "blob": self.get_uri(),
+            }))
+
     def copy_to(
             self,
             to_uri: str,
