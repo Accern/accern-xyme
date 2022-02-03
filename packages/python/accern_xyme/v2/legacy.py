@@ -20,7 +20,7 @@ import json
 import time
 import threading
 import contextlib
-import collections
+import collections.abc
 from io import BytesIO
 import requests
 import pandas as pd
