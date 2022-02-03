@@ -8,6 +8,10 @@ S3Config = TypedDict('S3Config', {
     "model_download_bucket": str,
     "model_download_path": List[str],
 })
+URIPrefix = TypedDict('URIPrefix', {
+    "connector": str,
+    "address": str,
+})
 DagDef = TypedDict('DagDef', {
     "company": str,
     "default_input_key": Optional[str],
@@ -16,7 +20,7 @@ DagDef = TypedDict('DagDef', {
     "name": str,
     "nodes": List['NodeDef'],
     "queue_mng": Optional[str],
-    "state": str,
+    "uri_prefix": Optional[URIPrefix],
 })
 NodeDef = TypedDict('NodeDef', {
     "blobs": Dict[str, str],
