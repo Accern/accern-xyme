@@ -2763,30 +2763,6 @@ class CSVBlobHandle(BlobHandle):
                 io_in.close()
             self._clear_upload()
 
-    def add_from_file(
-            self,
-            filename: str,
-            progress_bar: Optional[IO[Any]] = sys.stdout,
-            ) -> Optional[UploadFilesResponse]:
-        fname = filename
-        if filename.endswith(INPUT_ZIP_EXT):
-            fname = filename[:-len(INPUT_ZIP_EXT)]
-        ext_pos = fname.rfind(".")
-        if ext_pos >= 0:
-            ext = filename[ext_pos + 1:]  # full filename
-        else:
-            raise ValueError("could not determine extension")
-        try:
-            with open(filename, "rb") as fbuff:
-                self._upload_file(
-                    fbuff,
-                    ext=ext,
-                    progress_bar=progress_bar)
-            return self.finish_csv_upload(filename)
-        finally:
-            self._clear_upload()
-
-
 # *** CSVBlobHandle ***
 
 
