@@ -2107,6 +2107,12 @@ class NodeHandle:
         blob.set_local_owner(owner)
         return blob
 
+    def get_torch_blob(self, key: str = "orig") -> 'TorchBlobHandle':
+        uri, owner = self.get_blob_uri(key, "torch")
+        blob = TorchBlobHandle(self._client, uri, is_full=False)
+        blob.set_local_owner(owner)
+        return blob
+
     def get_json_blob(self, key: str = "jsons_in") -> 'JSONBlobHandle':
         uri, owner = self.get_blob_uri(key, "json")
         blob = JSONBlobHandle(self._client, uri, is_full=False)
@@ -2757,7 +2763,73 @@ class CSVBlobHandle(BlobHandle):
                 io_in.close()
             self._clear_upload()
 
+    def add_from_file(
+            self,
+            filename: str,
+            progress_bar: Optional[IO[Any]] = sys.stdout,
+            ) -> Optional[UploadFilesResponse]:
+        fname = filename
+        if filename.endswith(INPUT_ZIP_EXT):
+            fname = filename[:-len(INPUT_ZIP_EXT)]
+        ext_pos = fname.rfind(".")
+        if ext_pos >= 0:
+            ext = filename[ext_pos + 1:]  # full filename
+        else:
+            raise ValueError("could not determine extension")
+        try:
+            with open(filename, "rb") as fbuff:
+                self._upload_file(
+                    fbuff,
+                    ext=ext,
+                    progress_bar=progress_bar)
+            return self.finish_csv_upload(filename)
+        finally:
+            self._clear_upload()
+
+
 # *** CSVBlobHandle ***
+
+
+class TorchBlobHandle(BlobHandle):
+    def finish_torch_upload(
+            self, filename: Optional[str] = None) -> UploadFilesResponse:
+        tmp_uri = self._tmp_uri
+        if tmp_uri is None:
+            raise ValueError("tmp_uri is None")
+        args: Dict[str, Optional[Union[str, int]]] = {
+            "tmp_uri": tmp_uri,
+            "torch_uri": self.get_uri(),
+            "owner_dag": self.get_owner_dag(),
+            "owner_node": self.get_owner_node(),
+            "filename": filename,
+        }
+        return cast(UploadFilesResponse, self._client.request_json(
+            METHOD_POST, "/finish_torch", args))
+
+    def add_from_file(
+            self,
+            filename: str,
+            progress_bar: Optional[IO[Any]] = sys.stdout,
+            ) -> Optional[UploadFilesResponse]:
+        fname = filename
+        if filename.endswith(INPUT_ZIP_EXT):
+            fname = filename[:-len(INPUT_ZIP_EXT)]
+        ext_pos = fname.rfind(".")
+        if ext_pos >= 0:
+            ext = filename[ext_pos + 1:]  # full filename
+        else:
+            raise ValueError("could not determine extension")
+        try:
+            with open(filename, "rb") as fbuff:
+                self._upload_file(
+                    fbuff,
+                    ext=ext,
+                    progress_bar=progress_bar)
+            return self.finish_torch_upload(filename)
+        finally:
+            self._clear_upload()
+
+# *** TorchBlobHandle ***
 
 
 class JSONBlobHandle(BlobHandle):
