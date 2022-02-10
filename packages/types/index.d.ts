@@ -2,7 +2,7 @@
 /// <reference lib="dom" />
 import { Readable } from 'stream';
 import { promises as fpm } from 'fs';
-import { AllowedCustomImports, BlobOwner, BlobTypeResponse, CacheStats, DagDef, DagInfo, DagList, DagPrettyNode, DictStrStr, DynamicFormat, InstanceStatus, KafkaGroup, KafkaOffsets, KafkaThroughput, KafkaTopics, KnownBlobs, MinimalQueueStatsResponse, ModelInfo, ModelParamsResponse, ModelReleaseResponse, ModelVersionResponse, NodeCustomImports, NodeDef, NodeDefInfo, NodeInfo, NodeState, NodeTypes, NodeUserColumnsResponse, QueueStatsResponse, QueueStatus, SettingsObj, TaskStatus, Timing, TimingResult, UploadFilesResponse, VersionResponse, DeleteBlobResponse, NodeCustomCode } from './types';
+import { AllowedCustomImports, BlobOwner, BlobTypeResponse, CacheStats, DagDef, DagInfo, DagList, DagPrettyNode, DictStrStr, DynamicFormat, InstanceStatus, KafkaGroup, KafkaOffsets, KafkaThroughput, KafkaTopics, KnownBlobs, MinimalQueueStatsResponse, ModelInfo, ModelParamsResponse, ModelReleaseResponse, ModelVersionResponse, NodeCustomImports, NodeDef, NodeDefInfo, NodeInfo, NodeState, NodeTypes, NodeUserColumnsResponse, QueueStatsResponse, QueueStatus, SettingsObj, TaskStatus, Timing, TimingResult, UploadFilesResponse, VersionResponse, DeleteBlobResponse, NodeCustomCode, URIPrefix } from './types';
 import { RetryOptions } from './request';
 import { ByteResponse } from './util';
 export * from './errors';
@@ -137,6 +137,7 @@ export declare class DagHandle {
     outs?: [string, string][];
     queueMng?: string;
     state_uri?: string;
+    uri_prefix?: URIPrefix;
     uri: string;
     constructor(client: XYMEClient, uri: string);
     refresh(): void;
@@ -150,6 +151,7 @@ export declare class DagHandle {
     getName(): Promise<string>;
     getCompany(): Promise<string>;
     getStateType(): Promise<string>;
+    getURIPrefix(): Promise<URIPrefix>;
     getTiming(blacklist?: string[]): Promise<TimingResult>;
     isHighPriority(): Promise<boolean>;
     isQueue(): Promise<boolean>;
@@ -184,6 +186,7 @@ export declare class DagHandle {
     setName(value: string): Promise<void>;
     setCompany(value: string): Promise<void>;
     setStateUri(value: string): Promise<void>;
+    setURIPrefix(value: URIPrefix): Promise<void>;
     setHighPriority(value: string): Promise<void>;
     setQueueMng(value: string | undefined): Promise<void>;
     checkQueueStats(minimal: false): Promise<QueueStatsResponse>;
