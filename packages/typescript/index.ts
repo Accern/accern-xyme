@@ -1325,8 +1325,8 @@ export class DagHandle {
     public async getURIPrefix(): Promise<URIPrefix> {
         this.maybeRefresh();
         await this.maybeFetch();
-        assertString(this.uri_prefix.connector)
-        assertString(this.uri_prefix.address)
+        assertString(this.uri_prefix.connector);
+        assertString(this.uri_prefix.address);
         return this.uri_prefix;
     }
 

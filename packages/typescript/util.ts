@@ -1,6 +1,6 @@
 import crypto from 'crypto';
 import { promises as fpm } from 'fs';
-import { DictStrStr, URIPrefix } from './types';
+import { DictStrStr } from './types';
 import { KeyError, ServerSideError } from './errors';
 
 const MINUTE = 60.0;
