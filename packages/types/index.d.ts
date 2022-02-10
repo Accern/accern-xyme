@@ -136,7 +136,7 @@ export declare class DagHandle {
     };
     outs?: [string, string][];
     queueMng?: string;
-    state?: string;
+    state_uri?: string;
     uri: string;
     constructor(client: XYMEClient, uri: string);
     refresh(): void;
@@ -183,7 +183,7 @@ export declare class DagHandle {
     setAttr(attr: string, value: any): Promise<void>;
     setName(value: string): Promise<void>;
     setCompany(value: string): Promise<void>;
-    setState(value: string): Promise<void>;
+    setStateUri(value: string): Promise<void>;
     setHighPriority(value: string): Promise<void>;
     setQueueMng(value: string | undefined): Promise<void>;
     checkQueueStats(minimal: false): Promise<QueueStatsResponse>;

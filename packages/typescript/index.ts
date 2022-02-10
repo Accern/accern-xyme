@@ -72,6 +72,7 @@ import {
     NodeTypeResponse,
     DeleteBlobResponse,
     NodeCustomCode,
+    URIPrefix,
 } from './types';
 import {
     handleError,
@@ -1214,6 +1215,7 @@ export class DagHandle {
     outs?: [string, string][];
     queueMng?: string;
     state_uri?: string;
+    uri_prefix?: URIPrefix;
     uri: string;
 
     constructor(client: XYMEClient, uri: string) {
@@ -1318,6 +1320,14 @@ export class DagHandle {
         this.maybeRefresh();
         await this.maybeFetch();
         return assertString(this.state_uri);
+    }
+
+    public async getURIPrefix(): Promise<URIPrefix> {
+        this.maybeRefresh();
+        await this.maybeFetch();
+        assertString(this.uri_prefix.connector)
+        assertString(this.uri_prefix.address)
+        return this.uri_prefix;
     }
 
     public async getTiming(blacklist?: string[]): Promise<TimingResult> {
@@ -1693,6 +1703,10 @@ export class DagHandle {
 
     public async setStateUri(value: string): Promise<void> {
         await this.setAttr('state_uri', value);
+    }
+
+    public async setURIPrefix(value: URIPrefix): Promise<void> {
+        await this.setAttr('uri_prefix', value);
     }
 
     public async setHighPriority(value: string): Promise<void> {

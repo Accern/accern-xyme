@@ -123,6 +123,7 @@ from .types import (
     TimingResult,
     Timings,
     TritonModelsResponse,
+    URIPrefix,
     UploadFilesResponse,
     UUIDResponse,
     VersionResponse,
@@ -1060,6 +1061,7 @@ class DagHandle:
         self._name: Optional[str] = None
         self._company: Optional[str] = None
         self._state_uri: Optional[str] = None
+        self._uri_prefix: Optional[URIPrefix] = None
         self._is_high_priority: Optional[bool] = None
         self._queue_mng: Optional[str] = None
         self._nodes: Dict[str, NodeHandle] = {}
@@ -1097,6 +1099,7 @@ class DagHandle:
         self._name = info["name"]
         self._company = info["company"]
         self._state_uri = info["state_uri"]
+        self._uri_prefix = info["uri_prefix"]
         self._is_high_priority = info["high_priority"]
         self._queue_mng = info["queue_mng"]
         self._ins = info["ins"]
@@ -1144,6 +1147,12 @@ class DagHandle:
         self._maybe_fetch()
         assert self._state_uri is not None
         return self._state_uri
+    
+    def get_uri_prefix(self) -> URIPrefix:
+        self._maybe_refresh()
+        self._maybe_fetch()
+        assert self._uri_prefix is not None
+        return self._uri_prefix
 
     def get_timing(
             self,
@@ -1573,6 +1582,9 @@ class DagHandle:
 
     def set_state_uri(self, value: str) -> None:
         self.set_attr("state_uri", value)
+    
+    def set_uri_prefix(self, value: URIPrefix) -> None:
+        self.set_attr("uri_prefix", value)
 
     def set_high_priority(self, value: bool) -> None:
         self.set_attr("high_priority", value)
