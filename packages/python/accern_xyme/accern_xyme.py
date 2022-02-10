@@ -1147,7 +1147,7 @@ class DagHandle:
         self._maybe_fetch()
         assert self._state_uri is not None
         return self._state_uri
-    
+
     def get_uri_prefix(self) -> URIPrefix:
         self._maybe_refresh()
         self._maybe_fetch()
