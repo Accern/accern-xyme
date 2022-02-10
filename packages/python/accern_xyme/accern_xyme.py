@@ -1582,7 +1582,7 @@ class DagHandle:
 
     def set_state_uri(self, value: str) -> None:
         self.set_attr("state_uri", value)
-    
+
     def set_uri_prefix(self, value: URIPrefix) -> None:
         self.set_attr("uri_prefix", value)
 
