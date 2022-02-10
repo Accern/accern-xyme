@@ -240,7 +240,8 @@ export interface DagInfo {
     nodes: NodeInfo[];
     outs: [string, string][];
     queue_mng?: string;
-    state: string;
+    uri_prefix: URIPrefix;
+    state_uri: string;
 }
 
 export interface BlobInit {

@@ -1213,7 +1213,7 @@ export class DagHandle {
     nodes: { [key: string]: NodeHandle } = {};
     outs?: [string, string][];
     queueMng?: string;
-    state?: string;
+    state_uri?: string;
     uri: string;
 
     constructor(client: XYMEClient, uri: string) {
@@ -1228,7 +1228,7 @@ export class DagHandle {
         this.name = undefined;
         this.outs = undefined;
         this.queueMng = undefined;
-        this.state = undefined;
+        this.state_uri = undefined;
     }
 
     private maybeRefresh() {
@@ -1247,7 +1247,7 @@ export class DagHandle {
         const info = await this.getInfo();
         this.name = info.name;
         this.company = info.company;
-        this.state = info.state;
+        this.state_uri = info.state_uri;
         this.highPriority = info.high_priority;
         this.queueMng = info.queue_mng;
         this.ins = info.ins;
@@ -1317,7 +1317,7 @@ export class DagHandle {
     public async getStateType(): Promise<string> {
         this.maybeRefresh();
         await this.maybeFetch();
-        return assertString(this.state);
+        return assertString(this.state_uri);
     }
 
     public async getTiming(blacklist?: string[]): Promise<TimingResult> {
@@ -1691,8 +1691,8 @@ export class DagHandle {
         await this.setAttr('company', value);
     }
 
-    public async setState(value: string): Promise<void> {
-        await this.setAttr('state', value);
+    public async setStateUri(value: string): Promise<void> {
+        await this.setAttr('state_uri', value);
     }
 
     public async setHighPriority(value: string): Promise<void> {

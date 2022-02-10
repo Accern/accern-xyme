@@ -1059,7 +1059,7 @@ class DagHandle:
         self._dag_uri = dag_uri
         self._name: Optional[str] = None
         self._company: Optional[str] = None
-        self._state: Optional[str] = None
+        self._state_uri: Optional[str] = None
         self._is_high_priority: Optional[bool] = None
         self._queue_mng: Optional[str] = None
         self._nodes: Dict[str, NodeHandle] = {}
@@ -1071,7 +1071,7 @@ class DagHandle:
     def refresh(self) -> None:
         self._name = None
         self._company = None
-        self._state = None
+        self._state_uri = None
         self._is_high_priority = None
         self._queue_mng = None
         self._ins = None
@@ -1096,7 +1096,7 @@ class DagHandle:
         info = self.get_info()
         self._name = info["name"]
         self._company = info["company"]
-        self._state = info["state"]
+        self._state_uri = info["state_uri"]
         self._is_high_priority = info["high_priority"]
         self._queue_mng = info["queue_mng"]
         self._ins = info["ins"]
@@ -1142,8 +1142,8 @@ class DagHandle:
     def get_state_type(self) -> str:
         self._maybe_refresh()
         self._maybe_fetch()
-        assert self._state is not None
-        return self._state
+        assert self._state_uri is not None
+        return self._state_uri
 
     def get_timing(
             self,
@@ -1571,8 +1571,8 @@ class DagHandle:
     def set_company(self, value: str) -> None:
         self.set_attr("company", value)
 
-    def set_state(self, value: str) -> None:
-        self.set_attr("state", value)
+    def set_state_uri(self, value: str) -> None:
+        self.set_attr("state_uri", value)
 
     def set_high_priority(self, value: bool) -> None:
         self.set_attr("high_priority", value)

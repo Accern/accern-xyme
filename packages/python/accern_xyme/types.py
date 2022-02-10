@@ -212,7 +212,8 @@ DagInfo = TypedDict('DagInfo', {
     "nodes": List[NodeInfo],
     "outs": List[Tuple[str, str]],
     "queue_mng": Optional[str],
-    "state": str,
+    "uri_prefix": URIPrefix,
+    "state_uri": str,
 })
 BlobInit = TypedDict('BlobInit', {
     "blob": str,
