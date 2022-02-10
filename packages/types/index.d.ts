@@ -91,6 +91,7 @@ export default class XYMEClient {
     getBlobType(blobURI: string): Promise<BlobTypeResponse>;
     getCSVBlob(blobURI: string): Promise<CSVBlobHandle>;
     getCustomCodeBlob(blobURI: string): Promise<CustomCodeBlobHandle>;
+    getTorchBlob(blobURI: string): Promise<TorchBlobHandle>;
     getJSONBlob(blobURI: string): Promise<JSONBlobHandle>;
     duplicateDag(dagURI: string, destURI?: string, copyNonownedBlobs?: boolean): Promise<string>;
     duplicateDagNew(dagURI: string, destURI?: string, retainNonownedBlobs?: boolean): Promise<string>;
@@ -349,6 +350,11 @@ export declare class CSVBlobHandle extends BlobHandle {
     addFromFile(fileName: string, progressBar?: WritableStream | undefined): Promise<UploadFilesResponse>;
     addFromContent(fileName: string, content: Buffer, progressBar?: WritableStream | undefined): Promise<UploadFilesResponse>;
     finishCSVUpload(fileName?: string): Promise<UploadFilesResponse>;
+}
+
+export declare class TorchBlobHandle extends BlobHandle {
+    addFromFile(fileName: string, progressBar?: WritableStream | undefined): Promise<UploadFilesResponse>;
+    finishTorchUpload(fileName?: string): Promise<UploadFilesResponse>;
 }
 export declare class CustomCodeBlobHandle extends BlobHandle {
     setCustomImports(modules: string[][]): Promise<NodeCustomImports>;

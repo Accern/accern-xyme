@@ -840,6 +840,14 @@ export default class XYMEClient {
         return new CSVBlobHandle(this, blobURI, false);
     }
 
+    public async getTorchBlob(blobURI: string): Promise<TorchBlobHandle> {
+        const blobType = await this.getBlobType(blobURI);
+        if (!blobType.is_torch) {
+            throw new Error(`blob: ${blobURI} is not torch type`);
+        }
+        return new TorchBlobHandle(this, blobURI, false);
+    }
+
     public async getCustomCodeBlob(
         blobURI: string
     ): Promise<CustomCodeBlobHandle> {
@@ -2377,6 +2385,13 @@ export class NodeHandle {
         return blob;
     }
 
+    public async getTorchBlob(key = 'orig'): Promise<TorchBlobHandle> {
+        const [uri, owner] = await this.getBlobURI(key, 'torch');
+        const blob = new TorchBlobHandle(this.client, uri, false);
+        blob.setLocalOwner(owner);
+        return blob;
+    }
+
     public async getJSONBlob(key = 'jsons_in'): Promise<JSONBlobHandle> {
         const [uri, owner] = await this.getBlobURI(key, 'json');
         const blob = new JSONBlobHandle(this.client, uri, false);
@@ -3066,6 +3081,57 @@ export class CSVBlobHandle extends BlobHandle {
         });
     }
 }
+
+
+export class TorchBlobHandle extends BlobHandle {
+    public async addFromFile(
+        fileName: string,
+        progressBar: WritableStream | undefined = undefined
+    ) {
+        let fname = fileName;
+        if (fileName.endsWith(INPUT_ZIP_EXT)) {
+            fname = fileName.slice(0, -INPUT_ZIP_EXT.length);
+        }
+        const extPos = fname.indexOf('.');
+        let ext: string;
+        if (extPos > 0) {
+            ext = fileName.slice(extPos + 1);
+        } else {
+            throw new Error('could not determine extension');
+        }
+        const fileHandle = await fpm.open(fileName, 'r');
+
+        try {
+            await this.uploadFile(fileHandle, ext, progressBar);
+            return await this.finishTorchUpload(fileName);
+        } finally {
+            await fileHandle.close();
+            await this.clearUpload();
+        }
+    }
+
+    public async finishTorchUpload(
+        fileName?: string
+    ): Promise<UploadFilesResponse> {
+        const tmpURI = this.tmpURI;
+        if (isUndefined(tmpURI)) {
+            throw new Error('uri undefined');
+        }
+        return await this.client.requestJSON({
+            method: METHOD_POST,
+            path: '/finish_torch',
+            args: {
+                tmp_uri: tmpURI,
+                csv_uri: this.getURI(),
+                owner_dag: await this.getOwnerDag(),
+                owner_node: await this.getOwnerNode(),
+                filename: fileName,
+            },
+        });
+    }
+}
+
+// *** TorchBlobHandle ***
 
 export class CustomCodeBlobHandle extends BlobHandle {
     public async setCustomImports(

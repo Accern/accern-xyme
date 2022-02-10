@@ -421,6 +421,7 @@ BlobTypeResponse = TypedDict('BlobTypeResponse', {
     "is_custom_code": bool,
     "is_json": bool,
     "type": str,
+    "is_torch": str,
 })
 UUIDResponse = TypedDict('UUIDResponse', {
     "uuid": str,
