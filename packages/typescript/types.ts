@@ -7,7 +7,7 @@ export interface DagDef {
     company: string;
     nodes: Partial<NodeDef>[];
     uri_prefix?: URIPrefix;
-    state: string;
+    state_uri?: string;
     high_priority: boolean;
     queue_mng?: string;
     default_input_key?: string;

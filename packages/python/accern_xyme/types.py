@@ -20,8 +20,8 @@ DagDef = TypedDict('DagDef', {
     "name": str,
     "nodes": List['NodeDef'],
     "queue_mng": Optional[str],
-    "uri_prefix": Optional[URIPrefix],
-    "state": str,
+    "uri_prefix": URIPrefix,
+    "state_uri": str,
 }, total=False)
 NodeDef = TypedDict('NodeDef', {
     "blobs": Dict[str, str],
