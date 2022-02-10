@@ -699,6 +699,12 @@ class XYMEClient:
             raise ValueError(f"blob: {blob_uri} is not csv type")
         return CSVBlobHandle(self, blob_uri, is_full=False)
 
+    def get_torch_blob(self, blob_uri: str) -> 'TorchBlobHandle':
+        blob_type = self.get_blob_type(blob_uri)
+        if not blob_type["is_torch"]:
+            raise ValueError(f"blob: {blob_uri} is not torch type")
+        return TorchBlobHandle(self, blob_uri, is_full=False)
+
     def get_custom_code_blob(self, blob_uri: str) -> 'CustomCodeBlobHandle':
         blob_type = self.get_blob_type(blob_uri)
         if not blob_type["is_custom_code"]:
