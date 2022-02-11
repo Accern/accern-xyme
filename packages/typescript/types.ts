@@ -50,6 +50,7 @@ export interface SettingsObj {
     s3?: { [key: string]: S3BucketSettings };
     triton?: { [key: string]: S3BucketSettings };
     dremio?: { [key: string]: DremioAuthSettings };
+    versions?: { [key: string]: [string, string] };
 }
 
 export type TaskType = 'node:cpubig' | 'node:cpusmall';

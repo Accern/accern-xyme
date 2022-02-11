@@ -55,6 +55,7 @@ SettingsObj = TypedDict('SettingsObj', {
     "triton": Dict[str, S3BucketSettings],
     "es": Dict[str, ESConnectorSettings],
     "dremio": Dict[str, DremioAuthSettings],
+    "versions": Dict[str, Tuple[str, str]],
 }, total=False)
 TaskType = Literal[
     "node:cpubig",
