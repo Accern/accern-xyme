@@ -6,7 +6,20 @@ export interface DagDef {
     name: string;
     company: string;
     nodes: Partial<NodeDef>[];
+    uri_prefix: URIPrefix;
+    state_uri: string;
+    high_priority: boolean;
+    queue_mng?: string;
+    default_input_key?: string;
+    default_output_key?: string;
+}
+
+export interface UserDagDef {
+    name: string;
+    company: string;
+    nodes: Partial<NodeDef>[];
     uri_prefix?: URIPrefix;
+    state_uri?: string;
     high_priority: boolean;
     queue_mng?: string;
     default_input_key?: string;
@@ -240,7 +253,8 @@ export interface DagInfo {
     nodes: NodeInfo[];
     outs: [string, string][];
     queue_mng?: string;
-    state: string;
+    uri_prefix: URIPrefix;
+    state_uri: string;
 }
 
 export interface BlobInit {

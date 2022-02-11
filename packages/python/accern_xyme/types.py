@@ -20,8 +20,20 @@ DagDef = TypedDict('DagDef', {
     "name": str,
     "nodes": List['NodeDef'],
     "queue_mng": Optional[str],
-    "uri_prefix": Optional[URIPrefix],
+    "uri_prefix": URIPrefix,
+    "state_uri": str,
 })
+UserDagDef = TypedDict('UserDagDef', {
+    "company": str,
+    "default_input_key": Optional[str],
+    "default_output_key": Optional[str],
+    "high_priority": bool,
+    "name": str,
+    "nodes": List['NodeDef'],
+    "queue_mng": Optional[str],
+    "uri_prefix": URIPrefix,
+    "state_uri": str,
+}, total=False)
 NodeDef = TypedDict('NodeDef', {
     "blobs": Dict[str, str],
     "id": str,
@@ -212,7 +224,8 @@ DagInfo = TypedDict('DagInfo', {
     "nodes": List[NodeInfo],
     "outs": List[Tuple[str, str]],
     "queue_mng": Optional[str],
-    "state": str,
+    "uri_prefix": URIPrefix,
+    "state_uri": str,
 })
 BlobInit = TypedDict('BlobInit', {
     "blob": str,
