@@ -1143,7 +1143,7 @@ class DagHandle:
         assert self._company is not None
         return self._company
 
-    def get_state_type(self) -> str:
+    def get_state_uri(self) -> str:
         self._maybe_refresh()
         self._maybe_fetch()
         assert self._state_uri is not None

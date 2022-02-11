@@ -136,8 +136,8 @@ export declare class DagHandle {
     };
     outs?: [string, string][];
     queueMng?: string;
-    state_uri?: string;
-    uri_prefix?: URIPrefix;
+    stateUri?: string;
+    uriPrefix?: URIPrefix;
     uri: string;
     constructor(client: XYMEClient, uri: string);
     refresh(): void;
@@ -150,7 +150,7 @@ export declare class DagHandle {
     getNode(nodeName: string): Promise<NodeHandle>;
     getName(): Promise<string>;
     getCompany(): Promise<string>;
-    getStateType(): Promise<string>;
+    getStateUri(): Promise<string>;
     getURIPrefix(): Promise<URIPrefix>;
     getTiming(blacklist?: string[]): Promise<TimingResult>;
     isHighPriority(): Promise<boolean>;
