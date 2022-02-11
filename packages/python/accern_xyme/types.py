@@ -438,6 +438,7 @@ BlobTypeResponse = TypedDict('BlobTypeResponse', {
     "is_csv": bool,
     "is_custom_code": bool,
     "is_json": bool,
+    "is_torch": bool,
     "type": str,
 })
 UUIDResponse = TypedDict('UUIDResponse', {

@@ -531,6 +531,7 @@ export interface BlobTypeResponse {
     is_csv: boolean;
     is_custom_code: boolean;
     is_json: boolean;
+    is_torch: boolean;
 }
 
 export interface BlobURIResponse {
