@@ -73,6 +73,7 @@ import {
     DeleteBlobResponse,
     NodeCustomCode,
     URIPrefix,
+    UserDagDef,
 } from './types';
 import {
     handleError,
@@ -893,7 +894,7 @@ export default class XYMEClient {
         }).then((response) => response.dag);
     }
 
-    public async setDag(dagURI: string, defs: DagDef): Promise<DagHandle> {
+    public async setDag(dagURI: string, defs: DagDef | UserDagDef): Promise<DagHandle> {
         const dagCreate = await this.requestJSON<DagCreate>({
             method: METHOD_POST,
             path: '/dag_create',
@@ -1414,7 +1415,7 @@ export class DagHandle {
         }
     }
 
-    public async setDag(defs: DagDef) {
+    public async setDag(defs: DagDef | UserDagDef) {
         await this.client.setDag(this.getURI(), defs);
     }
 
