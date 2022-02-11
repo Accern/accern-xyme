@@ -123,8 +123,10 @@ from .types import (
     TimingResult,
     Timings,
     TritonModelsResponse,
+    URIPrefix,
     UploadFilesResponse,
     UUIDResponse,
+    UserDagDef,
     VersionResponse,
     WorkerScale,
 )
@@ -745,7 +747,7 @@ class XYMEClient:
     def set_dag(
             self,
             dag_uri: str,
-            defs: DagDef,
+            defs: Union[DagDef, UserDagDef],
             warnings_io: Optional[IO[Any]] = sys.stderr) -> 'DagHandle':
         dag_create = cast(DagCreate, self.request_json(
             METHOD_POST, "/dag_create", {
@@ -1065,7 +1067,8 @@ class DagHandle:
         self._dag_uri = dag_uri
         self._name: Optional[str] = None
         self._company: Optional[str] = None
-        self._state: Optional[str] = None
+        self._state_uri: Optional[str] = None
+        self._uri_prefix: Optional[URIPrefix] = None
         self._is_high_priority: Optional[bool] = None
         self._queue_mng: Optional[str] = None
         self._nodes: Dict[str, NodeHandle] = {}
@@ -1077,7 +1080,8 @@ class DagHandle:
     def refresh(self) -> None:
         self._name = None
         self._company = None
-        self._state = None
+        self._state_uri = None
+        self._uri_prefix = None
         self._is_high_priority = None
         self._queue_mng = None
         self._ins = None
@@ -1102,7 +1106,8 @@ class DagHandle:
         info = self.get_info()
         self._name = info["name"]
         self._company = info["company"]
-        self._state = info["state"]
+        self._state_uri = info["state_uri"]
+        self._uri_prefix = info["uri_prefix"]
         self._is_high_priority = info["high_priority"]
         self._queue_mng = info["queue_mng"]
         self._ins = info["ins"]
@@ -1145,11 +1150,17 @@ class DagHandle:
         assert self._company is not None
         return self._company
 
-    def get_state_type(self) -> str:
+    def get_state_uri(self) -> str:
         self._maybe_refresh()
         self._maybe_fetch()
-        assert self._state is not None
-        return self._state
+        assert self._state_uri is not None
+        return self._state_uri
+
+    def get_uri_prefix(self) -> URIPrefix:
+        self._maybe_refresh()
+        self._maybe_fetch()
+        assert self._uri_prefix is not None
+        return self._uri_prefix
 
     def get_timing(
             self,
@@ -1229,7 +1240,7 @@ class DagHandle:
                 self.refresh()
             yield do_refresh
 
-    def set_dag(self, defs: DagDef) -> None:
+    def set_dag(self, defs: Union[DagDef, UserDagDef]) -> None:
         self._client.set_dag(self.get_uri(), defs)
 
     def dynamic_model(
@@ -1577,8 +1588,11 @@ class DagHandle:
     def set_company(self, value: str) -> None:
         self.set_attr("company", value)
 
-    def set_state(self, value: str) -> None:
-        self.set_attr("state", value)
+    def set_state_uri(self, value: str) -> None:
+        self.set_attr("state_uri", value)
+
+    def set_uri_prefix(self, value: URIPrefix) -> None:
+        self.set_attr("uri_prefix", value)
 
     def set_high_priority(self, value: bool) -> None:
         self.set_attr("high_priority", value)
