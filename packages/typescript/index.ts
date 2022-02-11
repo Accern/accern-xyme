@@ -1214,8 +1214,8 @@ export class DagHandle {
     nodes: { [key: string]: NodeHandle } = {};
     outs?: [string, string][];
     queueMng?: string;
-    state_uri?: string;
-    uri_prefix?: URIPrefix;
+    stateUri?: string;
+    uriPrefix?: URIPrefix;
     uri: string;
 
     constructor(client: XYMEClient, uri: string) {
@@ -1230,7 +1230,8 @@ export class DagHandle {
         this.name = undefined;
         this.outs = undefined;
         this.queueMng = undefined;
-        this.state_uri = undefined;
+        this.stateUri = undefined;
+        this.uriPrefix = undefined;
     }
 
     private maybeRefresh() {
@@ -1249,7 +1250,7 @@ export class DagHandle {
         const info = await this.getInfo();
         this.name = info.name;
         this.company = info.company;
-        this.state_uri = info.state_uri;
+        this.stateUri = info.state_uri;
         this.highPriority = info.high_priority;
         this.queueMng = info.queue_mng;
         this.ins = info.ins;
@@ -1316,18 +1317,18 @@ export class DagHandle {
         return assertString(this.company);
     }
 
-    public async getStateType(): Promise<string> {
+    public async getStateUri(): Promise<string> {
         this.maybeRefresh();
         await this.maybeFetch();
-        return assertString(this.state_uri);
+        return assertString(this.stateUri);
     }
 
     public async getURIPrefix(): Promise<URIPrefix> {
         this.maybeRefresh();
         await this.maybeFetch();
-        assertString(this.uri_prefix.connector);
-        assertString(this.uri_prefix.address);
-        return this.uri_prefix;
+        assertString(this.uriPrefix.connector);
+        assertString(this.uriPrefix.address);
+        return this.uriPrefix;
     }
 
     public async getTiming(blacklist?: string[]): Promise<TimingResult> {

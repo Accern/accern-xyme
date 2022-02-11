@@ -1074,6 +1074,7 @@ class DagHandle:
         self._name = None
         self._company = None
         self._state_uri = None
+        self._uri_prefix = None
         self._is_high_priority = None
         self._queue_mng = None
         self._ins = None
