@@ -72,6 +72,8 @@ import {
     NodeTypeResponse,
     DeleteBlobResponse,
     NodeCustomCode,
+    URIPrefix,
+    UserDagDef,
 } from './types';
 import {
     handleError,
@@ -900,7 +902,10 @@ export default class XYMEClient {
         }).then((response) => response.dag);
     }
 
-    public async setDag(dagURI: string, defs: DagDef): Promise<DagHandle> {
+    public async setDag(
+        dagURI: string,
+        defs: DagDef | UserDagDef
+    ): Promise<DagHandle> {
         const dagCreate = await this.requestJSON<DagCreate>({
             method: METHOD_POST,
             path: '/dag_create',
@@ -1221,7 +1226,8 @@ export class DagHandle {
     nodes: { [key: string]: NodeHandle } = {};
     outs?: [string, string][];
     queueMng?: string;
-    state?: string;
+    stateUri?: string;
+    uriPrefix?: URIPrefix;
     uri: string;
 
     constructor(client: XYMEClient, uri: string) {
@@ -1236,7 +1242,8 @@ export class DagHandle {
         this.name = undefined;
         this.outs = undefined;
         this.queueMng = undefined;
-        this.state = undefined;
+        this.stateUri = undefined;
+        this.uriPrefix = undefined;
     }
 
     private maybeRefresh() {
@@ -1255,7 +1262,7 @@ export class DagHandle {
         const info = await this.getInfo();
         this.name = info.name;
         this.company = info.company;
-        this.state = info.state;
+        this.stateUri = info.state_uri;
         this.highPriority = info.high_priority;
         this.queueMng = info.queue_mng;
         this.ins = info.ins;
@@ -1322,10 +1329,18 @@ export class DagHandle {
         return assertString(this.company);
     }
 
-    public async getStateType(): Promise<string> {
+    public async getStateUri(): Promise<string> {
         this.maybeRefresh();
         await this.maybeFetch();
-        return assertString(this.state);
+        return assertString(this.stateUri);
+    }
+
+    public async getURIPrefix(): Promise<URIPrefix> {
+        this.maybeRefresh();
+        await this.maybeFetch();
+        assertString(this.uriPrefix.connector);
+        assertString(this.uriPrefix.address);
+        return this.uriPrefix;
     }
 
     public async getTiming(blacklist?: string[]): Promise<TimingResult> {
@@ -1411,7 +1426,7 @@ export class DagHandle {
         }
     }
 
-    public async setDag(defs: DagDef) {
+    public async setDag(defs: DagDef | UserDagDef) {
         await this.client.setDag(this.getURI(), defs);
     }
 
@@ -1699,8 +1714,12 @@ export class DagHandle {
         await this.setAttr('company', value);
     }
 
-    public async setState(value: string): Promise<void> {
-        await this.setAttr('state', value);
+    public async setStateUri(value: string): Promise<void> {
+        await this.setAttr('state_uri', value);
+    }
+
+    public async setURIPrefix(value: URIPrefix): Promise<void> {
+        await this.setAttr('uri_prefix', value);
     }
 
     public async setHighPriority(value: string): Promise<void> {

@@ -1,8 +1,25 @@
+export interface URIPrefix {
+    connector: string;
+    address: string;
+}
 export interface DagDef {
     name: string;
     company: string;
     nodes: Partial<NodeDef>[];
-    state: string;
+    uri_prefix: URIPrefix;
+    state_uri: string;
+    high_priority: boolean;
+    queue_mng?: string;
+    default_input_key?: string;
+    default_output_key?: string;
+}
+
+export interface UserDagDef {
+    name: string;
+    company: string;
+    nodes: Partial<NodeDef>[];
+    uri_prefix?: URIPrefix;
+    state_uri?: string;
     high_priority: boolean;
     queue_mng?: string;
     default_input_key?: string;
@@ -46,6 +63,7 @@ export interface SettingsObj {
     s3?: { [key: string]: S3BucketSettings };
     triton?: { [key: string]: S3BucketSettings };
     dremio?: { [key: string]: DremioAuthSettings };
+    versions?: { [key: string]: [string, string] };
 }
 
 export type TaskType = 'node:cpubig' | 'node:cpusmall';
@@ -235,7 +253,8 @@ export interface DagInfo {
     nodes: NodeInfo[];
     outs: [string, string][];
     queue_mng?: string;
-    state: string;
+    uri_prefix: URIPrefix;
+    state_uri: string;
 }
 
 export interface BlobInit {
