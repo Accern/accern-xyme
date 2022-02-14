@@ -2,7 +2,7 @@
 /// <reference lib="dom" />
 import { Readable } from 'stream';
 import { promises as fpm } from 'fs';
-import { AllowedCustomImports, BlobOwner, BlobTypeResponse, CacheStats, DagDef, DagInfo, DagList, DagPrettyNode, DictStrStr, DynamicFormat, InstanceStatus, KafkaGroup, KafkaOffsets, KafkaThroughput, KafkaTopics, KnownBlobs, MinimalQueueStatsResponse, ModelInfo, ModelParamsResponse, ModelReleaseResponse, ModelVersionResponse, NodeCustomImports, NodeDef, NodeDefInfo, NodeInfo, NodeState, NodeTypes, NodeUserColumnsResponse, QueueStatsResponse, QueueStatus, SettingsObj, TaskStatus, Timing, TimingResult, UploadFilesResponse, VersionResponse, DeleteBlobResponse, NodeCustomCode, URIPrefix, UserDagDef } from './types';
+import { AllowedCustomImports, BlobOwner, BlobTypeResponse, CacheStats, DagDef, DagInfo, DagList, DagPrettyNode, DictStrStr, DynamicFormat, InstanceStatus, KafkaGroup, KafkaOffsets, KafkaThroughput, KafkaTopics, KnownBlobs, MinimalQueueStatsResponse, ModelInfo, ModelParamsResponse, ModelReleaseResponse, ModelVersionResponse, NodeCustomImports, NodeDef, NodeDefInfo, NodeInfo, NodeState, NodeTypes, NodeUserColumnsResponse, QueueStatsResponse, QueueStatus, SettingsObj, TaskStatus, Timing, TimingResult, UploadFilesResponse, VersionResponse, DeleteBlobResponse, NodeCustomCode, URIPrefix, BaseDagDef } from './types';
 import { RetryOptions } from './request';
 import { ByteResponse } from './util';
 export * from './errors';
@@ -95,7 +95,7 @@ export default class XYMEClient {
     getJSONBlob(blobURI: string): Promise<JSONBlobHandle>;
     duplicateDag(dagURI: string, destURI?: string, copyNonownedBlobs?: boolean): Promise<string>;
     duplicateDagNew(dagURI: string, destURI?: string, retainNonownedBlobs?: boolean): Promise<string>;
-    setDag(dagURI: string, defs: DagDef | UserDagDef): Promise<DagHandle>;
+    setDag(dagURI: string, defs: BaseDagDef): Promise<DagHandle>;
     setSettings(configToken: string, settings: SettingsObj): Promise<SettingsObj>;
     getSettings(): Promise<SettingsObj>;
     getAllowedCustomImports(): Promise<AllowedCustomImports>;
@@ -159,7 +159,7 @@ export declare class DagHandle {
     getQueueMng(): Promise<string | undefined>;
     getIns(): Promise<string[]>;
     getOuts(): Promise<[string, string][]>;
-    setDag(defs: DagDef | UserDagDef): Promise<void>;
+    setDag(defs: BaseDagDef): Promise<void>;
     dynamicModel(inputs: any[], formatMethod?: DynamicFormat, noCache?: boolean): Promise<any[]>;
     dynamicList(inputs: any[], fargs: {
         inputKey?: string;
