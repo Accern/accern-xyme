@@ -902,10 +902,7 @@ export default class XYMEClient {
         }).then((response) => response.dag);
     }
 
-    public async setDag(
-        dagURI: string,
-        defs: UserDagDef
-    ): Promise<DagHandle> {
+    public async setDag(dagURI: string, defs: UserDagDef): Promise<DagHandle> {
         const dagCreate = await this.requestJSON<DagCreate>({
             method: METHOD_POST,
             path: '/dag_create',
