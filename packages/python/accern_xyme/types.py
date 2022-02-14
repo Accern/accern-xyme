@@ -20,11 +20,13 @@ BaseDagDef = TypedDict('BaseDagDef', {
     "queue_mng": Optional[str],
 })
 
+
 class UserDagDef(BaseDagDef, total=False):
     default_input_key: Optional[str]
     default_output_key: Optional[str]
     uri_prefix: URIPrefix
     state_uri: str
+
 
 class DagDef(BaseDagDef):
     default_input_key: Optional[str]
