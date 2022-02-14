@@ -904,7 +904,7 @@ export default class XYMEClient {
 
     public async setDag(
         dagURI: string,
-        defs: DagDef | UserDagDef
+        defs: UserDagDef
     ): Promise<DagHandle> {
         const dagCreate = await this.requestJSON<DagCreate>({
             method: METHOD_POST,
@@ -1426,7 +1426,7 @@ export class DagHandle {
         }
     }
 
-    public async setDag(defs: DagDef | UserDagDef) {
+    public async setDag(defs: UserDagDef) {
         await this.client.setDag(this.getURI(), defs);
     }
 

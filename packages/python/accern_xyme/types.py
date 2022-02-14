@@ -12,17 +12,6 @@ URIPrefix = TypedDict('URIPrefix', {
     "connector": str,
     "address": str,
 })
-DagDef = TypedDict('DagDef', {
-    "company": str,
-    "default_input_key": Optional[str],
-    "default_output_key": Optional[str],
-    "high_priority": bool,
-    "name": str,
-    "nodes": List['NodeDef'],
-    "queue_mng": Optional[str],
-    "uri_prefix": URIPrefix,
-    "state_uri": str,
-})
 UserDagDef = TypedDict('UserDagDef', {
     "company": str,
     "default_input_key": Optional[str],
@@ -34,6 +23,16 @@ UserDagDef = TypedDict('UserDagDef', {
     "uri_prefix": URIPrefix,
     "state_uri": str,
 }, total=False)
+class DagDef(UserDagDef):
+    company: str
+    default_input_key: Optional[str]
+    default_output_key: Optional[str]
+    high_priority: bool
+    name: str
+    nodes: List['NodeDef']
+    queue_mng: Optional[str]
+    uri_prefix: URIPrefix
+    state_uri: str
 NodeDef = TypedDict('NodeDef', {
     "blobs": Dict[str, str],
     "id": str,
