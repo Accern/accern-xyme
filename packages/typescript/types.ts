@@ -3,26 +3,24 @@ export interface URIPrefix {
     address: string;
 }
 
-export interface UserDagDef {
+export interface BaseDagDef {
     name: string;
     company: string;
     nodes: Partial<NodeDef>[];
-    uri_prefix?: URIPrefix;
-    state_uri?: string;
     high_priority: boolean;
     queue_mng?: string;
+}
+
+export interface UserDagDef extends BaseDagDef {
+    uri_prefix?: URIPrefix;
+    state_uri?: string;
     default_input_key?: string;
     default_output_key?: string;
 }
 
-export interface DagDef extends UserDagDef {
-    name: string;
-    company: string;
-    nodes: Partial<NodeDef>[];
+export interface DagDef extends BaseDagDef {
     uri_prefix: URIPrefix;
     state_uri: string;
-    high_priority: boolean;
-    queue_mng?: string;
     default_input_key?: string;
     default_output_key?: string;
 }

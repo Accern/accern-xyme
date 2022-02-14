@@ -59,6 +59,7 @@ from .util import (
 )
 from .types import (
     AllowedCustomImports,
+    BaseDagDef,
     BlobFilesResponse,
     BlobInit,
     BlobOwner,
@@ -126,7 +127,6 @@ from .types import (
     URIPrefix,
     UploadFilesResponse,
     UUIDResponse,
-    UserDagDef,
     VersionResponse,
     WorkerScale,
 )
@@ -747,7 +747,7 @@ class XYMEClient:
     def set_dag(
             self,
             dag_uri: str,
-            defs: UserDagDef,
+            defs: BaseDagDef,
             warnings_io: Optional[IO[Any]] = sys.stderr) -> 'DagHandle':
         dag_create = cast(DagCreate, self.request_json(
             METHOD_POST, "/dag_create", {
@@ -1240,7 +1240,7 @@ class DagHandle:
                 self.refresh()
             yield do_refresh
 
-    def set_dag(self, defs: UserDagDef) -> None:
+    def set_dag(self, defs: BaseDagDef) -> None:
         self._client.set_dag(self.get_uri(), defs)
 
     def dynamic_model(
