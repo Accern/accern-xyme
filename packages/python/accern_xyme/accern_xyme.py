@@ -1071,6 +1071,7 @@ class DagHandle:
         self._uri_prefix: Optional[URIPrefix] = None
         self._is_high_priority: Optional[bool] = None
         self._queue_mng: Optional[str] = None
+        self._version_override: Optional[str] = None
         self._nodes: Dict[str, NodeHandle] = {}
         self._node_lookup: Dict[str, str] = {}
         self._dynamic_error: Optional[str] = None
@@ -1084,6 +1085,7 @@ class DagHandle:
         self._uri_prefix = None
         self._is_high_priority = None
         self._queue_mng = None
+        self._version_override = None
         self._ins = None
         self._outs = None
         # NOTE: we don't reset nodes
@@ -1110,6 +1112,7 @@ class DagHandle:
         self._uri_prefix = info["uri_prefix"]
         self._is_high_priority = info["high_priority"]
         self._queue_mng = info["queue_mng"]
+        self._version_override = info["version_override"]
         self._ins = info["ins"]
         self._outs = [(el[0], el[1]) for el in info["outs"]]
         old_nodes = {} if self._nodes is None else self._nodes
@@ -1600,6 +1603,9 @@ class DagHandle:
     def set_queue_mng(self, value: Optional[str]) -> None:
         self.set_attr("queue_mng", value)
 
+    def set_version_override(self, value: Optional[str]) -> None:
+        self.set_attr("version_override", value)
+
     @overload
     def check_queue_stats(  # pylint: disable=no-self-use
             self, minimal: Literal[True]) -> MinimalQueueStatsResponse:
@@ -1875,6 +1881,7 @@ class NodeHandle:
         self._state: Optional[int] = None
         self._config_error: Optional[str] = None
         self._is_model: Optional[bool] = None
+        self._version_override = None
 
     def as_owner(self) -> BlobOwner:
         return {
@@ -1914,6 +1921,7 @@ class NodeHandle:
         self._inputs = node_info["inputs"]
         self._state = node_info["state"]
         self._config_error = node_info["config_error"]
+        self._version_override = node_info["version_override"]
 
     def get_dag(self) -> DagHandle:
         return self._dag
@@ -1949,6 +1957,9 @@ class NodeHandle:
 
     def get_config_error(self) -> Optional[str]:
         return self._config_error
+
+    def get_version_override(self) -> Optional[str]:
+        return self._version_override
 
     def get_blobs(self) -> List[str]:
         return sorted(self._blobs.keys())
