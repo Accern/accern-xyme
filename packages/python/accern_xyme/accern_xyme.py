@@ -1881,7 +1881,7 @@ class NodeHandle:
         self._state: Optional[int] = None
         self._config_error: Optional[str] = None
         self._is_model: Optional[bool] = None
-        self._version_override = None
+        self._version_override: Optional[str] = None
 
     def as_owner(self) -> BlobOwner:
         return {
