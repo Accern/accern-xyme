@@ -1159,6 +1159,13 @@ class DagHandle:
         assert self._state_uri is not None
         return self._state_uri
 
+    def get_version_override(self) -> Optional[str]:
+        self._maybe_refresh()
+        self._maybe_fetch()
+        assert self._version_override is not None
+        return self._version_override
+
+
     def get_uri_prefix(self) -> URIPrefix:
         self._maybe_refresh()
         self._maybe_fetch()
