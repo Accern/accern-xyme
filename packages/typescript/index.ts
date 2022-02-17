@@ -1226,6 +1226,7 @@ export class DagHandle {
     stateUri?: string;
     uriPrefix?: URIPrefix;
     uri: string;
+    versionOverride?: string;
 
     constructor(client: XYMEClient, uri: string) {
         this.client = client;
@@ -1241,6 +1242,7 @@ export class DagHandle {
         this.queueMng = undefined;
         this.stateUri = undefined;
         this.uriPrefix = undefined;
+        this.versionOverride = undefined;
     }
 
     private maybeRefresh() {
@@ -1260,6 +1262,7 @@ export class DagHandle {
         this.name = info.name;
         this.company = info.company;
         this.stateUri = info.state_uri;
+        this.versionOverride = info.version_override;
         this.highPriority = info.high_priority;
         this.queueMng = info.queue_mng;
         this.ins = info.ins;
@@ -1330,6 +1333,12 @@ export class DagHandle {
         this.maybeRefresh();
         await this.maybeFetch();
         return assertString(this.stateUri);
+    }
+
+    public async getVersionOverride(): Promise<string> {
+        this.maybeRefresh();
+        await this.maybeFetch();
+        return assertString(this.versionOverride);
     }
 
     public async getURIPrefix(): Promise<URIPrefix> {
@@ -1715,6 +1724,10 @@ export class DagHandle {
         await this.setAttr('state_uri', value);
     }
 
+    public async setVersionOverride(value: string): Promise<void> {
+        await this.setAttr('version_override', value);
+    }
+
     public async setURIPrefix(value: URIPrefix): Promise<void> {
         await this.setAttr('uri_prefix', value);
     }
@@ -2056,6 +2069,7 @@ export class NodeHandle {
     inputs: { [key: string]: [string, string] } = {};
     name: string;
     state?: number;
+    versionOverride?: string;
     type: string;
     _isModel?: boolean;
 
@@ -2114,6 +2128,7 @@ export class NodeHandle {
         this.inputs = nodeInfo.inputs;
         this.state = nodeInfo.state;
         this.configError = nodeInfo.config_error;
+        this.versionOverride = nodeInfo.version_override;
         const blobs = nodeInfo.blobs;
         this.blobs = Object.keys(blobs).reduce(
             (o, key) => ({
@@ -2138,6 +2153,10 @@ export class NodeHandle {
 
     public getType(): string {
         return this.type;
+    }
+
+    public getVersionOverride(): string {
+        return this.versionOverride;
     }
 
     public async getNodeDef(): Promise<NodeDefInfo> {
