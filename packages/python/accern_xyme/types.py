@@ -26,6 +26,7 @@ class UserDagDef(BaseDagDef, total=False):
     default_output_key: Optional[str]
     uri_prefix: URIPrefix
     state_uri: str
+    version_override: Optional[str]
 
 
 class DagDef(BaseDagDef):
@@ -33,6 +34,7 @@ class DagDef(BaseDagDef):
     default_output_key: Optional[str]
     uri_prefix: URIPrefix
     state_uri: str
+    version_override: Optional[str]
 
 
 NodeDef = TypedDict('NodeDef', {
