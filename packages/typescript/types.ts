@@ -16,6 +16,7 @@ export interface UserDagDef extends BaseDagDef {
     state_uri?: string;
     default_input_key?: string;
     default_output_key?: string;
+    version_override?: string;
 }
 
 export interface DagDef extends BaseDagDef {
@@ -23,6 +24,7 @@ export interface DagDef extends BaseDagDef {
     state_uri: string;
     default_input_key?: string;
     default_output_key?: string;
+    version_override: string;
 }
 export interface NodeDef {
     blobs: DictStrStr;
@@ -31,6 +33,7 @@ export interface NodeDef {
     kind: string;
     name: string;
     params: { [key: string]: any };
+    version_override?: string;
 }
 
 export interface S3BucketSettings {
@@ -196,6 +199,7 @@ export interface NodeDefInfo {
     queue_types?: QueueType[];
     blob_types: Record<string, string | string[]>;
     params: ParamDefs;
+    version_override?: string;
 }
 
 export interface NodeStatus {
@@ -224,6 +228,7 @@ export interface NodeInfo {
     inputs: { [key: string]: [string, string] };
     state?: number;
     config_error?: string;
+    version_override?: string;
 }
 export interface DagStatus {
     config_error?: string;
@@ -253,6 +258,7 @@ export interface DagInfo {
     queue_mng?: string;
     uri_prefix: URIPrefix;
     state_uri: string;
+    version_override?: string;
 }
 
 export interface BlobInit {

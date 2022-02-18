@@ -26,6 +26,7 @@ class UserDagDef(BaseDagDef, total=False):
     default_output_key: Optional[str]
     uri_prefix: URIPrefix
     state_uri: str
+    version_override: Optional[str]
 
 
 class DagDef(BaseDagDef):
@@ -33,6 +34,7 @@ class DagDef(BaseDagDef):
     default_output_key: Optional[str]
     uri_prefix: URIPrefix
     state_uri: str
+    version_override: Optional[str]
 
 
 NodeDef = TypedDict('NodeDef', {
@@ -42,6 +44,7 @@ NodeDef = TypedDict('NodeDef', {
     "kind": str,
     "name": str,
     "params": Dict[str, Any],
+    "version_override": Optional[str],
 }, total=False)
 S3BucketSettings = TypedDict('S3BucketSettings', {
     "api_version": Optional[str],
@@ -177,6 +180,7 @@ NodeDefInfo = TypedDict('NodeDefInfo', {
     "queue_types": Optional[List[QueueType]],
     "blob_types": Dict[str, Union[str, List[str]]],
     "params": ParamDefs,
+    "version_override": Optional[str],
 })
 NodeStatus = TypedDict('NodeStatus', {
     "status": TaskStatus,
@@ -200,6 +204,7 @@ NodeInfo = TypedDict('NodeInfo', {
     "inputs": Dict[str, Tuple[str, str]],
     "state": Optional[int],
     "config_error": Optional[str],
+    "version_override": Optional[str],
 })
 DagStatus = TypedDict("DagStatus", {
     "config_error": Optional[str],
@@ -227,6 +232,7 @@ DagInfo = TypedDict('DagInfo', {
     "queue_mng": Optional[str],
     "uri_prefix": URIPrefix,
     "state_uri": str,
+    "version_override": Optional[str],
 })
 BlobInit = TypedDict('BlobInit', {
     "blob": str,
