@@ -2155,7 +2155,7 @@ export class NodeHandle {
         return this.type;
     }
 
-    public getVersionOverride(): string {
+    public getVersionOverride(): string | undefined {
         return this.versionOverride;
     }
 
