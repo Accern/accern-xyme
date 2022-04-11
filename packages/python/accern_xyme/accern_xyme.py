@@ -2673,8 +2673,8 @@ class BlobHandle:
     def upload_sklike_model(
             self,
             model: Any,
-            xcols: Optional[List[str]],
-            ycols: Optional[List[str]],
+            xcols: List[str],
+            ycols: List[str],
             is_clf: bool,
             model_name: str = None,
             version: int = -1,
