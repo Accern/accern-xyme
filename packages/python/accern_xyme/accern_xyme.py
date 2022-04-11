@@ -2728,7 +2728,7 @@ class BlobHandle:
                 "blob": self.get_uri(),
             }))
 
-    def     get_model_version(self) -> ModelVersionResponse:
+    def get_model_version(self) -> ModelVersionResponse:
         return cast(ModelVersionResponse, self._client.request_json(
             METHOD_GET, "/model_version", {
                 "model_uri": self.get_uri(),

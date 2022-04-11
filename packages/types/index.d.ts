@@ -140,6 +140,7 @@ export declare class DagHandle {
     stateUri?: string;
     uriPrefix?: URIPrefix;
     uri: string;
+    versionOverride?: string;
     constructor(client: XYMEClient, uri: string);
     refresh(): void;
     private maybeRefresh;
@@ -152,6 +153,7 @@ export declare class DagHandle {
     getName(): Promise<string>;
     getCompany(): Promise<string>;
     getStateUri(): Promise<string>;
+    getVersionOverride(): Promise<string>;
     getURIPrefix(): Promise<URIPrefix>;
     getTiming(blacklist?: string[]): Promise<TimingResult>;
     isHighPriority(): Promise<boolean>;
@@ -187,6 +189,7 @@ export declare class DagHandle {
     setName(value: string): Promise<void>;
     setCompany(value: string): Promise<void>;
     setStateUri(value: string): Promise<void>;
+    setVersionOverride(value: string): Promise<void>;
     setURIPrefix(value: URIPrefix): Promise<void>;
     setHighPriority(value: string): Promise<void>;
     setQueueMng(value: string | undefined): Promise<void>;
@@ -224,6 +227,7 @@ export declare class NodeHandle {
     };
     name: string;
     state?: number;
+    versionOverride?: string;
     type: string;
     _isModel?: boolean;
     constructor(client: XYMEClient, dag: DagHandle, nodeId: string, name: string, kind: string);
@@ -234,6 +238,7 @@ export declare class NodeHandle {
     getId(): string;
     getName(): string;
     getType(): string;
+    getVersionOverride(): string | undefined;
     getNodeDef(): Promise<NodeDefInfo>;
     getInputs(): Set<string>;
     getInput(key: string): Promise<[NodeHandle, string]>;
