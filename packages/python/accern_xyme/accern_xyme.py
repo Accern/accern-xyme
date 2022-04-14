@@ -35,6 +35,7 @@ import requests
 from requests import Response
 from requests.exceptions import HTTPError, RequestException
 from typing_extensions import Literal
+from zipfile import ZipFile
 import quick_server
 
 from .util import (
@@ -77,6 +78,7 @@ from .types import (
     DagReload,
     DagStatus,
     DeleteBlobResponse,
+    DownloadFullDagResponse,
     DynamicResults,
     DynamicStatusResponse,
     ESQueryResponse,
@@ -1848,6 +1850,53 @@ class DagHandle:
                 "blob_uris": [self.get_uri()],
             },
         ))
+
+    def download_full_dag_zip(self, to_path: str) -> DownloadFullDagResponse:
+        return cast(DownloadFullDagResponse, self._client.request_json(
+            METHOD_POST, "/download_dag_zip", {
+                "dag": self.get_uri(),
+                "dest_file_path": to_path,
+            },
+        ))
+
+    def _upload_dag_blobs(
+            self,
+            parent_zip: ZipFile) -> List['BlobHandle']:
+        dag_handle = self._client.get_dag(self.get_uri())
+        dag_defn = dag_handle.get_def()
+        blob_uris: List[str] = []
+        for blobs in dag_defn.get("nodes", []):
+            for _, blob_uri in blobs.get("blobs", {}).items():
+                blob_uris.append(blob_uri)
+        blob_handles = []
+        for uri in blob_uris:
+            uri_str = uri.split('/')[-1]
+            blob_zip_file = f"{uri_str}.zip"
+            if blob_zip_file not in parent_zip.namelist():
+                raise FileNotFoundError(
+                    f"{blob_zip_file} not found in the given zip file. "
+                    f"zip file contents: {parent_zip.namelist()}")
+            blob_handle = self._client.get_blob_handle(uri)
+            blob_zip = parent_zip.extract(blob_zip_file)
+            blob_handles.append(blob_handle.upload_zip(blob_zip))
+            os.remove(blob_zip)
+        return blob_handles
+
+    def upload_full_dag_zip(self, source: str) -> List['BlobHandle']:
+        dag_blob_handle = self._client.get_blob_handle(self.get_uri())
+        blob_handles = []
+        with ZipFile(source, "r") as parent_zip:
+            dag_zip_uri = self.get_uri().split('/')[-1]
+            dag_zip_file = f"{dag_zip_uri}.zip"
+            if dag_zip_file not in parent_zip.namelist():
+                raise FileNotFoundError(
+                    f"{dag_zip_file} not found in the given zip file. "
+                    f"zip file contents: {parent_zip.namelist()}")
+            dag_zip = parent_zip.extract(dag_zip_file)
+            blob_handles.append(dag_blob_handle.upload_zip(dag_zip))
+            os.remove(dag_zip)
+            blob_handles.append(self._upload_dag_blobs(parent_zip))
+        return blob_handles
 
     def __hash__(self) -> int:
         return hash(self.get_uri())
