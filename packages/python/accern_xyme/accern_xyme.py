@@ -1878,7 +1878,7 @@ class DagHandle:
                     f"zip file contents: {parent_zip.namelist()}")
             blob_handle = self._client.get_blob_handle(uri)
             blob_zip = parent_zip.extract(blob_zip_file)
-            blob_handles.append(blob_handle.upload_zip(blob_zip))
+            blob_handles.extend(blob_handle.upload_zip(blob_zip))
             os.remove(blob_zip)
         return blob_handles
 
@@ -1886,16 +1886,15 @@ class DagHandle:
         dag_blob_handle = self._client.get_blob_handle(self.get_uri())
         blob_handles = []
         with ZipFile(source, "r") as parent_zip:
-            dag_zip_uri = self.get_uri().split('/')[-1]
-            dag_zip_file = f"{dag_zip_uri}.zip"
+            dag_zip_file = source.split('/')[-1]
             if dag_zip_file not in parent_zip.namelist():
                 raise FileNotFoundError(
                     f"{dag_zip_file} not found in the given zip file. "
                     f"zip file contents: {parent_zip.namelist()}")
             dag_zip = parent_zip.extract(dag_zip_file)
-            blob_handles.append(dag_blob_handle.upload_zip(dag_zip))
+            blob_handles.extend(dag_blob_handle.upload_zip(dag_zip))
             os.remove(dag_zip)
-            blob_handles.append(self._upload_dag_blobs(parent_zip))
+            blob_handles.extend(self._upload_dag_blobs(parent_zip))
         return blob_handles
 
     def __hash__(self) -> int:
