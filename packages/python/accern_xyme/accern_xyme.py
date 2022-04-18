@@ -26,6 +26,7 @@ import inspect
 import textwrap
 import threading
 import contextlib
+from zipfile import ZipFile
 from io import BytesIO, StringIO
 from urllib.parse import urlparse, urlunparse
 from pathlib import PosixPath, PurePath
@@ -35,7 +36,6 @@ import requests
 from requests import Response
 from requests.exceptions import HTTPError, RequestException
 from typing_extensions import Literal
-from zipfile import ZipFile
 import quick_server
 
 from .util import (
