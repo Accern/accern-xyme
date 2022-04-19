@@ -1,3 +1,5 @@
+import shutil
+import tempfile
 from typing import (
     Any,
     Callable,
@@ -26,7 +28,6 @@ import inspect
 import textwrap
 import threading
 import contextlib
-from zipfile import ZipFile
 from io import BytesIO, StringIO
 from urllib.parse import urlparse, urlunparse
 from pathlib import PosixPath, PurePath
@@ -78,7 +79,6 @@ from .types import (
     DagReload,
     DagStatus,
     DeleteBlobResponse,
-    DownloadFullDagResponse,
     DynamicResults,
     DynamicStatusResponse,
     ESQueryResponse,
@@ -118,6 +118,7 @@ from .types import (
     QueueStatsResponse,
     QueueStatus,
     ReadNode,
+    RepoTagResponse,
     S3Config,
     SetNamedSecret,
     SettingsObj,
@@ -595,6 +596,14 @@ class XYMEClient:
             {},
             add_prefix=False,
             add_namespace=False))
+
+    def get_version_override(self) -> RepoTagResponse:
+        server_version = self.get_server_version()
+        img_repo = server_version["image_repo"]
+        img_tag = server_version["image_tag"]
+        return {
+            "version": [img_repo, img_tag],
+        }
 
     def get_namespaces(self) -> List[str]:
         return cast(NamespaceList, self.request_json(
@@ -1851,50 +1860,44 @@ class DagHandle:
             },
         ))
 
-    def download_full_dag_zip(self, to_path: str) -> DownloadFullDagResponse:
-        return cast(DownloadFullDagResponse, self._client.request_json(
-            METHOD_POST, "/download_dag_zip", {
+    def download_full_dag_zip(
+            self, to_path: Optional[str]) -> Optional[io.BytesIO]:
+        cur_res, _ = self._client.request_bytes(
+            METHOD_GET, "/download_dag_zip", {
                 "dag": self.get_uri(),
-                "dest_file_path": to_path,
-            },
-        ))
+            })
+        if to_path is None:
+            return io.BytesIO(cur_res.read())
+        with open(to_path, "wb") as file_download:
+            file_download.write(cur_res.read())
+        return None
 
     def _upload_dag_blobs(
             self,
-            parent_zip: ZipFile) -> List['BlobHandle']:
-        dag_handle = self._client.get_dag(self.get_uri())
-        dag_defn = dag_handle.get_def()
-        blob_uris: List[str] = []
-        for blobs in dag_defn.get("nodes", []):
-            for _, blob_uri in blobs.get("blobs", {}).items():
-                blob_uris.append(blob_uri)
+            tmpdir: str,
+            blobs_map: Dict[str, str]) -> List['BlobHandle']:
         blob_handles = []
-        for uri in blob_uris:
-            uri_str = uri.split('/')[-1]
-            blob_zip_file = f"{uri_str}.zip"
-            if blob_zip_file not in parent_zip.namelist():
-                raise FileNotFoundError(
-                    f"{blob_zip_file} not found in the given zip file. "
-                    f"zip file contents: {parent_zip.namelist()}")
-            blob_handle = self._client.get_blob_handle(uri)
-            blob_zip = parent_zip.extract(blob_zip_file)
-            blob_handles.extend(blob_handle.upload_zip(blob_zip))
-            os.remove(blob_zip)
+        for blob_uri, blob_fname in blobs_map.items():
+            blob_file = os.path.join(tmpdir, blob_fname)
+            blob_handle = self._client.get_blob_handle(blob_uri)
+            blob_handles.extend(blob_handle.upload_zip(blob_file))
         return blob_handles
 
     def upload_full_dag_zip(self, source: str) -> List['BlobHandle']:
         dag_blob_handle = self._client.get_blob_handle(self.get_uri())
         blob_handles = []
-        with ZipFile(source, "r") as parent_zip:
-            dag_zip_file = source.split('/')[-1]
-            if dag_zip_file not in parent_zip.namelist():
-                raise FileNotFoundError(
-                    f"{dag_zip_file} not found in the given zip file. "
-                    f"zip file contents: {parent_zip.namelist()}")
-            dag_zip = parent_zip.extract(dag_zip_file)
-            blob_handles.extend(dag_blob_handle.upload_zip(dag_zip))
-            os.remove(dag_zip)
-            blob_handles.extend(self._upload_dag_blobs(parent_zip))
+        with tempfile.TemporaryDirectory() as tmpdir:
+            shutil.unpack_archive(source, tmpdir, "zip")
+            fmap_json = os.path.join(tmpdir, "filemap.json")
+            with open(fmap_json, "r") as fmap:
+                file_map: Dict[str, str] = json.load(fmap)
+            dag_uri = file_map["dag_blob"]
+            dag_fname = file_map[dag_uri]
+            dag_file = os.path.join(tmpdir, f"{dag_fname}")
+            blob_handles.extend(dag_blob_handle.upload_zip(dag_file))
+            del file_map["dag_blob"]
+            del file_map[dag_uri]
+            blob_handles.extend(self._upload_dag_blobs(tmpdir, file_map))
         return blob_handles
 
     def __hash__(self) -> int:
