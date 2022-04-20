@@ -2058,7 +2058,7 @@ export class DagHandle {
             },
         });
     }
-}
+
 
     public async downloadFullDagZip(toPath?: string): Promise<Buffer | undefined> {
         const [res] = await this.client.requestBytes({
@@ -2074,6 +2074,7 @@ export class DagHandle {
         await openWrite(res, toPath);
         return;
     }
+}
 
 
 export class NodeHandle {
