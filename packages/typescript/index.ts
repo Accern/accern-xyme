@@ -22,6 +22,7 @@ import {
     DagPrettyNode,
     DagReload,
     DictStrStr,
+    DictStrList,
     DynamicFormat,
     DynamicResults,
     DynamicStatusResponse,
@@ -655,6 +656,16 @@ export default class XYMEClient {
             addNamespace: false,
             args: {},
         });
+    }
+
+    public async getVersionOverride(): Promise<DictStrList> {
+        const serverVersion = await this.getServerVersion();
+        let repoTag: DictStrList = {};
+        repoTag["versions"] = [
+            serverVersion.image_repo,
+            serverVersion.image_tag
+        ];
+        return repoTag;
     }
 
     public async getNamespaces(): Promise<string[]> {

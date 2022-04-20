@@ -62,6 +62,7 @@ from .util import (
 from .types import (
     AllowedCustomImports,
     BaseDagDef,
+    BlobDetails,
     BlobFilesResponse,
     BlobInit,
     BlobOwner,
@@ -82,6 +83,7 @@ from .types import (
     DynamicResults,
     DynamicStatusResponse,
     ESQueryResponse,
+    FileMap,
     FlushAllQueuesResponse,
     InCursors,
     InstanceStatus,
@@ -118,7 +120,6 @@ from .types import (
     QueueStatsResponse,
     QueueStatus,
     ReadNode,
-    RepoTagResponse,
     S3Config,
     SetNamedSecret,
     SettingsObj,
@@ -597,7 +598,7 @@ class XYMEClient:
             add_prefix=False,
             add_namespace=False))
 
-    def get_version_override(self) -> RepoTagResponse:
+    def get_version_override(self) -> Dict[str, List[Optional[str]]]:
         server_version = self.get_server_version()
         img_repo = server_version["image_repo"]
         img_tag = server_version["image_tag"]
@@ -1875,11 +1876,11 @@ class DagHandle:
     def _upload_dag_blobs(
             self,
             tmpdir: str,
-            blobs_map: Dict[str, str]) -> List['BlobHandle']:
+            blobs_map: List[BlobDetails]) -> List['BlobHandle']:
         blob_handles = []
-        for blob_uri, blob_fname in blobs_map.items():
-            blob_file = os.path.join(tmpdir, blob_fname)
-            blob_handle = self._client.get_blob_handle(blob_uri)
+        for blob in blobs_map:
+            blob_file = os.path.join(tmpdir, blob["fname"])
+            blob_handle = self._client.get_blob_handle(blob["blob_uri"])
             blob_handles.extend(blob_handle.upload_zip(blob_file))
         return blob_handles
 
@@ -1890,14 +1891,12 @@ class DagHandle:
             shutil.unpack_archive(source, tmpdir, "zip")
             fmap_json = os.path.join(tmpdir, "filemap.json")
             with open(fmap_json, "r") as fmap:
-                file_map: Dict[str, str] = json.load(fmap)
-            dag_uri = file_map["dag_blob"]
-            dag_fname = file_map[dag_uri]
+                file_map: FileMap = json.load(fmap)
+            dag_fname = file_map["dag_blob"]
             dag_file = os.path.join(tmpdir, f"{dag_fname}")
             blob_handles.extend(dag_blob_handle.upload_zip(dag_file))
-            del file_map["dag_blob"]
-            del file_map[dag_uri]
-            blob_handles.extend(self._upload_dag_blobs(tmpdir, file_map))
+            blob_handles.extend(self._upload_dag_blobs(
+                tmpdir, file_map["blobs"]))
         return blob_handles
 
     def __hash__(self) -> int:
