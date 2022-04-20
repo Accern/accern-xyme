@@ -660,10 +660,10 @@ export default class XYMEClient {
 
     public async getVersionOverride(): Promise<DictStrList> {
         const serverVersion = await this.getServerVersion();
-        let repoTag: DictStrList = {};
-        repoTag["versions"] = [
+        const repoTag: DictStrList = {};
+        repoTag['versions'] = [
             serverVersion.image_repo,
-            serverVersion.image_tag
+            serverVersion.image_tag,
         ];
         return repoTag;
     }
