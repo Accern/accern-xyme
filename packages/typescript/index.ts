@@ -2060,7 +2060,9 @@ export class DagHandle {
     }
 
 
-    public async downloadFullDagZip(toPath?: string): Promise<Buffer | undefined> {
+    public async downloadFullDagZip(
+            toPath?: string
+    ): Promise<Buffer | undefined> {
         const [res] = await this.client.requestBytes({
             method: METHOD_GET,
             path: '/download_dag_zip',
@@ -2075,7 +2077,6 @@ export class DagHandle {
         return;
     }
 }
-
 
 export class NodeHandle {
     blobs: { [key: string]: BlobHandle } = {};
