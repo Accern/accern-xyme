@@ -180,6 +180,8 @@ export interface VersionResponse {
     api_version_minor: number;
     backends?: Backends;
     caller_api_version: number;
+    image_repo: string;
+    image_tag: string;
     time: string;
     xyme_version_full: string;
     xyme_version: string;

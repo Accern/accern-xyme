@@ -2060,6 +2060,22 @@ export class DagHandle {
     }
 }
 
+    public async downloadFullDagZip(toPath?: string): Promise<Buffer | undefined> {
+        const [res] = await this.client.requestBytes({
+            method: METHOD_GET,
+            path: '/download_dag_zip',
+            args: {
+                dag: this.getURI(),
+            },
+        });
+        if (isUndefined(toPath)) {
+            return res;
+        }
+        await openWrite(res, toPath);
+        return;
+    }
+
+
 export class NodeHandle {
     blobs: { [key: string]: BlobHandle } = {};
     client: XYMEClient;
