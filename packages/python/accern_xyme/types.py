@@ -163,9 +163,14 @@ VersionResponse = TypedDict('VersionResponse', {
     "api_version_minor": int,
     "backends": Optional[Backends],
     "caller_api_version": int,
+    "image_repo": str,
+    "image_tag": str,
     "time": str,
     "xyme_version_full": str,
     "xyme_version": str,
+})
+RepoTagResponse = TypedDict('RepoTagResponse', {
+    "version": List[str],
 })
 ReadNode = TypedDict('ReadNode', {
     "redis_key": str,
