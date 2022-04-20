@@ -2059,9 +2059,8 @@ export class DagHandle {
         });
     }
 
-
     public async downloadFullDagZip(
-            toPath?: string
+        toPath?: string
     ): Promise<Buffer | undefined> {
         const [res] = await this.client.requestBytes({
             method: METHOD_GET,
