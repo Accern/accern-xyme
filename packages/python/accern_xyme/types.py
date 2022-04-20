@@ -462,7 +462,3 @@ DeleteBlobStatus = TypedDict('DeleteBlobStatus', {
 DeleteBlobResponse = TypedDict('DeleteBlobResponse', {
     "blobs": List[DeleteBlobStatus],
 })
-DownloadFullDagResponse = TypedDict('DownloadFullDagResponse', {
-    "blob_uris": List[str],
-    "file": str,
-})
