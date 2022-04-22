@@ -22,6 +22,7 @@ import {
     DagPrettyNode,
     DagReload,
     DictStrStr,
+    DictStrList,
     DynamicFormat,
     DynamicResults,
     DynamicStatusResponse,
@@ -655,6 +656,16 @@ export default class XYMEClient {
             addNamespace: false,
             args: {},
         });
+    }
+
+    public async getVersionOverride(): Promise<DictStrList> {
+        const serverVersion = await this.getServerVersion();
+        const repoTag: DictStrList = {};
+        repoTag['versions'] = [
+            serverVersion.image_repo,
+            serverVersion.image_tag,
+        ];
+        return repoTag;
     }
 
     public async getNamespaces(): Promise<string[]> {
@@ -2057,6 +2068,23 @@ export class DagHandle {
                 blob_uris: [this.getURI()],
             },
         });
+    }
+
+    public async downloadFullDagZip(
+        toPath?: string
+    ): Promise<Buffer | undefined> {
+        const [res] = await this.client.requestBytes({
+            method: METHOD_GET,
+            path: '/download_dag_zip',
+            args: {
+                dag: this.getURI(),
+            },
+        });
+        if (isUndefined(toPath)) {
+            return res;
+        }
+        await openWrite(res, toPath);
+        return;
     }
 }
 
