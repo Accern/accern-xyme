@@ -2830,7 +2830,7 @@ class CSVBlobHandle(BlobHandle):
                 io_in,
                 ext="csv",
                 progress_bar=progress_bar)
-            return self.finish_csv_upload(requeue_on_finish=requeue_on_finish)
+            return self.finish_csv_upload()
         finally:
             if requeue_on_finish is not None:
                 requeue_on_finish.requeue()
