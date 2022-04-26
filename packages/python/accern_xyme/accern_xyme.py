@@ -2795,6 +2795,7 @@ class CSVBlobHandle(BlobHandle):
             self,
             filename: str,
             progress_bar: Optional[IO[Any]] = sys.stdout,
+            requeue_on_finish: Optional[NodeHandle] = None,
             ) -> Optional[UploadFilesResponse]:
         fname = filename
         if filename.endswith(INPUT_ZIP_EXT):
@@ -2812,12 +2813,15 @@ class CSVBlobHandle(BlobHandle):
                     progress_bar=progress_bar)
             return self.finish_csv_upload(filename)
         finally:
+            if requeue_on_finish is not None:
+                requeue_on_finish.requeue()
             self._clear_upload()
 
     def add_from_df(
             self,
             df: pd.DataFrame,
             progress_bar: Optional[IO[Any]] = sys.stdout,
+            requeue_on_finish: Optional[NodeHandle] = None,
             ) -> Optional[UploadFilesResponse]:
         io_in = None
         try:
@@ -2826,8 +2830,10 @@ class CSVBlobHandle(BlobHandle):
                 io_in,
                 ext="csv",
                 progress_bar=progress_bar)
-            return self.finish_csv_upload()
+            return self.finish_csv_upload(requeue_on_finish=requeue_on_finish)
         finally:
+            if requeue_on_finish is not None:
+                requeue_on_finish.requeue()
             if io_in is not None:
                 io_in.close()
             self._clear_upload()
@@ -2836,6 +2842,7 @@ class CSVBlobHandle(BlobHandle):
             self,
             content: Union[bytes, str, pd.DataFrame],
             progress_bar: Optional[IO[Any]] = sys.stdout,
+            requeue_on_finish: Optional[NodeHandle] = None,
             ) -> Optional[UploadFilesResponse]:
         io_in = None
         try:
@@ -2846,6 +2853,8 @@ class CSVBlobHandle(BlobHandle):
                 progress_bar=progress_bar)
             return self.finish_csv_upload()
         finally:
+            if requeue_on_finish is not None:
+                requeue_on_finish.requeue()
             if io_in is not None:
                 io_in.close()
             self._clear_upload()
