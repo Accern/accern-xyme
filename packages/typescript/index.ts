@@ -2424,6 +2424,18 @@ export class NodeHandle {
         });
     }
 
+    public async requeue(): Promise<NodeState> {
+        return this.client.requestJSON<NodeState>({
+            method: METHOD_PUT,
+            path: '/requeue',
+            args: {
+                dag: this.getDag().getURI(),
+                node: this.getId(),
+                action: 'requeue',
+            },
+        });
+    }
+
     public async getBlobURI(
         blobKey: string,
         blobType: string
@@ -3075,7 +3087,8 @@ export class BlobHandle {
 export class CSVBlobHandle extends BlobHandle {
     public async addFromFile(
         fileName: string,
-        progressBar: WritableStream | undefined = undefined
+        progressBar: WritableStream | undefined = undefined,
+        requeueOnFinish: NodeHandle | undefined = undefined
     ) {
         let fname = fileName;
         if (fileName.endsWith(INPUT_ZIP_EXT)) {
@@ -3094,6 +3107,9 @@ export class CSVBlobHandle extends BlobHandle {
             await this.uploadFile(fileHandle, ext, progressBar);
             return await this.finishCSVUpload(fileName);
         } finally {
+            if (!isUndefined(requeueOnFinish)) {
+                requeueOnFinish.requeue()
+            }
             await fileHandle.close();
             await this.clearUpload();
         }
@@ -3102,7 +3118,8 @@ export class CSVBlobHandle extends BlobHandle {
     public async addFromContent(
         fileName: string,
         content: Buffer,
-        progressBar: WritableStream | undefined = undefined
+        progressBar: WritableStream | undefined = undefined,
+        requeueOnFinish: NodeHandle | undefined = undefined
     ) {
         let fname = fileName;
         if (fileName.endsWith(INPUT_ZIP_EXT)) {
@@ -3120,6 +3137,9 @@ export class CSVBlobHandle extends BlobHandle {
             await this.uploadFileUsingContent(content, ext, progressBar);
             return await this.finishCSVUpload(fileName);
         } finally {
+            if (!isUndefined(requeueOnFinish)) {
+                requeueOnFinish.requeue()
+            }
             await this.clearUpload();
         }
     }
