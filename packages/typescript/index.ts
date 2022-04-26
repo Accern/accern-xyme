@@ -3108,7 +3108,7 @@ export class CSVBlobHandle extends BlobHandle {
             return await this.finishCSVUpload(fileName);
         } finally {
             if (!isUndefined(requeueOnFinish)) {
-                requeueOnFinish.requeue()
+                requeueOnFinish.requeue();
             }
             await fileHandle.close();
             await this.clearUpload();
@@ -3138,7 +3138,7 @@ export class CSVBlobHandle extends BlobHandle {
             return await this.finishCSVUpload(fileName);
         } finally {
             if (!isUndefined(requeueOnFinish)) {
-                requeueOnFinish.requeue()
+                requeueOnFinish.requeue();
             }
             await this.clearUpload();
         }
