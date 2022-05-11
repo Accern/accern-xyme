@@ -307,6 +307,9 @@ def interpret_ctype(data: IO[bytes], ctype: str) -> ByteResponse:
     if ctype == "application/problem+json":
         res = json.load(data)
         raise ServerSideError(res["errMessage"])
+    if ctype == "application/terminal+empty":
+        assert len(data.read()) == 0
+        return None
     if ctype == "application/parquet":
         return pd.read_parquet(data)
     if ctype == "application/torch":
