@@ -1353,7 +1353,7 @@ class DagHandle:
                 "might be too large. try reducing split_th") from e
         return res_arr
 
-    def dynamic(self, input_data: BytesIO) -> ByteResponse:
+    def dynamic(self, input_data: BytesIO) -> Optional[ByteResponse]:
         cur_res, ctype = self._client.request_bytes(
             METHOD_FILE, "/dynamic", {
                 "dag": self.get_uri(),
@@ -1362,7 +1362,7 @@ class DagHandle:
             })
         return interpret_ctype(cur_res, ctype)
 
-    def dynamic_obj(self, input_obj: Any) -> ByteResponse:
+    def dynamic_obj(self, input_obj: Any) -> Optional[ByteResponse]:
         bio = BytesIO(json.dumps(
             input_obj,
             separators=(",", ":"),
@@ -1402,7 +1402,7 @@ class DagHandle:
             for input_obj in input_data
         ])
 
-    def get_dynamic_result(self, value_id: str) -> ByteResponse:
+    def get_dynamic_result(self, value_id: str) -> Optional[ByteResponse]:
         try:
             cur_res, ctype = self._client.request_bytes(
                 METHOD_GET, "/dynamic_result", {
@@ -1436,9 +1436,9 @@ class DagHandle:
             input_data: List[BytesIO],
             max_buff: int = 4000,
             block_size: int = 5,
-            num_threads: int = 20) -> Iterable[ByteResponse]:
+            num_threads: int = 20) -> Iterable[Optional[ByteResponse]]:
 
-        def get(hnd: 'ComputationHandle') -> ByteResponse:
+        def get(hnd: 'ComputationHandle') -> Optional[ByteResponse]:
             return hnd.get()
 
         success = False
@@ -1462,9 +1462,9 @@ class DagHandle:
             input_data: List[Any],
             max_buff: int = 4000,
             block_size: int = 5,
-            num_threads: int = 20) -> Iterable[ByteResponse]:
+            num_threads: int = 20) -> Iterable[Optional[ByteResponse]]:
 
-        def get(hnd: 'ComputationHandle') -> ByteResponse:
+        def get(hnd: 'ComputationHandle') -> Optional[ByteResponse]:
             return hnd.get()
 
         success = False
@@ -1722,7 +1722,7 @@ class DagHandle:
             max_rows: int = 100) -> Optional[ByteResponse]:
         offset_str = [offset]
 
-        def read_single() -> Tuple[ByteResponse, str]:
+        def read_single() -> Tuple[Optional[ByteResponse], str]:
             cur, read_ctype = self._client.request_bytes(
                 METHOD_GET, "/kafka_msg", {
                     "dag": self.get_uri(),
@@ -2999,7 +2999,7 @@ class ComputationHandle:
     def has_fetched(self) -> bool:
         return self._value is not None
 
-    def get(self) -> ByteResponse:
+    def get(self) -> Optional[ByteResponse]:
         try:
             if self._value is None:
                 self._value = self._dag.get_dynamic_result(self._value_id)
