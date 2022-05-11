@@ -1599,7 +1599,7 @@ export class DagHandle {
 
     public async getDynamicResult(
         valueId: string
-    ): Promise<ByteResponse| null> {
+    ): Promise<ByteResponse | null> {
         try {
             const [res, ctype] = await this.client.requestBytes({
                 method: METHOD_GET,

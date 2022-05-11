@@ -175,8 +175,8 @@ export function interpretContentType(
         const res = JSON.parse(data.toString());
         throw new ServerSideError(res['errMessage']);
     }
-    if (ctype == "application/terminal+empty") {
-        const res = data.toString()
+    if (ctype == 'application/terminal+empty') {
+        const res = data.toString();
         if (!res.length) {
             return null;
         } else {
