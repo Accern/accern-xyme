@@ -32,7 +32,7 @@ RETRY_SLEEP = 5.0
 RT = TypeVar('RT')
 
 
-ByteResponse = Union[pd.DataFrame, dict, IO[bytes], List[dict]]
+ByteResponse = Optional[Union[pd.DataFrame, dict, IO[bytes], List[dict]]]
 
 
 def set_verbose() -> None:
