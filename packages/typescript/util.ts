@@ -167,13 +167,21 @@ export function std(arr: number[]): number {
 export function interpretContentType(
     data: Buffer,
     ctype: string
-): ByteResponse {
+): ByteResponse | null {
     if (ctype === 'application/json') {
         return JSON.parse(data.toString());
     }
     if (ctype === 'application/problem+json') {
         const res = JSON.parse(data.toString());
         throw new ServerSideError(res['errMessage']);
+    }
+    if (ctype == "application/terminal+empty") {
+        const res = data.toString()
+        if (!res.length) {
+            return null;
+        } else {
+            throw new Error(`${res} is not empty`);
+        }
     }
     if (ctype == 'application/parquet') {
         return data;
