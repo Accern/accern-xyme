@@ -301,12 +301,15 @@ def get_file_hash(buff: IO[bytes]) -> str:
     return sha.hexdigest()
 
 
-def interpret_ctype(data: IO[bytes], ctype: str) -> ByteResponse:
+def interpret_ctype(data: IO[bytes], ctype: str) -> Optional[ByteResponse]:
     if ctype == "application/json":
         return json.load(data)
     if ctype == "application/problem+json":
         res = json.load(data)
         raise ServerSideError(res["errMessage"])
+    if ctype == "application/terminal+empty":
+        assert len(data.read()) == 0
+        return None
     if ctype == "application/parquet":
         return pd.read_parquet(data)
     if ctype == "application/torch":
@@ -368,12 +371,12 @@ def merge_ctype(datas: List[ByteResponse], ctype: str) -> ByteResponse:
 def async_compute(
         arr: List[Any],
         start: Callable[[List[Any]], List[RT]],
-        get: Callable[[RT], ByteResponse],
+        get: Callable[[RT], Optional[ByteResponse]],
         check_queue: Callable[[], MinimalQueueStatsResponse],
         get_status: Callable[[List[RT]], Dict[RT, QueueStatus]],
         max_buff: int,
         block_size: int,
-        num_threads: int) -> Iterable[ByteResponse]:
+        num_threads: int) -> Iterable[Optional[ByteResponse]]:
     assert max_buff > 0
     assert block_size > 0
     assert num_threads > 0
@@ -383,7 +386,7 @@ def async_compute(
     exc: List[Optional[BaseException]] = [None]
     cond = threading.Condition()
     ids: Dict[RT, int] = {}
-    res: Dict[int, ByteResponse] = {}
+    res: Dict[int, Optional[ByteResponse]] = {}
     min_size_th = 20
     main_threads = 3
 
