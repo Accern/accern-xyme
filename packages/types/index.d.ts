@@ -170,13 +170,13 @@ export declare class DagHandle {
         forceKeys?: boolean;
         noCache?: boolean;
     }): Promise<any[]>;
-    dynamic(inputData: Buffer): Promise<ByteResponse>;
-    dynamicObj(inputObj: any): Promise<ByteResponse>;
+    dynamic(inputData: Buffer): Promise<ByteResponse | null>;
+    dynamicObj(inputObj: any): Promise<ByteResponse | null>;
     dynamicAsync(inputData: Buffer[]): Promise<ComputationHandle[]>;
     setDynamicErrorMessage(msg?: string): void;
     getDynamicErrorMessage(): string | undefined;
     dynamicAsyncObj(inputData: any[]): Promise<ComputationHandle[]>;
-    getDynamicResult(valueId: string): Promise<ByteResponse>;
+    getDynamicResult(valueId: string): Promise<ByteResponse | null>;
     getDynamicStatus(valueIds: ComputationHandle[]): Promise<{
         [key: string]: QueueStatus;
     }>;
@@ -380,6 +380,6 @@ export declare class ComputationHandle {
     setDynError: (error: string) => void;
     constructor(dag: DagHandle, valueId: string, getDynError: () => string | undefined, setDynError: (error: string) => void);
     hasFetched(): boolean;
-    get(): Promise<ByteResponse>;
+    get(): Promise<ByteResponse | null>;
     getId(): string;
 }

@@ -1531,7 +1531,7 @@ export class DagHandle {
         return resArray;
     }
 
-    public async dynamic(inputData: Buffer): Promise<ByteResponse> {
+    public async dynamic(inputData: Buffer): Promise<ByteResponse | null> {
         const [res, ctype] = await this.client.requestBytes({
             method: METHOD_FILE,
             path: '/dynamic',
@@ -1545,7 +1545,7 @@ export class DagHandle {
         return interpretContentType(res, ctype);
     }
 
-    public async dynamicObj(inputObj: any): Promise<ByteResponse> {
+    public async dynamicObj(inputObj: any): Promise<ByteResponse | null> {
         const buffer = Buffer.from(JSON.stringify(inputObj));
         return this.dynamic(buffer);
     }
@@ -1597,7 +1597,9 @@ export class DagHandle {
         );
     }
 
-    public async getDynamicResult(valueId: string): Promise<ByteResponse> {
+    public async getDynamicResult(
+        valueId: string
+    ): Promise<ByteResponse | null> {
         try {
             const [res, ctype] = await this.client.requestBytes({
                 method: METHOD_GET,
@@ -3341,7 +3343,7 @@ export class ComputationHandle {
         return this.value !== undefined;
     }
 
-    public async get(): Promise<ByteResponse> {
+    public async get(): Promise<ByteResponse | null> {
         try {
             if (isUndefined(this.value)) {
                 const res = await this.dag.getDynamicResult(this.valueId);
