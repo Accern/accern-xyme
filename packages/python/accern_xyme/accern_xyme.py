@@ -1,4 +1,3 @@
-from copy import deepcopy
 import math
 import shutil
 import tempfile
@@ -2670,27 +2669,7 @@ class BlobHandle:
             cur_size = self._upload_part(
                 buff, begin, offset, total_size, print_progress)
             offsets.append(offset)
-        # for chunk in range(total_chunks):
-        #     begin = chunk * get_file_upload_chunk_size()
-        #     file_content.seek(begin, io.SEEK_SET)
-        #     cur_size = self._upload_part(
-        #         deepcopy(file_content), chunk, total_size, print_progress)
-        #     offsets.append(chunk)
 
-        # while True:
-        #     print_progress(cur_size / total_size, False)
-        #     buff = file_content.read(get_file_upload_chunk_size())
-        #     if not buff:
-        #         break
-        #     offset = file_content.tell()
-        #     # offset = file_content.seek(0, io.SEEK_CUR)
-        #     # offsets.append(offset)
-        #     new_size = self._append_upload(tmp_uri, BytesIO(buff), offset)
-        #     if new_size - cur_size != len(buff):
-        #         raise ValueError(
-        #             f"incomplete chunk upload n:{new_size} "
-        #             f"o:{cur_size} b:{len(buff)}")
-        #     cur_size = new_size
         print_progress(cur_size / total_size, True)
         return total_chunks
 
