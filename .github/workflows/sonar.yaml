@@ -5,9 +5,9 @@ on:
     branches:
       - main
       - dev
-      - sq-intergration
-  # pull_request:
-  #   types: [opened, synchronize, reopened]  
+      - sq-integration
+  pull_request:
+    types: [opened, synchronize, reopened]  
 
 jobs:
   build:
