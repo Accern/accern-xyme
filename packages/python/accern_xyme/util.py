@@ -23,7 +23,7 @@ import torch
 from .types import MinimalQueueStatsResponse, QueueStatus
 
 VERBOSE = False
-FILE_UPLOAD_CHUNK_SIZE = 100 * 1024  # 100kb
+FILE_UPLOAD_CHUNK_SIZE = 512 * 1024  # 512kb
 FILE_HASH_CHUNK_SIZE = FILE_UPLOAD_CHUNK_SIZE
 MAX_RETRY = 20
 RETRY_SLEEP = 5.0
