@@ -2581,17 +2581,9 @@ class BlobHandle:
             self,
             uri: str,
             fobj: IO[bytes],
-            offset: int,
-            total_chunks: int) -> int:
+            offset: int) -> int:
         res = self._perform_upload_action(
-            "append",
-            {
-                "uri": uri,
-                "offset": offset,
-                "total_chunks": total_chunks,
-                "chunk_size": FILE_UPLOAD_CHUNK_SIZE,
-            },
-            fobj=fobj)
+            "append", {"uri": uri, "offset": offset}, fobj=fobj)
         return res["pos"]
 
     def _finish_upload_zip(self, expected_size: int) -> List[str]:
@@ -2642,16 +2634,20 @@ class BlobHandle:
             offset: int,
             total_chunks: int,
             total_size: int,
-            print_progress: Callable[..., Any]) -> int:
-        print_progress(begin / total_size, False)
+            size_processed: Dict[str, int],
+            print_progress: Callable[..., Any]) -> None:
         assert self._tmp_uri is not None
         new_size = self._append_upload(
-            self._tmp_uri, BytesIO(buff), offset, total_chunks)
-        if new_size - begin != len(buff):
+            self._tmp_uri,
+            BytesIO(buff),
+            offset)
+        size_processed["size_processed"] += new_size
+        print_progress(size_processed["size_processed"] / total_size, False)
+        if (new_size != len(buff) or (new_size != FILE_UPLOAD_CHUNK_SIZE)) \
+                and (offset != total_chunks - 1):
             raise ValueError(
                 f"incomplete chunk upload n:{new_size} "
                 f"o:{begin} b:{len(buff)} offset: {offset}")
-        return new_size
 
     def _upload_file(
             self,
@@ -2676,6 +2672,7 @@ class BlobHandle:
                 (begin, file_content.read(get_file_upload_chunk_size())))
 
         num_thread = 10
+        size_processed = {"size_processed": 0}
         threads: List[threading.Thread] = []
         for offset, (begin, buff) in enumerate(multi_parts):
             thread = threading.Thread(
@@ -2686,6 +2683,7 @@ class BlobHandle:
                     offset,
                     total_chunks,
                     total_size,
+                    size_processed,
                     print_progress,
                 )
             )
@@ -2700,7 +2698,8 @@ class BlobHandle:
                 th.start()
             for th in thread_batch:
                 th.join()
-        # print_progress(cur_size / total_size, True)
+        if size_processed["size_processed"] == total_size:
+            print_progress(size_processed["size_processed"] / total_size, True)
         return total_chunks
 
     def upload_zip(self, source: Union[str, io.BytesIO]) -> List['BlobHandle']:
