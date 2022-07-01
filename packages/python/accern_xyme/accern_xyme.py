@@ -2944,7 +2944,9 @@ class CSVBlobHandle(BlobHandle):
 
 class TorchBlobHandle(BlobHandle):
     def finish_torch_upload(
-            self, filename: Optional[str] = None) -> UploadFilesResponse:
+            self,
+            expected_size: int,
+            filename: Optional[str] = None) -> UploadFilesResponse:
         tmp_uri = self._tmp_uri
         if tmp_uri is None:
             raise ValueError("tmp_uri is None")
@@ -2954,6 +2956,7 @@ class TorchBlobHandle(BlobHandle):
             "owner_dag": self.get_owner_dag(),
             "owner_node": self.get_owner_node(),
             "filename": filename,
+            "expected_size": expected_size,
         }
         return cast(UploadFilesResponse, self._client.request_json(
             METHOD_POST, "/finish_torch", args))
@@ -2973,11 +2976,11 @@ class TorchBlobHandle(BlobHandle):
             raise ValueError("could not determine extension")
         try:
             with open(filename, "rb") as fbuff:
-                self._upload_file(
+                expected_size = self._upload_file(
                     fbuff,
                     ext=ext,
                     progress_bar=progress_bar)
-            return self.finish_torch_upload(filename)
+            return self.finish_torch_upload(expected_size, filename)
         finally:
             self._clear_upload()
 
