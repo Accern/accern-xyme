@@ -2603,7 +2603,8 @@ class BlobHandle:
             model_name: str,
             maybe_classes: Optional[List[str]],
             maybe_range: Tuple[Optional[float], Optional[float]],
-            full_init: bool) -> UploadFilesResponse:
+            full_init: bool,
+            expected_size: int) -> UploadFilesResponse:
         uri = self._tmp_uri
         if uri is None:
             raise ValueError("tmp_uri is None")
@@ -2619,6 +2620,7 @@ class BlobHandle:
                 "owner_node": self.get_owner_node(),
                 "tmp_uri": uri,
                 "xcols": xcols,
+                "expected_size": expected_size,
             }))
 
     def _clear_upload(self) -> None:
@@ -2636,13 +2638,13 @@ class BlobHandle:
             total_size: int,
             size_processed: Dict[str, int],
             print_progress: Callable[..., Any]) -> None:
+        print_progress(size_processed["size_processed"] / total_size, False)
         assert self._tmp_uri is not None
         new_size = self._append_upload(
             self._tmp_uri,
             BytesIO(buff),
             offset)
         size_processed["size_processed"] += new_size
-        print_progress(size_processed["size_processed"] / total_size, False)
         if (new_size != len(buff) or (new_size != FILE_UPLOAD_CHUNK_SIZE)) \
                 and (offset != total_chunks - 1):
             raise ValueError(
@@ -2685,7 +2687,7 @@ class BlobHandle:
                     total_size,
                     size_processed,
                     print_progress,
-                )
+                ),
             )
             threads.append(thread)
         num_batch = math.ceil(len(threads)/num_thread)
@@ -2738,7 +2740,8 @@ class BlobHandle:
                 maybe_range=output_range,
                 xcols=xcols,
                 is_clf=is_clf,
-                full_init=full_init)
+                full_init=full_init,
+                expected_size=expected_size)
         finally:
             self._clear_upload()
 
