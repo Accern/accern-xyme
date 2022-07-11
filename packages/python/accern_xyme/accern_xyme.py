@@ -2674,9 +2674,7 @@ class BlobHandle:
         upload_chunk_size = get_file_upload_chunk_size()
         total_chunks = math.ceil(total_size/upload_chunk_size)
 
-        begins = []
-        for chunk in range(total_chunks):
-            begins.append(chunk * upload_chunk_size)
+        begins = [chunk * upload_chunk_size for chunk in range(total_chunks)]
 
         size_processed = {"size_processed": 0}
         active_ths: Set[threading.Thread] = set()
