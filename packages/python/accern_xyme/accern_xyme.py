@@ -2377,6 +2377,7 @@ class BlobHandle:
         self._owner: Optional[BlobOwner] = None
         self._info: Optional[Dict[str, Any]] = None
         self._parent: Optional[BlobHandle] = None
+        self._async_upload_lock = threading.RLock()
 
     def is_full(self) -> bool:
         return self._is_full
@@ -2631,25 +2632,30 @@ class BlobHandle:
 
     def _upload_part(
             self,
-            buff: bytes,
-            begin: int,
+            file_content: IO[bytes],
+            begin: List[int],
             offset: int,
             total_chunks: int,
             total_size: int,
             size_processed: Dict[str, int],
             print_progress: Callable[..., Any]) -> None:
-        print_progress(size_processed["size_processed"] / total_size, False)
         assert self._tmp_uri is not None
+        upload_chunk_size = get_file_upload_chunk_size()
+        self._async_upload_lock.acquire()
+        file_content.seek(begin[0], io.SEEK_SET)
+        buff = file_content.read(upload_chunk_size)
+        self._async_upload_lock.release()
         new_size = self._append_upload(
             self._tmp_uri,
             BytesIO(buff),
             offset)
         size_processed["size_processed"] += new_size
+        print_progress(size_processed["size_processed"] / total_size, False)
         if (new_size != len(buff) or (new_size != FILE_UPLOAD_CHUNK_SIZE)) \
                 and (offset != total_chunks - 1):
             raise ValueError(
                 f"incomplete chunk upload n:{new_size} "
-                f"o:{begin} b:{len(buff)} offset: {offset}")
+                f"o:{begin[0]} b:{len(buff)} offset: {offset}")
 
     def _upload_file(
             self,
@@ -2665,41 +2671,49 @@ class BlobHandle:
         print_progress = get_progress_bar(out=progress_bar)
         tmp_uri = self._start_upload(total_size, file_hash, ext)
         self._tmp_uri = tmp_uri
-        total_chunks = math.ceil(total_size/get_file_upload_chunk_size())
-        multi_parts = []
-        for chunk in range(total_chunks):
-            begin = chunk * get_file_upload_chunk_size()
-            file_content.seek(begin, io.SEEK_SET)
-            multi_parts.append(
-                (begin, file_content.read(get_file_upload_chunk_size())))
+        upload_chunk_size = get_file_upload_chunk_size()
+        total_chunks = math.ceil(total_size/upload_chunk_size)
 
-        num_thread = 10
+        begins = []
+        for chunk in range(total_chunks):
+            begins.append(chunk * upload_chunk_size)
+
         size_processed = {"size_processed": 0}
-        threads: List[threading.Thread] = []
-        for offset, (begin, buff) in enumerate(multi_parts):
-            thread = threading.Thread(
-                target=self._upload_part,
-                args=(
-                    buff,
-                    begin,
+        active_ths: Set[threading.Thread] = set()
+
+        def compute_half(
+                file_content: IO[bytes],
+                cur: List[int],
+                offset: int,
+                func: Callable[..., Any],
+                split_num: int = 1,
+                max_threads: int = 10) -> None:
+            if len(cur) <= split_num:
+                func(
+                    file_content,
+                    cur,
                     offset,
                     total_chunks,
                     total_size,
                     size_processed,
-                    print_progress,
-                ),
-            )
-            threads.append(thread)
-        num_batch = math.ceil(len(threads)/num_thread)
-        for ix in range(num_batch):
-            if ix == num_batch - 1:
-                thread_batch = threads[ix * num_thread:]
+                    print_progress)
+                return
+            half_ix: int = len(cur) // 2
+            args_first = (cur[:half_ix], offset, func)
+            args_second = (cur[half_ix:], offset + half_ix, func)
+            if len(active_ths) < max_threads:
+                comp_th = threading.Thread(
+                    target=compute_half, args=(file_content, *args_first))
+                active_ths.add(comp_th)
+                comp_th.start()
+                compute_half(file_content, *args_second)
+                comp_th.join()
+                active_ths.remove(comp_th)
             else:
-                thread_batch = threads[ix * num_thread: (ix + 1) * num_thread]
-            for th in thread_batch:
-                th.start()
-            for th in thread_batch:
-                th.join()
+                compute_half(file_content, *args_first)
+                compute_half(file_content, *args_second)
+
+        compute_half(file_content, begins, 0, self._upload_part)
         if size_processed["size_processed"] == total_size:
             print_progress(size_processed["size_processed"] / total_size, True)
         return total_chunks
