@@ -1,3 +1,4 @@
+import itertools
 import math
 import shutil
 import tempfile
@@ -41,9 +42,9 @@ from typing_extensions import Literal
 import quick_server
 
 from .util import (
-    FILE_UPLOAD_CHUNK_SIZE,
     async_compute,
     ByteResponse,
+    compute_parallel,
     content_to_csv_bytes,
     df_to_csv_bytes,
     get_age,
@@ -1319,57 +1320,38 @@ class DagHandle:
                     "dag": self.get_uri(),
                 }))
             return res["results"]
-        # FIXME: write generic spliterator implementation
+
         split_num: int = split_th
         assert split_num > 0
-        res_arr: List[Any] = [None] * len(inputs)
-        exc: List[Optional[BaseException]] = [None]
-        active_ths: Set[threading.Thread] = set()
 
-        def compute_half(cur: List[Any], offset: int) -> None:
-            if exc[0] is not None:
-                return
-            if len(cur) <= split_num:
+        def compute_dynamic_list(
+                cur: int,
+                lock: threading.RLock,  # pylint: disable=unused-argument
+                ) -> Any:
+            result = None
+            try:
+                result = self.dynamic_list(
+                    inputs[cur:cur + split_num],
+                    input_key=input_key,
+                    output_key=output_key,
+                    split_th=None,
+                    max_threads=max_threads,
+                    format_method=format_method,
+                    force_keys=force_keys,
+                    no_cache=no_cache)
+            except BaseException as e:  # pylint: disable=broad-except
                 try:
-                    cur_res = self.dynamic_list(
-                        cur,
-                        input_key=input_key,
-                        output_key=output_key,
-                        split_th=None,
-                        max_threads=max_threads,
-                        format_method=format_method,
-                        force_keys=force_keys,
-                        no_cache=no_cache)
-                    res_arr[offset:offset + len(cur_res)] = cur_res
-                except BaseException as e:  # pylint: disable=broad-except
-                    exc[0] = e
-                return
-            half_ix: int = len(cur) // 2
-            args_first = (cur[:half_ix], offset)
-            args_second = (cur[half_ix:], offset + half_ix)
-            if len(active_ths) < max_threads:
-                comp_th = threading.Thread(
-                    target=compute_half, args=args_first)
-                active_ths.add(comp_th)
-                comp_th.start()
-                compute_half(*args_second)
-                comp_th.join()
-                active_ths.remove(comp_th)
-            else:
-                compute_half(*args_first)
-                compute_half(*args_second)
+                    if isinstance(e, BaseException):
+                        raise e
+                except RequestException as err:
+                    raise ValueError(
+                        "request error while processing.") from err
+            return result
 
-        compute_half(inputs, 0)
-        for remain_th in active_ths:
-            remain_th.join()
-        raise_e = exc[0]
-        try:
-            if isinstance(raise_e, BaseException):
-                raise raise_e  # pylint: disable=raising-bad-type
-        except RequestException as e:
-            raise ValueError(
-                "request error while processing. processing time per batch "
-                "might be too large. try reducing split_th") from e
+        tasks = [offset for offset in range(0, len(inputs), split_num)]
+        arr = compute_parallel(
+            tasks, compute_dynamic_list, None, max_threads)
+        res_arr = list(itertools.chain(*arr))
         return res_arr
 
     def dynamic(self, input_data: BytesIO) -> Optional[ByteResponse]:
@@ -2377,7 +2359,6 @@ class BlobHandle:
         self._owner: Optional[BlobOwner] = None
         self._info: Optional[Dict[str, Any]] = None
         self._parent: Optional[BlobHandle] = None
-        self._async_upload_lock = threading.RLock()
 
     def is_full(self) -> bool:
         return self._is_full
@@ -2594,7 +2575,11 @@ class BlobHandle:
         res = cast(UploadFilesResponse, self._client.request_json(
             METHOD_POST,
             "/finish_zip",
-            {"uri": uri, "expected_size": expected_size}))
+            {
+                "uri": uri,
+                "expected_size": expected_size,
+                "part_size": get_file_upload_chunk_size(),
+            }))
         return res["files"]
 
     def _finish_upload_sklike(
@@ -2622,6 +2607,7 @@ class BlobHandle:
                 "tmp_uri": uri,
                 "xcols": xcols,
                 "expected_size": expected_size,
+                "part_size": get_file_upload_chunk_size(),
             }))
 
     def _clear_upload(self) -> None:
@@ -2629,33 +2615,6 @@ class BlobHandle:
         if uri is None:
             raise ValueError("tmp_uri is None")
         self._perform_upload_action("clear", {"uri": uri}, fobj=None)
-
-    def _upload_part(
-            self,
-            file_content: IO[bytes],
-            begin: List[int],
-            offset: int,
-            total_chunks: int,
-            total_size: int,
-            size_processed: Dict[str, int],
-            print_progress: Callable[..., Any]) -> None:
-        assert self._tmp_uri is not None
-        upload_chunk_size = get_file_upload_chunk_size()
-        self._async_upload_lock.acquire()
-        file_content.seek(begin[0], io.SEEK_SET)
-        buff = file_content.read(upload_chunk_size)
-        self._async_upload_lock.release()
-        new_size = self._append_upload(
-            self._tmp_uri,
-            BytesIO(buff),
-            offset)
-        size_processed["size_processed"] += new_size
-        print_progress(size_processed["size_processed"] / total_size, False)
-        if (new_size != len(buff) or (new_size != FILE_UPLOAD_CHUNK_SIZE)) \
-                and (offset != total_chunks - 1):
-            raise ValueError(
-                f"incomplete chunk upload n:{new_size} "
-                f"o:{begin[0]} b:{len(buff)} offset: {offset}")
 
     def _upload_file(
             self,
@@ -2676,45 +2635,26 @@ class BlobHandle:
 
         begins = [chunk * upload_chunk_size for chunk in range(total_chunks)]
 
-        size_processed = {"size_processed": 0}
-        active_ths: Set[threading.Thread] = set()
-
-        def compute_half(
-                file_content: IO[bytes],
-                cur: List[int],
+        def compute_upload(
                 offset: int,
-                func: Callable[..., Any],
-                split_num: int = 1,
-                max_threads: int = 10) -> None:
-            if len(cur) <= split_num:
-                func(
-                    file_content,
-                    cur,
-                    offset,
-                    total_chunks,
-                    total_size,
-                    size_processed,
-                    print_progress)
-                return
-            half_ix: int = len(cur) // 2
-            args_first = (cur[:half_ix], offset, func)
-            args_second = (cur[half_ix:], offset + half_ix, func)
-            if len(active_ths) < max_threads:
-                comp_th = threading.Thread(
-                    target=compute_half, args=(file_content, *args_first))
-                active_ths.add(comp_th)
-                comp_th.start()
-                compute_half(file_content, *args_second)
-                comp_th.join()
-                active_ths.remove(comp_th)
-            else:
-                compute_half(file_content, *args_first)
-                compute_half(file_content, *args_second)
+                compute_lock: threading.RLock) -> None:
+            assert self._tmp_uri is not None
+            with compute_lock:
+                file_content.seek(offset, io.SEEK_SET)
+                buff = file_content.read(upload_chunk_size)
+            new_size = self._append_upload(
+                self._tmp_uri,
+                BytesIO(buff),
+                offset)
+            if new_size != len(buff):
+                raise ValueError(
+                    f"incomplete chunk upload n:{new_size} "
+                    f"b:{len(buff)} offset: {offset}")
 
-        compute_half(file_content, begins, 0, self._upload_part)
-        if size_processed["size_processed"] == total_size:
-            print_progress(size_processed["size_processed"] / total_size, True)
-        return total_chunks
+        compute_parallel(
+            begins, compute_upload, print_progress, max_threads=10)
+
+        return total_size
 
     def upload_zip(self, source: Union[str, io.BytesIO]) -> List['BlobHandle']:
         files: List[str] = []
@@ -2879,6 +2819,7 @@ class CSVBlobHandle(BlobHandle):
             "owner_node": self.get_owner_node(),
             "filename": filename,
             "expected_size": expected_size,
+            "part_size": get_file_upload_chunk_size(),
         }
         return cast(UploadFilesResponse, self._client.request_json(
             METHOD_POST, "/finish_csv", args))
@@ -2969,6 +2910,7 @@ class TorchBlobHandle(BlobHandle):
             "owner_node": self.get_owner_node(),
             "filename": filename,
             "expected_size": expected_size,
+            "part_size": get_file_upload_chunk_size(),
         }
         return cast(UploadFilesResponse, self._client.request_json(
             METHOD_POST, "/finish_torch", args))

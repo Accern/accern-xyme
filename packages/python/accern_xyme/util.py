@@ -573,3 +573,41 @@ def maybe_json_loads(value: str) -> Any:
         return json.loads(escape_str(value))
     except json.JSONDecodeError:
         return None
+
+
+def compute_parallel(
+        tasks: List[int],
+        computing_fn: Callable[[int, threading.RLock], Any],
+        progress_fn: Optional[Callable[..., Any]],
+        max_threads: int) -> List[Any]:
+    a_tasks = list(enumerate(tasks))
+    task_count = 0
+    results = [None] * len(a_tasks)
+    progress_lock = threading.RLock()
+    compute_lock = threading.RLock()
+
+    def runner() -> None:
+        nonlocal task_count
+
+        while True:
+            if len(a_tasks) == 0:
+                break
+            cur_task = a_tasks.pop(0)
+            task_ix, offset = cur_task
+            results[task_ix] = computing_fn(offset, compute_lock)
+            task_count += 1
+            if progress_fn is not None:
+                with progress_lock:
+                    progress_fn(task_count / len(tasks), False)
+
+    ths = [
+        threading.Thread(target=runner, name=f"....{tid}")
+        for tid in range(max_threads)
+    ]
+    for th in ths:
+        th.start()
+    for th in ths:
+        th.join()
+    if progress_fn is not None:
+        progress_fn(task_count / len(tasks), True)
+    return results
