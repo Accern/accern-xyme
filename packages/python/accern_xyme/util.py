@@ -17,6 +17,7 @@ import shutil
 import time
 import threading
 from io import BytesIO, TextIOWrapper
+from accern_xyme.accern_xyme import XYMEClient
 import pandas as pd
 from scipy import sparse
 import torch
@@ -577,24 +578,28 @@ def maybe_json_loads(value: str) -> Any:
 
 
 def compute_parallel(
-        tasks: List[int],
-        computing_fn: Callable[[int, threading.RLock], CT],
-        progress_fn: Optional[Callable[..., None]],
-        max_threads: int) -> List[Optional[CT]]:
+        tasks: List[CT],
+        computing_fn: Callable[[CT, threading.RLock], RT],
+        progress_fn: Optional[Callable[[float, bool], None]],
+        max_threads: int) -> Union[List[RT], List[Optional[RT]]]:
     a_tasks = list(enumerate(tasks))
     task_count = 0
-    results: List[Optional[CT]] = [None] * len(a_tasks)
+    results: List[Optional[RT]] = [None] * len(a_tasks)
     progress_lock = threading.RLock()
     compute_lock = threading.RLock()
     exc: Optional[BaseException] = None
+    exc_task: Optional[Tuple[int, CT]] = None
 
     def runner() -> None:
-        nonlocal task_count, exc
+        nonlocal task_count, exc, exc_task
 
-        while True:
-            try:
-                cur_task = a_tasks.pop(0) if a_tasks else None
-                if cur_task is None or exc is not None:
+        try:
+            while True:
+                try:
+                    cur_task = a_tasks.pop(0)
+                except IndexError:
+                    break
+                if exc is not None:
                     break
                 task_ix, offset = cur_task
                 results[task_ix] = computing_fn(offset, compute_lock)
@@ -602,19 +607,24 @@ def compute_parallel(
                 if progress_fn is not None:
                     with progress_lock:
                         progress_fn(task_count / len(tasks), False)
-            except BaseException as e:  # pylint: disable=broad-except
+        except BaseException as e:  # pylint: disable=broad-except
+            with compute_lock:
                 exc = e
+                exc_task = cur_task
 
     ths = [
-        threading.Thread(target=runner, name=f"thread id: {tid}", daemon=True)
+        threading.Thread(
+            target=runner,
+            name=f"{XYMEClient.__name__}-Worker-{tid}",
+            daemon=True)
         for tid in range(max_threads)
     ]
     for th in ths:
         th.start()
     for th in ths:
         th.join()
-    if isinstance(exc, BaseException):
-        raise exc  # pylint: disable=raising-bad-type
+    if exc is not None:
+        raise ValueError(f"Error encountered in task: {exc_task}") from exc
     if progress_fn is not None:
         progress_fn(task_count / len(tasks), True)
     return results

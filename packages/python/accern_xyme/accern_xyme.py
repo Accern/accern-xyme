@@ -1324,10 +1324,7 @@ class DagHandle:
         split_num: int = split_th
         assert split_num > 0
 
-        def compute_dynamic_list(
-                cur: int,
-                lock: threading.RLock,  # pylint: disable=unused-argument
-                ) -> Any:
+        def compute_dynamic_list(cur: int, _: threading.RLock) -> Any:
             result = None
             try:
                 result = self.dynamic_list(
@@ -1351,8 +1348,7 @@ class DagHandle:
         tasks = [offset for offset in range(0, len(inputs), split_num)]
         arr = compute_parallel(
             tasks, compute_dynamic_list, None, max_threads)
-        res_arr = list(itertools.chain(*arr))
-        return res_arr
+        return list(itertools.chain(*arr))
 
     def dynamic(self, input_data: BytesIO) -> Optional[ByteResponse]:
         cur_res, ctype = self._client.request_bytes(
@@ -1877,15 +1873,17 @@ class DagHandle:
     def _upload_dag_blobs(
             self,
             tmpdir: str,
-            blobs_map: List[BlobDetails]) -> List['BlobHandle']:
+            blobs_map: List[BlobDetails],
+            max_threads: int) -> List['BlobHandle']:
         blob_handles = []
         for blob in blobs_map:
             blob_file = os.path.join(tmpdir, blob["fname"])
             blob_handle = self._client.get_blob_handle(blob["blob_uri"])
-            blob_handles.extend(blob_handle.upload_zip(blob_file))
+            blob_handles.extend(blob_handle.upload_zip(blob_file, max_threads))
         return blob_handles
 
-    def upload_full_dag_zip(self, source: str) -> List['BlobHandle']:
+    def upload_full_dag_zip(
+            self, source: str, max_threads: int = 10) -> List['BlobHandle']:
         dag_blob_handle = self._client.get_blob_handle(self.get_uri())
         blob_handles = []
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -1895,9 +1893,10 @@ class DagHandle:
                 file_map: FileMap = json.load(fmap)
             dag_fname = file_map["dag_blob"]
             dag_file = os.path.join(tmpdir, f"{dag_fname}")
-            blob_handles.extend(dag_blob_handle.upload_zip(dag_file))
+            blob_handles.extend(
+                dag_blob_handle.upload_zip(dag_file, max_threads))
             blob_handles.extend(self._upload_dag_blobs(
-                tmpdir, file_map["blobs"]))
+                tmpdir, file_map["blobs"], max_threads))
         return blob_handles
 
     def __hash__(self) -> int:
@@ -2610,6 +2609,7 @@ class BlobHandle:
     def _upload_file(
             self,
             file_content: IO[bytes],
+            max_threads: int,
             ext: str,
             progress_bar: Optional[IO[Any]] = sys.stdout) -> None:
         init_pos = file_content.seek(0, io.SEEK_CUR)
@@ -2622,7 +2622,7 @@ class BlobHandle:
         tmp_uri = self._start_upload(total_size, file_hash, ext)
         self._tmp_uri = tmp_uri
         upload_chunk_size = get_file_upload_chunk_size()
-        total_chunks = math.ceil(total_size/upload_chunk_size)
+        total_chunks = math.ceil(total_size / upload_chunk_size)
 
         begins = [chunk * upload_chunk_size for chunk in range(total_chunks)]
 
@@ -2642,17 +2642,19 @@ class BlobHandle:
                     f"incomplete chunk upload n:{new_size} "
                     f"b:{len(buff)} offset: {offset}")
 
-        compute_parallel(
-            begins, compute_upload, print_progress, max_threads=10)
+        compute_parallel(begins, compute_upload, print_progress, max_threads)
 
-    def upload_zip(self, source: Union[str, io.BytesIO]) -> List['BlobHandle']:
+    def upload_zip(
+            self,
+            source: Union[str, io.BytesIO],
+            max_threads: int = 10) -> List['BlobHandle']:
         files: List[str] = []
         try:
             if isinstance(source, str) or not hasattr(source, "read"):
                 with open(f"{source}", "rb") as fin:
-                    self._upload_file(fin, ext="zip")
+                    self._upload_file(fin, max_threads, ext="zip")
             else:
-                self._upload_file(source, ext="zip")
+                self._upload_file(source, max_threads, ext="zip")
             files = self._finish_upload_zip()
         finally:
             self._clear_upload()
@@ -2670,9 +2672,10 @@ class BlobHandle:
             maybe_classes: Optional[List[str]] = None,
             maybe_range: Optional[
                 Tuple[Optional[float], Optional[float]]] = None,
+            max_threads: int = 10,
             full_init: bool = True) -> UploadFilesResponse:
         try:
-            self._upload_file(model_obj, ext="pkl")
+            self._upload_file(model_obj, max_threads, ext="pkl")
             output_range = (None, None) if maybe_range is None else maybe_range
             return self._finish_upload_sklike(
                 model_name=model_name,
@@ -2813,7 +2816,7 @@ class CSVBlobHandle(BlobHandle):
             filename: str,
             progress_bar: Optional[IO[Any]] = sys.stdout,
             requeue_on_finish: Optional[NodeHandle] = None,
-            ) -> Optional[UploadFilesResponse]:
+            max_threads: int = 10) -> Optional[UploadFilesResponse]:
         fname = filename
         if filename.endswith(INPUT_ZIP_EXT):
             fname = filename[:-len(INPUT_ZIP_EXT)]
@@ -2826,6 +2829,7 @@ class CSVBlobHandle(BlobHandle):
             with open(filename, "rb") as fbuff:
                 self._upload_file(
                     fbuff,
+                    max_threads,
                     ext=ext,
                     progress_bar=progress_bar)
             return self.finish_csv_upload(filename)
@@ -2839,12 +2843,13 @@ class CSVBlobHandle(BlobHandle):
             df: pd.DataFrame,
             progress_bar: Optional[IO[Any]] = sys.stdout,
             requeue_on_finish: Optional[NodeHandle] = None,
-            ) -> Optional[UploadFilesResponse]:
+            max_threads: int = 10) -> Optional[UploadFilesResponse]:
         io_in = None
         try:
             io_in = df_to_csv_bytes(df)
             self._upload_file(
                 io_in,
+                max_threads,
                 ext="csv",
                 progress_bar=progress_bar)
             return self.finish_csv_upload()
@@ -2860,12 +2865,13 @@ class CSVBlobHandle(BlobHandle):
             content: Union[bytes, str, pd.DataFrame],
             progress_bar: Optional[IO[Any]] = sys.stdout,
             requeue_on_finish: Optional[NodeHandle] = None,
-            ) -> Optional[UploadFilesResponse]:
+            max_threads: int = 10) -> Optional[UploadFilesResponse]:
         io_in = None
         try:
             io_in = content_to_csv_bytes(content)
             self._upload_file(
                 io_in,
+                max_threads,
                 ext="csv",
                 progress_bar=progress_bar)
             return self.finish_csv_upload()
@@ -2900,7 +2906,7 @@ class TorchBlobHandle(BlobHandle):
             self,
             filename: str,
             progress_bar: Optional[IO[Any]] = sys.stdout,
-            ) -> Optional[UploadFilesResponse]:
+            max_threads: int = 10) -> Optional[UploadFilesResponse]:
         fname = filename
         if filename.endswith(INPUT_ZIP_EXT):
             fname = filename[:-len(INPUT_ZIP_EXT)]
@@ -2913,6 +2919,7 @@ class TorchBlobHandle(BlobHandle):
             with open(filename, "rb") as fbuff:
                 self._upload_file(
                     fbuff,
+                    max_threads,
                     ext=ext,
                     progress_bar=progress_bar)
             return self.finish_torch_upload(filename)
