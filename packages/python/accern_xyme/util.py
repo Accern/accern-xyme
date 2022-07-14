@@ -23,13 +23,15 @@ import torch
 from .types import MinimalQueueStatsResponse, QueueStatus
 
 VERBOSE = False
-FILE_UPLOAD_CHUNK_SIZE = 512 * 1024  # 512kb
+FILE_UPLOAD_CHUNK_SIZE = 100 * 1024  # 100kb
 FILE_HASH_CHUNK_SIZE = FILE_UPLOAD_CHUNK_SIZE
 MAX_RETRY = 20
 RETRY_SLEEP = 5.0
 
 
+CT = TypeVar('CT')
 RT = TypeVar('RT')
+
 
 
 ByteResponse = Union[pd.DataFrame, dict, IO[bytes], List[dict]]
@@ -577,37 +579,43 @@ def maybe_json_loads(value: str) -> Any:
 
 def compute_parallel(
         tasks: List[int],
-        computing_fn: Callable[[int, threading.RLock], Any],
-        progress_fn: Optional[Callable[..., Any]],
-        max_threads: int) -> List[Any]:
+        computing_fn: Callable[[int, threading.RLock], CT],
+        progress_fn: Optional[Callable[..., None]],
+        max_threads: int) -> List[Optional[CT]]:
     a_tasks = list(enumerate(tasks))
     task_count = 0
-    results = [None] * len(a_tasks)
+    results: List[Optional[CT]] = [None] * len(a_tasks)
     progress_lock = threading.RLock()
     compute_lock = threading.RLock()
+    exc: Optional[BaseException] = None
 
     def runner() -> None:
-        nonlocal task_count
+        nonlocal task_count, exc
 
         while True:
-            if len(a_tasks) == 0:
-                break
-            cur_task = a_tasks.pop(0)
-            task_ix, offset = cur_task
-            results[task_ix] = computing_fn(offset, compute_lock)
-            task_count += 1
-            if progress_fn is not None:
-                with progress_lock:
-                    progress_fn(task_count / len(tasks), False)
+            try:
+                cur_task = a_tasks.pop(0) if a_tasks else None
+                if cur_task is None or exc is not None:
+                    break
+                task_ix, offset = cur_task
+                results[task_ix] = computing_fn(offset, compute_lock)
+                task_count += 1
+                if progress_fn is not None:
+                    with progress_lock:
+                        progress_fn(task_count / len(tasks), False)
+            except BaseException as e:  # pylint: disable=broad-except
+                exc = e
 
     ths = [
-        threading.Thread(target=runner, name=f"....{tid}")
+        threading.Thread(target=runner, name=f"thread id: {tid}", daemon=True)
         for tid in range(max_threads)
     ]
     for th in ths:
         th.start()
     for th in ths:
         th.join()
+    if isinstance(exc, BaseException):
+        raise exc  # pylint: disable=raising-bad-type
     if progress_fn is not None:
         progress_fn(task_count / len(tasks), True)
     return results

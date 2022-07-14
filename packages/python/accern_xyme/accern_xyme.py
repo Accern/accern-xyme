@@ -2568,18 +2568,12 @@ class BlobHandle:
             "append", {"uri": uri, "offset": offset}, fobj=fobj)
         return res["pos"]
 
-    def _finish_upload_zip(self, expected_size: int) -> List[str]:
+    def _finish_upload_zip(self) -> List[str]:
         uri = self._tmp_uri
         if uri is None:
             raise ValueError("tmp_uri is None")
         res = cast(UploadFilesResponse, self._client.request_json(
-            METHOD_POST,
-            "/finish_zip",
-            {
-                "uri": uri,
-                "expected_size": expected_size,
-                "part_size": get_file_upload_chunk_size(),
-            }))
+            METHOD_POST, "/finish_zip", {"uri": uri}))
         return res["files"]
 
     def _finish_upload_sklike(
@@ -2589,8 +2583,7 @@ class BlobHandle:
             model_name: str,
             maybe_classes: Optional[List[str]],
             maybe_range: Tuple[Optional[float], Optional[float]],
-            full_init: bool,
-            expected_size: int) -> UploadFilesResponse:
+            full_init: bool) -> UploadFilesResponse:
         uri = self._tmp_uri
         if uri is None:
             raise ValueError("tmp_uri is None")
@@ -2606,8 +2599,6 @@ class BlobHandle:
                 "owner_node": self.get_owner_node(),
                 "tmp_uri": uri,
                 "xcols": xcols,
-                "expected_size": expected_size,
-                "part_size": get_file_upload_chunk_size(),
             }))
 
     def _clear_upload(self) -> None:
@@ -2620,7 +2611,7 @@ class BlobHandle:
             self,
             file_content: IO[bytes],
             ext: str,
-            progress_bar: Optional[IO[Any]] = sys.stdout) -> int:
+            progress_bar: Optional[IO[Any]] = sys.stdout) -> None:
         init_pos = file_content.seek(0, io.SEEK_CUR)
         file_hash = get_file_hash(file_content)
         total_size = file_content.seek(0, io.SEEK_END) - init_pos
@@ -2654,18 +2645,15 @@ class BlobHandle:
         compute_parallel(
             begins, compute_upload, print_progress, max_threads=10)
 
-        return total_size
-
     def upload_zip(self, source: Union[str, io.BytesIO]) -> List['BlobHandle']:
         files: List[str] = []
-        expected_size = 0
         try:
             if isinstance(source, str) or not hasattr(source, "read"):
                 with open(f"{source}", "rb") as fin:
-                    expected_size = self._upload_file(fin, ext="zip")
+                    self._upload_file(fin, ext="zip")
             else:
-                expected_size = self._upload_file(source, ext="zip")
-            files = self._finish_upload_zip(expected_size)
+                self._upload_file(source, ext="zip")
+            files = self._finish_upload_zip()
         finally:
             self._clear_upload()
         return [
@@ -2684,7 +2672,7 @@ class BlobHandle:
                 Tuple[Optional[float], Optional[float]]] = None,
             full_init: bool = True) -> UploadFilesResponse:
         try:
-            expected_size = self._upload_file(model_obj, ext="pkl")
+            self._upload_file(model_obj, ext="pkl")
             output_range = (None, None) if maybe_range is None else maybe_range
             return self._finish_upload_sklike(
                 model_name=model_name,
@@ -2692,8 +2680,7 @@ class BlobHandle:
                 maybe_range=output_range,
                 xcols=xcols,
                 is_clf=is_clf,
-                full_init=full_init,
-                expected_size=expected_size)
+                full_init=full_init)
         finally:
             self._clear_upload()
 
@@ -2807,7 +2794,6 @@ class BlobHandle:
 class CSVBlobHandle(BlobHandle):
     def finish_csv_upload(
             self,
-            expected_size: int,
             filename: Optional[str] = None) -> UploadFilesResponse:
         tmp_uri = self._tmp_uri
         if tmp_uri is None:
@@ -2818,8 +2804,6 @@ class CSVBlobHandle(BlobHandle):
             "owner_dag": self.get_owner_dag(),
             "owner_node": self.get_owner_node(),
             "filename": filename,
-            "expected_size": expected_size,
-            "part_size": get_file_upload_chunk_size(),
         }
         return cast(UploadFilesResponse, self._client.request_json(
             METHOD_POST, "/finish_csv", args))
@@ -2840,11 +2824,11 @@ class CSVBlobHandle(BlobHandle):
             raise ValueError("could not determine extension")
         try:
             with open(filename, "rb") as fbuff:
-                expected_size = self._upload_file(
+                self._upload_file(
                     fbuff,
                     ext=ext,
                     progress_bar=progress_bar)
-            return self.finish_csv_upload(expected_size, filename)
+            return self.finish_csv_upload(filename)
         finally:
             if requeue_on_finish is not None:
                 requeue_on_finish.requeue()
@@ -2859,11 +2843,11 @@ class CSVBlobHandle(BlobHandle):
         io_in = None
         try:
             io_in = df_to_csv_bytes(df)
-            expected_size = self._upload_file(
+            self._upload_file(
                 io_in,
                 ext="csv",
                 progress_bar=progress_bar)
-            return self.finish_csv_upload(expected_size)
+            return self.finish_csv_upload()
         finally:
             if requeue_on_finish is not None:
                 requeue_on_finish.requeue()
@@ -2880,11 +2864,11 @@ class CSVBlobHandle(BlobHandle):
         io_in = None
         try:
             io_in = content_to_csv_bytes(content)
-            expected_size = self._upload_file(
+            self._upload_file(
                 io_in,
                 ext="csv",
                 progress_bar=progress_bar)
-            return self.finish_csv_upload(expected_size)
+            return self.finish_csv_upload()
         finally:
             if requeue_on_finish is not None:
                 requeue_on_finish.requeue()
@@ -2898,7 +2882,6 @@ class CSVBlobHandle(BlobHandle):
 class TorchBlobHandle(BlobHandle):
     def finish_torch_upload(
             self,
-            expected_size: int,
             filename: Optional[str] = None) -> UploadFilesResponse:
         tmp_uri = self._tmp_uri
         if tmp_uri is None:
@@ -2909,8 +2892,6 @@ class TorchBlobHandle(BlobHandle):
             "owner_dag": self.get_owner_dag(),
             "owner_node": self.get_owner_node(),
             "filename": filename,
-            "expected_size": expected_size,
-            "part_size": get_file_upload_chunk_size(),
         }
         return cast(UploadFilesResponse, self._client.request_json(
             METHOD_POST, "/finish_torch", args))
@@ -2930,11 +2911,11 @@ class TorchBlobHandle(BlobHandle):
             raise ValueError("could not determine extension")
         try:
             with open(filename, "rb") as fbuff:
-                expected_size = self._upload_file(
+                self._upload_file(
                     fbuff,
                     ext=ext,
                     progress_bar=progress_bar)
-            return self.finish_torch_upload(expected_size, filename)
+            return self.finish_torch_upload(filename)
         finally:
             self._clear_upload()
 
