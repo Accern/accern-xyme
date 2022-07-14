@@ -33,7 +33,6 @@ CT = TypeVar('CT')
 RT = TypeVar('RT')
 
 
-
 ByteResponse = Union[pd.DataFrame, dict, IO[bytes], List[dict]]
 
 
