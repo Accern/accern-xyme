@@ -208,7 +208,8 @@ def has_graph_easy() -> bool:
 
     try:
         import subprocess
-        subprocess.Popen(["graph-easy", "--help"])
+        subprocess.Popen(  # pylint: disable=consider-using-with
+            ["graph-easy", "--help"])
         HAS_GRAPH_EASY = True
     except FileNotFoundError:
         # pylint: disable=line-too-long

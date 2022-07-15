@@ -1345,7 +1345,7 @@ class DagHandle:
                         "request error while processing.") from err
             return result
 
-        tasks = [offset for offset in range(0, len(inputs), split_num)]
+        tasks = list(range(0, len(inputs), split_num))
         arr = compute_parallel(
             tasks, compute_dynamic_list, None, max_threads)
         return list(itertools.chain(*arr))
@@ -1563,7 +1563,8 @@ class DagHandle:
 
                     import subprocess
                     cmd = ["echo", graph_str]
-                    p1 = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+                    p1 = subprocess.Popen(cmd, stdout=subprocess.PIPE) \
+                        # pylint: disable=consider-using-with
                     p2 = subprocess.check_output(
                         ["graph-easy"], stdin=p1.stdout)
                     res = p2.decode("utf-8")

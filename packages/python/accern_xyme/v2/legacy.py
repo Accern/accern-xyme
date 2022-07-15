@@ -2734,10 +2734,11 @@ class SourceHandle:
         with self.bulk_operation():
             self._ensure_multi_source()
             with self.update_schema() as schema_obj:
-                if "config" not in schema_obj:
-                    schema_obj["config"] = {}
+                if "config" not in schema_obj.keys():
+                    schema_obj["config"] = {}  \
+                        # pylint: disable=unsupported-assignment-operation
                 config = schema_obj["config"]
-                if "sources" not in config:
+                if "sources" not in config.keys():
                     config["sources"] = []
                 config["sources"].append(source.get_source_id())
 
@@ -2750,8 +2751,9 @@ class SourceHandle:
             self._ensure_csv_source()
             with self.update_schema() as schema_obj:
                 with input_obj.bulk_operation():
-                    if "config" not in schema_obj:
-                        schema_obj["config"] = {}
+                    if "config" not in schema_obj.keys():
+                        schema_obj["config"] = {}  \
+                            # pylint: disable=unsupported-assignment-operation
                     config = schema_obj["config"]
                     ext = input_obj.get_extension()
                     if ext is None:
