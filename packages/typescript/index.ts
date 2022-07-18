@@ -2890,7 +2890,6 @@ export class BlobHandle {
      */
 
     public async updateBuffer(
-        curSize: number,
         buffer: Buffer,
         nread: number,
         chunk: number,
@@ -2903,10 +2902,9 @@ export class BlobHandle {
             data = buffer;
         }
         const newSize = await blobHandle.appendUpload(this.tmpURI, data);
-        if (newSize - curSize !== data.length) {
+        if (newSize !== data.length) {
             throw new Error(`
-                incomplete chunk upload n:${newSize} o:${curSize}
-                b: ${data.length}
+                incomplete chunk upload n:${newSize} b: ${data.length}
             `);
         }
         return newSize;
@@ -2922,41 +2920,45 @@ export class BlobHandle {
             const methodStr = method !== undefined ? ` ${method}` : '';
             progressBar.getWriter().write(`Uploading${methodStr}:\n`);
         }
-
+        const maxThreads: number = 10;
         const [hash, totalSize] = await getReaderHash(read);
         const tmpURI = await this.startUpload(totalSize, hash, ext);
         this.tmpURI = tmpURI;
+        let totalChunks = Math.ceil(totalSize / getFileUploadChunkSize());
+        let begins: number[] = [];
+        Array.from(Array(totalChunks).keys()).forEach((chunk) => {
+            begins.push(chunk * getFileUploadChunkSize());
+        })
+
         let curPos = 0;
-        let curSize = 0;
 
         async function uploadNextChunk(
             blobHandle: BlobHandle,
-            chunk: number,
+            begin: number,
             read: (pos: number, size: number) => Promise<Buffer>
         ): Promise<void> {
-            const buffer = await read(curPos, chunk);
+            const buffer = await read(begin, getFileUploadChunkSize());
             const nread = buffer.byteLength;
             if (!nread) {
                 return;
             }
             curPos += nread;
             const newSize = await blobHandle.updateBuffer(
-                curSize,
                 buffer,
                 nread,
-                chunk,
+                begin,
                 blobHandle
             );
-            curSize = newSize;
-            await uploadNextChunk(blobHandle, chunk, read);
+            // await uploadNextChunk(blobHandle, begin, read);
         }
 
-        await uploadNextChunk(this, getFileUploadChunkSize(), read).catch(
+        await Promise.all(begins.map(async (ix) => {
+            uploadNextChunk(this, ix, read)
+        })).catch(
             (error) => {
-                this.clearUpload();
-                throw error;
-            }
-        );
+            this.clearUpload();
+            throw error;
+        });
     }
 
     public async uploadFile(

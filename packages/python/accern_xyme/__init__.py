@@ -1,5 +1,5 @@
 # pylint: disable=unused-import
-__version__ = "4.1.3"
+__version__ = "4.2.0"
 import accern_xyme.v2
 import accern_xyme.v3
 import accern_xyme.accern_xyme

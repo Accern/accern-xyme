@@ -414,6 +414,7 @@ class XYMEClient:
         url = f"{self._url}{prefix}{path}"
         headers = {
             "authorization": self._token,
+            "xyme-minor-version": self._api_version_minor
         }
         if add_namespace:
             args["namespace"] = self._namespace
@@ -1298,6 +1299,81 @@ class DagHandle:
             }))
         return res["results"]
 
+    def _legacy_dynamic_list(
+            self,
+            inputs: List[Any],
+            input_key: Optional[str] = None,
+            output_key: Optional[str] = None,
+            split_th: Optional[int] = 1000,
+            max_threads: int = 50,
+            format_method: str = "simple",
+            force_keys: bool = False,
+            no_cache: bool = False) -> List[Any]:
+        if split_th is None or len(inputs) <= split_th:
+            res = cast(DynamicResults, self._client.request_json(
+                METHOD_POST, "/dynamic_list", {
+                    "force_keys": force_keys,
+                    "format": format_method,
+                    "input_key": input_key,
+                    "inputs": inputs,
+                    "no_cache": no_cache,
+                    "output_key": output_key,
+                    "dag": self.get_uri(),
+                }))
+            return res["results"]
+        # FIXME: write generic spliterator implementation
+        split_num: int = split_th
+        assert split_num > 0
+        res_arr: List[Any] = [None] * len(inputs)
+        exc: List[Optional[BaseException]] = [None]
+        active_ths: Set[threading.Thread] = set()
+
+        def compute_half(cur: List[Any], offset: int) -> None:
+            if exc[0] is not None:
+                return
+            if len(cur) <= split_num:
+                try:
+                    cur_res = self._legacy_dynamic_list(
+                        cur,
+                        input_key=input_key,
+                        output_key=output_key,
+                        split_th=None,
+                        max_threads=max_threads,
+                        format_method=format_method,
+                        force_keys=force_keys,
+                        no_cache=no_cache)
+                    res_arr[offset:offset + len(cur_res)] = cur_res
+                except BaseException as e:  # pylint: disable=broad-except
+                    exc[0] = e
+                return
+            half_ix: int = len(cur) // 2
+            args_first = (cur[:half_ix], offset)
+            args_second = (cur[half_ix:], offset + half_ix)
+            if len(active_ths) < max_threads:
+                comp_th = threading.Thread(
+                    target=compute_half, args=args_first)
+                active_ths.add(comp_th)
+                comp_th.start()
+                compute_half(*args_second)
+                comp_th.join()
+                active_ths.remove(comp_th)
+            else:
+                compute_half(*args_first)
+                compute_half(*args_second)
+
+        compute_half(inputs, 0)
+        for remain_th in active_ths:
+            remain_th.join()
+        raise_e = exc[0]
+        try:
+            if isinstance(raise_e, BaseException):
+                raise raise_e  # pylint: disable=raising-bad-type
+        except RequestException as e:
+            raise ValueError(
+                "request error while processing. processing time per batch "
+                "might be too large. try reducing split_th") from e
+        return res_arr
+
     def dynamic_list(
             self,
             inputs: List[Any],
@@ -1308,6 +1384,18 @@ class DagHandle:
             format_method: str = "simple",
             force_keys: bool = False,
             no_cache: bool = False) -> List[Any]:
+        api_minor_version = self._client.get_api_version_minor()
+        if api_minor_version < 2:
+            return self._legacy_dynamic_list(
+                inputs,
+                input_key=input_key,
+                output_key=output_key,
+                split_th=None,
+                max_threads=max_threads,
+                format_method=format_method,
+                force_keys=force_keys,
+                no_cache=no_cache)
+
         if split_th is None or len(inputs) <= split_th:
             res = cast(DynamicResults, self._client.request_json(
                 METHOD_POST, "/dynamic_list", {
@@ -2607,12 +2695,43 @@ class BlobHandle:
             raise ValueError("tmp_uri is None")
         self._perform_upload_action("clear", {"uri": uri}, fobj=None)
 
+    def _legacy_upload_file(
+            self,
+            file_content: IO[bytes],
+            ext: str,
+            progress_bar: Optional[IO[Any]] = sys.stdout) -> None:
+        init_pos = file_content.seek(0, io.SEEK_CUR)
+        file_hash = get_file_hash(file_content)
+        total_size = file_content.seek(0, io.SEEK_END) - init_pos
+        file_content.seek(init_pos, io.SEEK_SET)
+        if progress_bar is not None:
+            progress_bar.write("Uploading file:\n")
+        print_progress = get_progress_bar(out=progress_bar)
+        tmp_uri = self._start_upload(total_size, file_hash, ext)
+        self._tmp_uri = tmp_uri
+        cur_size = 0
+        while True:
+            print_progress(cur_size / total_size, False)
+            buff = file_content.read(get_file_upload_chunk_size())
+            if not buff:
+                break
+            new_size = self._append_upload(tmp_uri, BytesIO(buff))
+            if new_size - cur_size != len(buff):
+                raise ValueError(
+                    f"incomplete chunk upload n:{new_size} "
+                    f"o:{cur_size} b:{len(buff)}")
+            cur_size = new_size
+        print_progress(cur_size / total_size, True)
+
     def _upload_file(
             self,
             file_content: IO[bytes],
             max_threads: int,
             ext: str,
             progress_bar: Optional[IO[Any]] = sys.stdout) -> None:
+        api_minor_version = self._client.get_api_version_minor()
+        if api_minor_version < 2:
+            return self._legacy_upload_file(file_content, ext="zip")
         init_pos = file_content.seek(0, io.SEEK_CUR)
         file_hash = get_file_hash(file_content)
         total_size = file_content.seek(0, io.SEEK_END) - init_pos
