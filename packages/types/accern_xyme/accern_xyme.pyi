@@ -10,6 +10,7 @@ from typing_extensions import Literal
 
 WVD: Incomplete
 API_VERSION: int
+MIN_API_VERSION: int
 DEFAULT_URL: str
 DEFAULT_NAMESPACE: str
 METHOD_DELETE: str
