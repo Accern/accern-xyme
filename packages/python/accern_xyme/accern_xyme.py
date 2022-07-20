@@ -144,7 +144,8 @@ else:
     WVD = weakref.WeakValueDictionary
 
 
-API_VERSION = 4
+API_VERSION = 5
+MIN_API_VERSION = 4
 DEFAULT_URL = "http://localhost:8080"
 DEFAULT_NAMESPACE = "default"
 
@@ -218,7 +219,7 @@ class XYMEClient:
                 raise LegacyVersion(1) from e
 
         api_version, api_version_minor = get_version()
-        if api_version < API_VERSION:
+        if api_version < MIN_API_VERSION:
             raise LegacyVersion(api_version)
         self._api_version = api_version
         self._api_version_minor = api_version_minor
@@ -414,7 +415,6 @@ class XYMEClient:
         url = f"{self._url}{prefix}{path}"
         headers = {
             "authorization": self._token,
-            "xyme-minor-version": self._api_version_minor
         }
         if add_namespace:
             args["namespace"] = self._namespace
@@ -1384,8 +1384,7 @@ class DagHandle:
             format_method: str = "simple",
             force_keys: bool = False,
             no_cache: bool = False) -> List[Any]:
-        api_minor_version = self._client.get_api_version_minor()
-        if api_minor_version < 2:
+        if API_VERSION < 5:
             return self._legacy_dynamic_list(
                 inputs,
                 input_key=input_key,
@@ -2647,6 +2646,14 @@ class BlobHandle:
         assert res["uri"] is not None
         return res["uri"]
 
+    def _legacy_append_upload(
+            self,
+            uri: str,
+            fobj: IO[bytes]) -> int:
+        res = self._perform_upload_action(
+            "append", {"uri": uri}, fobj=fobj)
+        return res["pos"]
+
     def _append_upload(
             self,
             uri: str,
@@ -2715,7 +2722,7 @@ class BlobHandle:
             buff = file_content.read(get_file_upload_chunk_size())
             if not buff:
                 break
-            new_size = self._append_upload(tmp_uri, BytesIO(buff))
+            new_size = self._legacy_append_upload(tmp_uri, BytesIO(buff))
             if new_size - cur_size != len(buff):
                 raise ValueError(
                     f"incomplete chunk upload n:{new_size} "
@@ -2729,8 +2736,7 @@ class BlobHandle:
             max_threads: int,
             ext: str,
             progress_bar: Optional[IO[Any]] = sys.stdout) -> None:
-        api_minor_version = self._client.get_api_version_minor()
-        if api_minor_version < 2:
+        if API_VERSION < 5:
             return self._legacy_upload_file(file_content, ext="zip")
         init_pos = file_content.seek(0, io.SEEK_CUR)
         file_hash = get_file_hash(file_content)

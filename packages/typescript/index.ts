@@ -166,8 +166,8 @@ export default class XYMEClient {
         this.url = config.url;
         this.namespace = config.namespace || DEFAULT_NAMESPACE;
         this.dagCache = new WeakMap();
-        this.httpAgent = new http.Agent({maxSockets: 10, keepAlive: true});
-        this.httpsAgent = new https.Agent({maxSockets: 10, keepAlive: true});
+        this.httpAgent = new http.Agent({maxSockets: 2, keepAlive: true});
+        this.httpsAgent = new https.Agent({maxSockets: 2, keepAlive: true});
     }
 
     public async getAPIVersion(): Promise<number> {
@@ -390,8 +390,12 @@ export default class XYMEClient {
         }
     }
 
-    private getAgent(_parsedURL: URL): http.Agent {
-        return _parsedURL.protocol == 'http:' ? this.httpAgent : this.httpsAgent;
+    private getAgent(parsedURL: URL): http.Agent | https.Agent {
+        if (parsedURL.protocol == 'http:') {
+            return this.httpAgent;
+        } else {
+            this.httpsAgent;
+        }
     }
 
     private async fallibleRawRequestBytes(
@@ -412,7 +416,6 @@ export default class XYMEClient {
         const url = `${this.url}${prefix}${path}`;
         const headers: HeadersInit = {
             authorization: this.token,
-            'xyme-minor-version': this.apiVersionMinor.toString(),
         };
         if (addNamespace) {
             args = {
@@ -425,7 +428,6 @@ export default class XYMEClient {
         let response: Response | undefined = undefined;
 
         const parsedURL = new URL(getQueryURL(args, url))
-        // const getAgent = (_parsedURL: URL) => _parsedURL.protocol == 'http:' ? this.httpAgent : this.httpsAgent;
         const agent = this.getAgent(parsedURL)
 
         switch (method) {
@@ -506,7 +508,6 @@ export default class XYMEClient {
         const url = `${this.url}${prefix}${path}`;
         const headers: HeadersInit = {
             authorization: this.token,
-            'xyme-minor-version': this.apiVersionMinor.toString(),
         };
         if (addNamespace) {
             args = {
@@ -584,7 +585,6 @@ export default class XYMEClient {
         let response: Response = undefined;
         const headers: HeadersInit = {
             'Authorization': this.token,
-            'xyme-minor-version': this.apiVersionMinor.toString(),
             'content-type': 'application/json',
         };
         if (addNamespace) {
@@ -2871,8 +2871,8 @@ export class BlobHandle {
         return uri;
     }
 
-    public async appendUpload(uri: string, fobj: Buffer): Promise<number> {
-        const res = await this.performUploadAction('append', { uri }, fobj);
+    public async appendUpload(uri: string, offset: number, fobj: Buffer): Promise<number> {
+        const res = await this.performUploadAction('append', { uri, offset }, fobj);
         return res.pos;
     }
 
@@ -2902,27 +2902,22 @@ export class BlobHandle {
     /**
      * This is the helper method being used by uploadFile
      * and uploadFileUsingContent
-     * @param curSize: Size of the updated buffer so far
      * @param buffer: the buffer chunk being uploaded
      * @param nread: number of bytes from the in the buffer
-     * @param chunk: chunk size
+     * @param offset: start byte position of part
      * @param blobHandle: the parent this being passed here
      * @returns
      */
 
     public async updateBuffer(
         buffer: Buffer,
-        nread: number,
-        chunk: number,
+        offset: number,
         blobHandle: BlobHandle
     ) {
         let data: Buffer;
-        if (nread < chunk) {
-            data = buffer.slice(0, nread);
-        } else {
-            data = buffer;
-        }
-        const newSize = await blobHandle.appendUpload(this.tmpURI, data);
+        data = buffer;
+        const newSize = await blobHandle.appendUpload(
+            this.tmpURI, offset, data);
         if (newSize !== data.length) {
             throw new Error(`
                 incomplete chunk upload n:${newSize} b: ${data.length}
@@ -2941,44 +2936,34 @@ export class BlobHandle {
             const methodStr = method !== undefined ? ` ${method}` : '';
             progressBar.getWriter().write(`Uploading${methodStr}:\n`);
         }
-        const maxThreads: number = 10;
         const [hash, totalSize] = await getReaderHash(read);
         const tmpURI = await this.startUpload(totalSize, hash, ext);
         this.tmpURI = tmpURI;
-        let totalChunks = Math.ceil(totalSize / getFileUploadChunkSize());
+        const uploadChunkSize = getFileUploadChunkSize()
+        let totalChunks = Math.ceil(totalSize / uploadChunkSize);
         let begins: number[] = [];
         Array.from(Array(totalChunks).keys()).forEach((chunk) => {
-            begins.push(chunk * getFileUploadChunkSize());
+            begins.push(chunk * uploadChunkSize);
         })
-
-        let curPos = 0;
 
         async function uploadNextChunk(
             blobHandle: BlobHandle,
-            begin: number,
+            offset: number,
             read: (pos: number, size: number) => Promise<Buffer>
         ): Promise<void> {
-            const buffer = await read(begin, getFileUploadChunkSize());
-            const nread = buffer.byteLength;
-            if (!nread) {
-                return;
-            }
-            curPos += nread;
-            const newSize = await blobHandle.updateBuffer(
+            const buffer = await read(offset, uploadChunkSize);
+            await blobHandle.updateBuffer(
                 buffer,
-                nread,
-                begin,
+                offset,
                 blobHandle
             );
-            // await uploadNextChunk(blobHandle, begin, read);
         }
 
-        await Promise.all(begins.map(async (ix) => {
-            uploadNextChunk(this, ix, read)
-        })).catch(
-            (error) => {
+        await Promise.all(begins.map((offset) => {
+            return uploadNextChunk(this, offset, read)
+        })).catch((err) => {
             this.clearUpload();
-            throw error;
+            throw err;
         });
     }
 
