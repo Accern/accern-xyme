@@ -5,6 +5,8 @@ import { promises as fpm } from 'fs';
 import fetch, { HeadersInit, Response, RequestInit } from 'node-fetch';
 import { performance } from 'perf_hooks';
 import { isNull } from 'lodash';
+import http = require('http');
+import https = require('https');
 import {
     AllowedCustomImports,
     BlobFilesResponse,
@@ -148,6 +150,8 @@ interface XYMERequestArgument {
 }
 
 export default class XYMEClient {
+    httpAgent?: http.Agent;
+    httpsAgent?: https.Agent;
     apiVersion?: number;
     apiVersionMinor?: number;
     autoRefresh = true;
@@ -162,6 +166,8 @@ export default class XYMEClient {
         this.url = config.url;
         this.namespace = config.namespace || DEFAULT_NAMESPACE;
         this.dagCache = new WeakMap();
+        this.httpAgent = new http.Agent({maxSockets: 10, keepAlive: true});
+        this.httpsAgent = new https.Agent({maxSockets: 10, keepAlive: true});
     }
 
     public async getAPIVersion(): Promise<number> {
@@ -384,6 +390,10 @@ export default class XYMEClient {
         }
     }
 
+    private getAgent(_parsedURL: URL): http.Agent {
+        return _parsedURL.protocol == 'http:' ? this.httpAgent : this.httpsAgent;
+    }
+
     private async fallibleRawRequestBytes(
         method: string,
         path: string,
@@ -402,6 +412,7 @@ export default class XYMEClient {
         const url = `${this.url}${prefix}${path}`;
         const headers: HeadersInit = {
             authorization: this.token,
+            'xyme-minor-version': this.apiVersionMinor.toString(),
         };
         if (addNamespace) {
             args = {
@@ -412,13 +423,19 @@ export default class XYMEClient {
         let options: RequestInit;
 
         let response: Response | undefined = undefined;
+
+        const parsedURL = new URL(getQueryURL(args, url))
+        // const getAgent = (_parsedURL: URL) => _parsedURL.protocol == 'http:' ? this.httpAgent : this.httpsAgent;
+        const agent = this.getAgent(parsedURL)
+
         switch (method) {
             case METHOD_GET: {
                 options = {
                     method,
                     headers,
+                    agent,
                 };
-                response = await fetch(getQueryURL(args, url), options);
+                response = await fetch(parsedURL, options);
                 break;
             }
             case METHOD_POST:
@@ -431,6 +448,7 @@ export default class XYMEClient {
                         'content-type': 'application/json',
                     },
                     body: JSON.stringify(args),
+                    agent,
                 });
                 break;
             }
@@ -451,6 +469,7 @@ export default class XYMEClient {
                             ...headers,
                             ...formData.getHeaders(),
                         },
+                        agent,
                     });
                 }
                 break;
@@ -487,6 +506,7 @@ export default class XYMEClient {
         const url = `${this.url}${prefix}${path}`;
         const headers: HeadersInit = {
             authorization: this.token,
+            'xyme-minor-version': this.apiVersionMinor.toString(),
         };
         if (addNamespace) {
             args = {
@@ -564,6 +584,7 @@ export default class XYMEClient {
         let response: Response = undefined;
         const headers: HeadersInit = {
             'Authorization': this.token,
+            'xyme-minor-version': this.apiVersionMinor.toString(),
             'content-type': 'application/json',
         };
         if (addNamespace) {

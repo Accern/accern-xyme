@@ -17,7 +17,6 @@ import shutil
 import time
 import threading
 from io import BytesIO, TextIOWrapper
-from accern_xyme.accern_xyme import XYMEClient
 import pandas as pd
 from scipy import sparse
 import torch
@@ -616,7 +615,7 @@ def compute_parallel(
     ths = [
         threading.Thread(
             target=runner,
-            name=f"{XYMEClient.__name__}-Worker-{tid}",
+            name=f"XYMEClient-Worker-{tid}",
             daemon=True)
         for tid in range(max_threads)
     ]
