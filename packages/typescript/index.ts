@@ -110,7 +110,8 @@ export * from './errors';
 export * from './request';
 export * from './types';
 
-const API_VERSION = 4;
+const API_VERSION = 5;
+const MIN_API_VERSION = 4;
 const MAX_RETRY = 20;
 const RETRY_SLEEP = 5.0;
 const EMPTY_BLOB_PREFIX = 'null://';
@@ -174,7 +175,7 @@ export default class XYMEClient {
         if (isUndefined(this.apiVersion)) {
             const serverVersions = await this.getServerVersion();
 
-            if (serverVersions.api_version < API_VERSION) {
+            if (serverVersions.api_version < MIN_API_VERSION) {
                 throw new Error(
                     `Legacy version ${serverVersions.api_version}`
                 );
