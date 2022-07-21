@@ -2960,12 +2960,7 @@ export class BlobHandle {
         method?: string
     ): Promise<void> {
         if (this.client.apiVersion < 5) {
-            await this.legacyUploadReader(
-                read,
-                ext,
-                progressBar,
-                method
-            );
+            await this.legacyUploadReader(read, ext, progressBar, method);
             return;
         }
         if (progressBar !== undefined) {
