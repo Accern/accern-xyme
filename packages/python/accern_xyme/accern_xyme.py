@@ -2736,7 +2736,8 @@ class BlobHandle:
             ext: str,
             progress_bar: Optional[IO[Any]] = sys.stdout) -> None:
         if self._client._api_version < 5:
-            return self._legacy_upload_file(file_content, ext="zip")
+            self._legacy_upload_file(file_content, ext="zip")
+            return
         init_pos = file_content.seek(0, io.SEEK_CUR)
         file_hash = get_file_hash(file_content)
         total_size = file_content.seek(0, io.SEEK_END) - init_pos
