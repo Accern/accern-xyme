@@ -172,7 +172,7 @@ CUSTOM_NODE_TYPES = {
     "custom_json_to_data",
     "custom_json_join_data",
 }
-NO_RETRY = [METHOD_POST, METHOD_FILE]
+NO_RETRY: List[str] = []  # [METHOD_POST, METHOD_FILE]
 
 
 class AccessDenied(Exception):

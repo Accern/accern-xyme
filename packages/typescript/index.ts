@@ -124,7 +124,7 @@ const CUSTOM_NODE_TYPES = [
     'custom_json_to_data',
     'custom_json_join_data',
 ];
-const NO_RETRY = [METHOD_POST, METHOD_FILE];
+const NO_RETRY: string[] = [];  // [METHOD_POST, METHOD_FILE]
 const NO_RETRY_CODE = [403, 404, 500];
 const formCustomCode = (func: string, funcName: string) => `
 ${func}
@@ -167,8 +167,8 @@ export default class XYMEClient {
         this.url = config.url;
         this.namespace = config.namespace || DEFAULT_NAMESPACE;
         this.dagCache = new WeakMap();
-        this.httpAgent = new http.Agent({ maxSockets: 2, keepAlive: true });
-        this.httpsAgent = new https.Agent({ maxSockets: 2, keepAlive: true });
+        this.httpAgent = new http.Agent({ maxSockets: 10, keepAlive: true });
+        this.httpsAgent = new https.Agent({ maxSockets: 10, keepAlive: true });
     }
 
     public async getAPIVersion(): Promise<number> {
@@ -268,7 +268,7 @@ export default class XYMEClient {
                     return await this.fallibleRawRequestBytes(
                         method,
                         path,
-                        args,
+                    args,
                         addPrefix,
                         addNamespace,
                         files,
@@ -436,7 +436,7 @@ export default class XYMEClient {
                 options = {
                     method,
                     headers,
-                    agent,
+                    agent: agent,
                 };
                 response = await fetch(parsedURL, options);
                 break;
@@ -451,7 +451,7 @@ export default class XYMEClient {
                         'content-type': 'application/json',
                     },
                     body: JSON.stringify(args),
-                    agent,
+                    agent: agent,
                 });
                 break;
             }
@@ -472,7 +472,7 @@ export default class XYMEClient {
                             ...headers,
                             ...formData.getHeaders(),
                         },
-                        agent,
+                        agent: agent,
                     });
                 }
                 break;
@@ -518,13 +518,17 @@ export default class XYMEClient {
         }
         let options: RequestInit;
         let response: Response | undefined = undefined;
+        const parsedURL = new URL(getQueryURL(args, url));
+        const agent = this.getAgent(parsedURL);
+
         switch (method) {
             case METHOD_GET: {
                 options = {
                     method,
                     headers,
+                    agent: agent,
                 };
-                response = await fetch(getQueryURL(args, url), options);
+                response = await fetch(parsedURL, options);
                 break;
             }
             case METHOD_POST:
@@ -537,6 +541,7 @@ export default class XYMEClient {
                         'content-type': 'application/json',
                     },
                     body: JSON.stringify(args),
+                    agent: agent,
                 };
                 response = await fetch(url, options);
                 break;
@@ -558,6 +563,7 @@ export default class XYMEClient {
                             ...headers,
                             ...formData.getHeaders(),
                         },
+                        agent: agent,
                     });
                 }
                 break;
@@ -594,13 +600,16 @@ export default class XYMEClient {
                 namespace: this.namespace,
             };
         }
+        const parsedURL = new URL(getQueryURL(args, url));
+        const agent = this.getAgent(parsedURL);
         const options: RequestInit = {
             method,
             headers,
+            agent: agent,
         };
         switch (method) {
             case METHOD_GET: {
-                response = await fetch(getQueryURL(args, url), options);
+                response = await fetch(parsedURL, options);
                 break;
             }
             case METHOD_POST: {
@@ -2872,6 +2881,11 @@ export class BlobHandle {
         return uri;
     }
 
+    public async legacyAppendUpload(uri: string, fobj: Buffer): Promise<number> {
+        const res = await this.performUploadAction('append', { uri }, fobj);
+        return res.pos;
+    }
+
     public async appendUpload(
         uri: string,
         offset: number,
@@ -2917,12 +2931,12 @@ export class BlobHandle {
      * @param blobHandle: the parent this being passed here
      * @returns
      */
-
-    public async updateBuffer(
-        buffer: Buffer,
+    private async updateBuffer(
+        read: (pos: number, size: number) => Promise<Buffer>,
         offset: number,
         blobHandle: BlobHandle
     ) {
+        const buffer = await read(offset, getFileUploadChunkSize());
         const newSize = await blobHandle.appendUpload(
             this.tmpURI,
             offset,
@@ -2936,12 +2950,16 @@ export class BlobHandle {
         return newSize;
     }
 
-    public async uploadReader(
+    private async uploadReader(
         read: (pos: number, size: number) => Promise<Buffer>,
         ext: string,
         progressBar?: WritableStream,
         method?: string
     ): Promise<void> {
+        if (this.client.apiVersion < 5) {
+            return await this.legacyUploadReader(
+                read, ext, progressBar, method)
+        }
         if (progressBar !== undefined) {
             const methodStr = method !== undefined ? ` ${method}` : '';
             progressBar.getWriter().write(`Uploading${methodStr}:\n`);
@@ -2955,24 +2973,84 @@ export class BlobHandle {
         Array.from(Array(totalChunks).keys()).forEach((chunk) => {
             begins.push(chunk * uploadChunkSize);
         });
-
-        async function uploadNextChunk(
-            blobHandle: BlobHandle,
-            offset: number,
-            read: (pos: number, size: number) => Promise<Buffer>
-        ): Promise<void> {
-            const buffer = await read(offset, uploadChunkSize);
-            await blobHandle.updateBuffer(buffer, offset, blobHandle);
-        }
-
         await Promise.all(
             begins.map((offset) => {
-                return uploadNextChunk(this, offset, read);
+                return this.updateBuffer(read, offset, this);
             })
         ).catch((err) => {
             this.clearUpload();
             throw err;
         });
+    }
+
+    private async legacyUpdateBuffer(
+        curSize: number,
+        buffer: Buffer,
+        nread: number,
+        chunk: number,
+        blobHandle: BlobHandle
+    ) {
+        let data: Buffer;
+        if (nread < chunk) {
+            data = buffer.slice(0, nread);
+        } else {
+            data = buffer;
+        }
+        const newSize = await blobHandle.legacyAppendUpload(this.tmpURI, data);
+        if (newSize - curSize !== data.length) {
+            throw new Error(`
+                incomplete chunk upload n:${newSize} o:${curSize}
+                b: ${data.length}
+            `);
+        }
+        return newSize;
+    }
+
+    private async legacyUploadReader(
+        read: (pos: number, size: number) => Promise<Buffer>,
+        ext: string,
+        progressBar?: WritableStream,
+        method?: string
+    ): Promise<void> {
+        if (progressBar !== undefined) {
+            const methodStr = method !== undefined ? ` ${method}` : '';
+            progressBar.getWriter().write(`Uploading${methodStr}:\n`);
+        }
+
+        const [hash, totalSize] = await getReaderHash(read);
+        const tmpURI = await this.startUpload(totalSize, hash, ext);
+        this.tmpURI = tmpURI;
+        let curPos = 0;
+        let curSize = 0;
+
+        async function uploadNextChunk(
+            blobHandle: BlobHandle,
+            chunk: number,
+            read: (pos: number, size: number) => Promise<Buffer>
+        ): Promise<void> {
+            const buffer = await read(curPos, chunk);
+            const nread = buffer.byteLength;
+            if (!nread) {
+                return;
+            }
+            curPos += nread;
+            const newSize = await blobHandle.legacyUpdateBuffer(
+                curSize,
+                buffer,
+                nread,
+                chunk,
+                blobHandle
+            );
+            curSize = newSize;
+            await uploadNextChunk(blobHandle, chunk, read);
+        }
+
+        await uploadNextChunk(this, getFileUploadChunkSize(), read).catch(
+            (error) => {
+                this.clearUpload();
+                throw error;
+            }
+        );
     }
 
     public async uploadFile(
@@ -2986,7 +3064,6 @@ export class BlobHandle {
             const nread = response.bytesRead;
             return buffer.slice(0, nread);
         }
-
         return await this.uploadReader(readFile, ext, progressBar, 'File');
     }
 
