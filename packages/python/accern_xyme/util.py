@@ -207,6 +207,8 @@ def has_graph_easy() -> bool:
 
     try:
         import subprocess
+
+        # FIXME: do we just keep the process undone?
         subprocess.Popen(  # pylint: disable=consider-using-with
             ["graph-easy", "--help"])
         HAS_GRAPH_EASY = True
@@ -601,8 +603,8 @@ def compute_parallel(
                     break
                 if exc is not None:
                     break
-                task_ix, offset = cur_task
-                results[task_ix] = computing_fn(offset, compute_lock)
+                task_ix, task_value = cur_task
+                results[task_ix] = computing_fn(task_value, compute_lock)
                 task_count += 1
                 if progress_fn is not None:
                     with progress_lock:

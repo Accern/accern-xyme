@@ -167,8 +167,8 @@ export default class XYMEClient {
         this.url = config.url;
         this.namespace = config.namespace || DEFAULT_NAMESPACE;
         this.dagCache = new WeakMap();
-        this.httpAgent = new http.Agent({maxSockets: 2, keepAlive: true});
-        this.httpsAgent = new https.Agent({maxSockets: 2, keepAlive: true});
+        this.httpAgent = new http.Agent({ maxSockets: 2, keepAlive: true });
+        this.httpsAgent = new https.Agent({ maxSockets: 2, keepAlive: true });
     }
 
     public async getAPIVersion(): Promise<number> {
@@ -428,8 +428,8 @@ export default class XYMEClient {
 
         let response: Response | undefined = undefined;
 
-        const parsedURL = new URL(getQueryURL(args, url))
-        const agent = this.getAgent(parsedURL)
+        const parsedURL = new URL(getQueryURL(args, url));
+        const agent = this.getAgent(parsedURL);
 
         switch (method) {
             case METHOD_GET: {
@@ -2872,8 +2872,16 @@ export class BlobHandle {
         return uri;
     }
 
-    public async appendUpload(uri: string, offset: number, fobj: Buffer): Promise<number> {
-        const res = await this.performUploadAction('append', { uri, offset }, fobj);
+    public async appendUpload(
+        uri: string,
+        offset: number,
+        fobj: Buffer
+    ): Promise<number> {
+        const res = await this.performUploadAction(
+            'append',
+            { uri, offset },
+            fobj
+        );
         return res.pos;
     }
 
@@ -2915,13 +2923,14 @@ export class BlobHandle {
         offset: number,
         blobHandle: BlobHandle
     ) {
-        let data: Buffer;
-        data = buffer;
         const newSize = await blobHandle.appendUpload(
-            this.tmpURI, offset, data);
-        if (newSize !== data.length) {
+            this.tmpURI,
+            offset,
+            buffer
+        );
+        if (newSize !== buffer.length) {
             throw new Error(`
-                incomplete chunk upload n:${newSize} b: ${data.length}
+                incomplete chunk upload n:${newSize} b: ${buffer.length}
             `);
         }
         return newSize;
@@ -2940,12 +2949,12 @@ export class BlobHandle {
         const [hash, totalSize] = await getReaderHash(read);
         const tmpURI = await this.startUpload(totalSize, hash, ext);
         this.tmpURI = tmpURI;
-        const uploadChunkSize = getFileUploadChunkSize()
-        let totalChunks = Math.ceil(totalSize / uploadChunkSize);
-        let begins: number[] = [];
+        const uploadChunkSize = getFileUploadChunkSize();
+        const totalChunks = Math.ceil(totalSize / uploadChunkSize);
+        const begins: number[] = [];
         Array.from(Array(totalChunks).keys()).forEach((chunk) => {
             begins.push(chunk * uploadChunkSize);
-        })
+        });
 
         async function uploadNextChunk(
             blobHandle: BlobHandle,
@@ -2953,16 +2962,14 @@ export class BlobHandle {
             read: (pos: number, size: number) => Promise<Buffer>
         ): Promise<void> {
             const buffer = await read(offset, uploadChunkSize);
-            await blobHandle.updateBuffer(
-                buffer,
-                offset,
-                blobHandle
-            );
+            await blobHandle.updateBuffer(buffer, offset, blobHandle);
         }
 
-        await Promise.all(begins.map((offset) => {
-            return uploadNextChunk(this, offset, read)
-        })).catch((err) => {
+        await Promise.all(
+            begins.map((offset) => {
+                return uploadNextChunk(this, offset, read);
+            })
+        ).catch((err) => {
             this.clearUpload();
             throw err;
         });

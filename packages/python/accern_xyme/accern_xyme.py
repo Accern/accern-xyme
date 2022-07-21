@@ -1384,7 +1384,7 @@ class DagHandle:
             format_method: str = "simple",
             force_keys: bool = False,
             no_cache: bool = False) -> List[Any]:
-        if API_VERSION < 5:
+        if self._client._api_version < 5:
             return self._legacy_dynamic_list(
                 inputs,
                 input_key=input_key,
@@ -1650,10 +1650,9 @@ class DagHandle:
 
                     import subprocess
                     cmd = ["echo", graph_str]
-                    p1 = subprocess.Popen(cmd, stdout=subprocess.PIPE) \
-                        # pylint: disable=consider-using-with
-                    p2 = subprocess.check_output(
-                        ["graph-easy"], stdin=p1.stdout)
+                    with subprocess.Popen(cmd, stdout=subprocess.PIPE) as p1:
+                        p2 = subprocess.check_output(
+                            ["graph-easy"], stdin=p1.stdout)
                     res = p2.decode("utf-8")
                     return render(res)
                 raise ValueError(
@@ -2736,7 +2735,7 @@ class BlobHandle:
             max_threads: int,
             ext: str,
             progress_bar: Optional[IO[Any]] = sys.stdout) -> None:
-        if API_VERSION < 5:
+        if self._client._api_version < 5:
             return self._legacy_upload_file(file_content, ext="zip")
         init_pos = file_content.seek(0, io.SEEK_CUR)
         file_hash = get_file_hash(file_content)
