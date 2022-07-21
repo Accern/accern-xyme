@@ -29,6 +29,7 @@ MAX_RETRY = 20
 RETRY_SLEEP = 5.0
 
 
+CT = TypeVar('CT')
 RT = TypeVar('RT')
 
 
@@ -206,7 +207,10 @@ def has_graph_easy() -> bool:
 
     try:
         import subprocess
-        subprocess.Popen(["graph-easy", "--help"])
+
+        # FIXME: do we just keep the process undone?
+        subprocess.Popen(  # pylint: disable=consider-using-with
+            ["graph-easy", "--help"])
         HAS_GRAPH_EASY = True
     except FileNotFoundError:
         # pylint: disable=line-too-long
@@ -573,3 +577,57 @@ def maybe_json_loads(value: str) -> Any:
         return json.loads(escape_str(value))
     except json.JSONDecodeError:
         return None
+
+
+def compute_parallel(
+        tasks: List[CT],
+        computing_fn: Callable[[CT, threading.RLock], RT],
+        progress_fn: Optional[Callable[[float, bool], None]],
+        max_threads: int) -> Union[List[RT], List[Optional[RT]]]:
+    a_tasks = list(enumerate(tasks))
+    task_count = 0
+    results: List[Optional[RT]] = [None] * len(a_tasks)
+    progress_lock = threading.RLock()
+    compute_lock = threading.RLock()
+    exc: Optional[BaseException] = None
+    exc_task: Optional[Tuple[int, CT]] = None
+
+    def runner() -> None:
+        nonlocal task_count, exc, exc_task
+
+        cur_task = None
+        try:
+            while True:
+                try:
+                    cur_task = a_tasks.pop(0)
+                except IndexError:
+                    break
+                if exc is not None:
+                    break
+                task_ix, task_value = cur_task
+                results[task_ix] = computing_fn(task_value, compute_lock)
+                task_count += 1
+                if progress_fn is not None:
+                    with progress_lock:
+                        progress_fn(task_count / len(tasks), False)
+        except BaseException as e:  # pylint: disable=broad-except
+            with compute_lock:
+                exc = e
+                exc_task = cur_task
+
+    ths = [
+        threading.Thread(
+            target=runner,
+            name=f"XYMEClient-Worker-{tid}",
+            daemon=True)
+        for tid in range(max_threads)
+    ]
+    for th in ths:
+        th.start()
+    for th in ths:
+        th.join()
+    if exc is not None:
+        raise ValueError(f"Error encountered in task: {exc_task}") from exc
+    if progress_fn is not None:
+        progress_fn(task_count / len(tasks), True)
+    return results
