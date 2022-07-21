@@ -595,6 +595,7 @@ def compute_parallel(
     def runner() -> None:
         nonlocal task_count, exc, exc_task
 
+        cur_task = None
         try:
             while True:
                 try:
