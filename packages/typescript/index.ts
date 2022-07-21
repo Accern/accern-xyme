@@ -124,7 +124,7 @@ const CUSTOM_NODE_TYPES = [
     'custom_json_to_data',
     'custom_json_join_data',
 ];
-const NO_RETRY: string[] = [];  // [METHOD_POST, METHOD_FILE]
+const NO_RETRY: string[] = []; // [METHOD_POST, METHOD_FILE]
 const NO_RETRY_CODE = [403, 404, 500];
 const formCustomCode = (func: string, funcName: string) => `
 ${func}
@@ -268,7 +268,7 @@ export default class XYMEClient {
                     return await this.fallibleRawRequestBytes(
                         method,
                         path,
-                    args,
+                        args,
                         addPrefix,
                         addNamespace,
                         files,
@@ -2881,7 +2881,10 @@ export class BlobHandle {
         return uri;
     }
 
-    public async legacyAppendUpload(uri: string, fobj: Buffer): Promise<number> {
+    public async legacyAppendUpload(
+        uri: string,
+        fobj: Buffer
+    ): Promise<number> {
         const res = await this.performUploadAction('append', { uri }, fobj);
         return res.pos;
     }
@@ -2958,7 +2961,11 @@ export class BlobHandle {
     ): Promise<void> {
         if (this.client.apiVersion < 5) {
             return await this.legacyUploadReader(
-                read, ext, progressBar, method)
+                read,
+                ext,
+                progressBar,
+                method
+            );
         }
         if (progressBar !== undefined) {
             const methodStr = method !== undefined ? ` ${method}` : '';
