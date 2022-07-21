@@ -395,7 +395,7 @@ export default class XYMEClient {
         if (parsedURL.protocol == 'http:') {
             return this.httpAgent;
         } else {
-            this.httpsAgent;
+            return this.httpsAgent;
         }
     }
 
@@ -436,7 +436,7 @@ export default class XYMEClient {
                 options = {
                     method,
                     headers,
-                    agent: agent,
+                    agent,
                 };
                 response = await fetch(parsedURL, options);
                 break;
@@ -451,7 +451,7 @@ export default class XYMEClient {
                         'content-type': 'application/json',
                     },
                     body: JSON.stringify(args),
-                    agent: agent,
+                    agent,
                 });
                 break;
             }
@@ -472,7 +472,7 @@ export default class XYMEClient {
                             ...headers,
                             ...formData.getHeaders(),
                         },
-                        agent: agent,
+                        agent,
                     });
                 }
                 break;
@@ -526,7 +526,7 @@ export default class XYMEClient {
                 options = {
                     method,
                     headers,
-                    agent: agent,
+                    agent,
                 };
                 response = await fetch(parsedURL, options);
                 break;
@@ -541,7 +541,7 @@ export default class XYMEClient {
                         'content-type': 'application/json',
                     },
                     body: JSON.stringify(args),
-                    agent: agent,
+                    agent,
                 };
                 response = await fetch(url, options);
                 break;
@@ -563,7 +563,7 @@ export default class XYMEClient {
                             ...headers,
                             ...formData.getHeaders(),
                         },
-                        agent: agent,
+                        agent,
                     });
                 }
                 break;
@@ -605,7 +605,7 @@ export default class XYMEClient {
         const options: RequestInit = {
             method,
             headers,
-            agent: agent,
+            agent,
         };
         switch (method) {
             case METHOD_GET: {
@@ -2881,7 +2881,7 @@ export class BlobHandle {
         return uri;
     }
 
-    public async legacyAppendUpload(
+    private async legacyAppendUpload(
         uri: string,
         fobj: Buffer
     ): Promise<number> {
@@ -2889,7 +2889,7 @@ export class BlobHandle {
         return res.pos;
     }
 
-    public async appendUpload(
+    private async appendUpload(
         uri: string,
         offset: number,
         fobj: Buffer
@@ -2960,12 +2960,13 @@ export class BlobHandle {
         method?: string
     ): Promise<void> {
         if (this.client.apiVersion < 5) {
-            return await this.legacyUploadReader(
+            await this.legacyUploadReader(
                 read,
                 ext,
                 progressBar,
                 method
             );
+            return;
         }
         if (progressBar !== undefined) {
             const methodStr = method !== undefined ? ` ${method}` : '';
