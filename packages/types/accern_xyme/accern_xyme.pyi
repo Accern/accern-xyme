@@ -26,7 +26,7 @@ INPUT_ZIP_EXT: str
 INPUT_EXT: Incomplete
 FUNC = Callable[..., Any]
 CUSTOM_NODE_TYPES: Incomplete
-NO_RETRY: Incomplete
+NO_RETRY: List[str]
 
 class AccessDenied(Exception): ...
 
