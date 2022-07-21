@@ -1653,7 +1653,7 @@ class DagHandle:
                     with subprocess.Popen(cmd, stdout=subprocess.PIPE) as p1:
                         p2 = subprocess.check_output(
                             ["graph-easy"], stdin=p1.stdout)
-                    res = p2.decode("utf-8")
+                        res = p2.decode("utf-8")
                     return render(res)
                 raise ValueError(
                     f"invalid format {output_format}, "
