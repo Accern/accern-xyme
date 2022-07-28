@@ -1,3 +1,5 @@
+import itertools
+import math
 import shutil
 import tempfile
 from typing import (
@@ -42,6 +44,7 @@ import quick_server
 from .util import (
     async_compute,
     ByteResponse,
+    compute_parallel,
     content_to_csv_bytes,
     df_to_csv_bytes,
     get_age,
@@ -141,7 +144,8 @@ else:
     WVD = weakref.WeakValueDictionary
 
 
-API_VERSION = 4
+API_VERSION = 5
+MIN_API_VERSION = 4
 DEFAULT_URL = "http://localhost:8080"
 DEFAULT_NAMESPACE = "default"
 
@@ -168,7 +172,7 @@ CUSTOM_NODE_TYPES = {
     "custom_json_to_data",
     "custom_json_join_data",
 }
-NO_RETRY = [METHOD_POST, METHOD_FILE]
+NO_RETRY: List[str] = []  # [METHOD_POST, METHOD_FILE]
 
 
 class AccessDenied(Exception):
@@ -215,7 +219,7 @@ class XYMEClient:
                 raise LegacyVersion(1) from e
 
         api_version, api_version_minor = get_version()
-        if api_version < API_VERSION:
+        if api_version < MIN_API_VERSION:
             raise LegacyVersion(api_version)
         self._api_version = api_version
         self._api_version_minor = api_version_minor
@@ -1295,7 +1299,7 @@ class DagHandle:
             }))
         return res["results"]
 
-    def dynamic_list(
+    def _legacy_dynamic_list(
             self,
             inputs: List[Any],
             input_key: Optional[str] = None,
@@ -1329,7 +1333,7 @@ class DagHandle:
                 return
             if len(cur) <= split_num:
                 try:
-                    cur_res = self.dynamic_list(
+                    cur_res = self._legacy_dynamic_list(
                         cur,
                         input_key=input_key,
                         output_key=output_key,
@@ -1369,6 +1373,69 @@ class DagHandle:
                 "request error while processing. processing time per batch "
                 "might be too large. try reducing split_th") from e
         return res_arr
+
+    def dynamic_list(
+            self,
+            inputs: List[Any],
+            input_key: Optional[str] = None,
+            output_key: Optional[str] = None,
+            split_th: Optional[int] = 1000,
+            max_threads: int = 50,
+            format_method: str = "simple",
+            force_keys: bool = False,
+            no_cache: bool = False) -> List[Any]:
+        if self._client._api_version < 5:
+            return self._legacy_dynamic_list(
+                inputs,
+                input_key=input_key,
+                output_key=output_key,
+                split_th=None,
+                max_threads=max_threads,
+                format_method=format_method,
+                force_keys=force_keys,
+                no_cache=no_cache)
+
+        if split_th is None or len(inputs) <= split_th:
+            res = cast(DynamicResults, self._client.request_json(
+                METHOD_POST, "/dynamic_list", {
+                    "force_keys": force_keys,
+                    "format": format_method,
+                    "input_key": input_key,
+                    "inputs": inputs,
+                    "no_cache": no_cache,
+                    "output_key": output_key,
+                    "dag": self.get_uri(),
+                }))
+            return res["results"]
+
+        split_num: int = split_th
+        assert split_num > 0
+
+        def compute_dynamic_list(cur: int, _: threading.RLock) -> Any:
+            result = None
+            try:
+                result = self.dynamic_list(
+                    inputs[cur:cur + split_num],
+                    input_key=input_key,
+                    output_key=output_key,
+                    split_th=None,
+                    max_threads=max_threads,
+                    format_method=format_method,
+                    force_keys=force_keys,
+                    no_cache=no_cache)
+            except BaseException as e:  # pylint: disable=broad-except
+                try:
+                    if isinstance(e, BaseException):
+                        raise e
+                except RequestException as err:
+                    raise ValueError(
+                        "request error while processing.") from err
+            return result
+
+        tasks = list(range(0, len(inputs), split_num))
+        arr = compute_parallel(
+            tasks, compute_dynamic_list, None, max_threads)
+        return list(itertools.chain(*arr))
 
     def dynamic(self, input_data: BytesIO) -> Optional[ByteResponse]:
         cur_res, ctype = self._client.request_bytes(
@@ -1583,10 +1650,10 @@ class DagHandle:
 
                     import subprocess
                     cmd = ["echo", graph_str]
-                    p1 = subprocess.Popen(cmd, stdout=subprocess.PIPE)
-                    p2 = subprocess.check_output(
-                        ["graph-easy"], stdin=p1.stdout)
-                    res = p2.decode("utf-8")
+                    with subprocess.Popen(cmd, stdout=subprocess.PIPE) as p1:
+                        p2 = subprocess.check_output(
+                            ["graph-easy"], stdin=p1.stdout)
+                        res = p2.decode("utf-8")
                     return render(res)
                 raise ValueError(
                     f"invalid format {output_format}, "
@@ -1893,15 +1960,17 @@ class DagHandle:
     def _upload_dag_blobs(
             self,
             tmpdir: str,
-            blobs_map: List[BlobDetails]) -> List['BlobHandle']:
+            blobs_map: List[BlobDetails],
+            max_threads: int) -> List['BlobHandle']:
         blob_handles = []
         for blob in blobs_map:
             blob_file = os.path.join(tmpdir, blob["fname"])
             blob_handle = self._client.get_blob_handle(blob["blob_uri"])
-            blob_handles.extend(blob_handle.upload_zip(blob_file))
+            blob_handles.extend(blob_handle.upload_zip(blob_file, max_threads))
         return blob_handles
 
-    def upload_full_dag_zip(self, source: str) -> List['BlobHandle']:
+    def upload_full_dag_zip(
+            self, source: str, max_threads: int = 10) -> List['BlobHandle']:
         dag_blob_handle = self._client.get_blob_handle(self.get_uri())
         blob_handles = []
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -1911,9 +1980,10 @@ class DagHandle:
                 file_map: FileMap = json.load(fmap)
             dag_fname = file_map["dag_blob"]
             dag_file = os.path.join(tmpdir, f"{dag_fname}")
-            blob_handles.extend(dag_blob_handle.upload_zip(dag_file))
+            blob_handles.extend(
+                dag_blob_handle.upload_zip(dag_file, max_threads))
             blob_handles.extend(self._upload_dag_blobs(
-                tmpdir, file_map["blobs"]))
+                tmpdir, file_map["blobs"], max_threads))
         return blob_handles
 
     def __hash__(self) -> int:
@@ -2543,9 +2613,9 @@ class BlobHandle:
     def _perform_upload_action(
             self,
             action: str,
-            additional: Dict[str, Union[str, int]],
+            additional: Dict[str, Union[str, int, List[int]]],
             fobj: Optional[IO[bytes]]) -> UploadFilesResponse:
-        args: Dict[str, Union[str, int]] = {
+        args: Dict[str, Union[str, int, List[int]]] = {
             "action": action,
         }
         args.update(additional)
@@ -2575,8 +2645,21 @@ class BlobHandle:
         assert res["uri"] is not None
         return res["uri"]
 
-    def _append_upload(self, uri: str, fobj: IO[bytes]) -> int:
-        res = self._perform_upload_action("append", {"uri": uri}, fobj=fobj)
+    def _legacy_append_upload(
+            self,
+            uri: str,
+            fobj: IO[bytes]) -> int:
+        res = self._perform_upload_action(
+            "append", {"uri": uri}, fobj=fobj)
+        return res["pos"]
+
+    def _append_upload(
+            self,
+            uri: str,
+            fobj: IO[bytes],
+            offset: int) -> int:
+        res = self._perform_upload_action(
+            "append", {"uri": uri, "offset": offset}, fobj=fobj)
         return res["pos"]
 
     def _finish_upload_zip(self) -> List[str]:
@@ -2618,7 +2701,7 @@ class BlobHandle:
             raise ValueError("tmp_uri is None")
         self._perform_upload_action("clear", {"uri": uri}, fobj=None)
 
-    def _upload_file(
+    def _legacy_upload_file(
             self,
             file_content: IO[bytes],
             ext: str,
@@ -2638,7 +2721,7 @@ class BlobHandle:
             buff = file_content.read(get_file_upload_chunk_size())
             if not buff:
                 break
-            new_size = self._append_upload(tmp_uri, BytesIO(buff))
+            new_size = self._legacy_append_upload(tmp_uri, BytesIO(buff))
             if new_size - cur_size != len(buff):
                 raise ValueError(
                     f"incomplete chunk upload n:{new_size} "
@@ -2646,14 +2729,58 @@ class BlobHandle:
             cur_size = new_size
         print_progress(cur_size / total_size, True)
 
-    def upload_zip(self, source: Union[str, io.BytesIO]) -> List['BlobHandle']:
+    def _upload_file(
+            self,
+            file_content: IO[bytes],
+            max_threads: int,
+            ext: str,
+            progress_bar: Optional[IO[Any]] = sys.stdout) -> None:
+        if self._client._api_version < 5:
+            self._legacy_upload_file(file_content, ext="zip")
+            return
+        init_pos = file_content.seek(0, io.SEEK_CUR)
+        file_hash = get_file_hash(file_content)
+        total_size = file_content.seek(0, io.SEEK_END) - init_pos
+        file_content.seek(init_pos, io.SEEK_SET)
+        if progress_bar is not None:
+            progress_bar.write("Uploading file:\n")
+        print_progress = get_progress_bar(out=progress_bar)
+        tmp_uri = self._start_upload(total_size, file_hash, ext)
+        self._tmp_uri = tmp_uri
+        upload_chunk_size = get_file_upload_chunk_size()
+        total_chunks = math.ceil(total_size / upload_chunk_size)
+
+        begins = [chunk * upload_chunk_size for chunk in range(total_chunks)]
+
+        def compute_upload(
+                offset: int,
+                compute_lock: threading.RLock) -> None:
+            assert self._tmp_uri is not None
+            with compute_lock:
+                file_content.seek(offset, io.SEEK_SET)
+                buff = file_content.read(upload_chunk_size)
+            new_size = self._append_upload(
+                self._tmp_uri,
+                BytesIO(buff),
+                offset)
+            if new_size != len(buff):
+                raise ValueError(
+                    f"incomplete chunk upload n:{new_size} "
+                    f"b:{len(buff)} offset: {offset}")
+
+        compute_parallel(begins, compute_upload, print_progress, max_threads)
+
+    def upload_zip(
+            self,
+            source: Union[str, io.BytesIO],
+            max_threads: int = 10) -> List['BlobHandle']:
         files: List[str] = []
         try:
             if isinstance(source, str) or not hasattr(source, "read"):
                 with open(f"{source}", "rb") as fin:
-                    self._upload_file(fin, ext="zip")
+                    self._upload_file(fin, max_threads, ext="zip")
             else:
-                self._upload_file(source, ext="zip")
+                self._upload_file(source, max_threads, ext="zip")
             files = self._finish_upload_zip()
         finally:
             self._clear_upload()
@@ -2671,9 +2798,10 @@ class BlobHandle:
             maybe_classes: Optional[List[str]] = None,
             maybe_range: Optional[
                 Tuple[Optional[float], Optional[float]]] = None,
+            max_threads: int = 10,
             full_init: bool = True) -> UploadFilesResponse:
         try:
-            self._upload_file(model_obj, ext="pkl")
+            self._upload_file(model_obj, max_threads, ext="pkl")
             output_range = (None, None) if maybe_range is None else maybe_range
             return self._finish_upload_sklike(
                 model_name=model_name,
@@ -2794,7 +2922,8 @@ class BlobHandle:
 
 class CSVBlobHandle(BlobHandle):
     def finish_csv_upload(
-            self, filename: Optional[str] = None) -> UploadFilesResponse:
+            self,
+            filename: Optional[str] = None) -> UploadFilesResponse:
         tmp_uri = self._tmp_uri
         if tmp_uri is None:
             raise ValueError("tmp_uri is None")
@@ -2813,7 +2942,7 @@ class CSVBlobHandle(BlobHandle):
             filename: str,
             progress_bar: Optional[IO[Any]] = sys.stdout,
             requeue_on_finish: Optional[NodeHandle] = None,
-            ) -> Optional[UploadFilesResponse]:
+            max_threads: int = 10) -> Optional[UploadFilesResponse]:
         fname = filename
         if filename.endswith(INPUT_ZIP_EXT):
             fname = filename[:-len(INPUT_ZIP_EXT)]
@@ -2826,6 +2955,7 @@ class CSVBlobHandle(BlobHandle):
             with open(filename, "rb") as fbuff:
                 self._upload_file(
                     fbuff,
+                    max_threads,
                     ext=ext,
                     progress_bar=progress_bar)
             return self.finish_csv_upload(filename)
@@ -2839,12 +2969,13 @@ class CSVBlobHandle(BlobHandle):
             df: pd.DataFrame,
             progress_bar: Optional[IO[Any]] = sys.stdout,
             requeue_on_finish: Optional[NodeHandle] = None,
-            ) -> Optional[UploadFilesResponse]:
+            max_threads: int = 10) -> Optional[UploadFilesResponse]:
         io_in = None
         try:
             io_in = df_to_csv_bytes(df)
             self._upload_file(
                 io_in,
+                max_threads,
                 ext="csv",
                 progress_bar=progress_bar)
             return self.finish_csv_upload()
@@ -2860,12 +2991,13 @@ class CSVBlobHandle(BlobHandle):
             content: Union[bytes, str, pd.DataFrame],
             progress_bar: Optional[IO[Any]] = sys.stdout,
             requeue_on_finish: Optional[NodeHandle] = None,
-            ) -> Optional[UploadFilesResponse]:
+            max_threads: int = 10) -> Optional[UploadFilesResponse]:
         io_in = None
         try:
             io_in = content_to_csv_bytes(content)
             self._upload_file(
                 io_in,
+                max_threads,
                 ext="csv",
                 progress_bar=progress_bar)
             return self.finish_csv_upload()
@@ -2881,7 +3013,8 @@ class CSVBlobHandle(BlobHandle):
 
 class TorchBlobHandle(BlobHandle):
     def finish_torch_upload(
-            self, filename: Optional[str] = None) -> UploadFilesResponse:
+            self,
+            filename: Optional[str] = None) -> UploadFilesResponse:
         tmp_uri = self._tmp_uri
         if tmp_uri is None:
             raise ValueError("tmp_uri is None")
@@ -2899,7 +3032,7 @@ class TorchBlobHandle(BlobHandle):
             self,
             filename: str,
             progress_bar: Optional[IO[Any]] = sys.stdout,
-            ) -> Optional[UploadFilesResponse]:
+            max_threads: int = 10) -> Optional[UploadFilesResponse]:
         fname = filename
         if filename.endswith(INPUT_ZIP_EXT):
             fname = filename[:-len(INPUT_ZIP_EXT)]
@@ -2912,6 +3045,7 @@ class TorchBlobHandle(BlobHandle):
             with open(filename, "rb") as fbuff:
                 self._upload_file(
                     fbuff,
+                    max_threads,
                     ext=ext,
                     progress_bar=progress_bar)
             return self.finish_torch_upload(filename)
