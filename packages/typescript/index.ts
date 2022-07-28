@@ -2049,7 +2049,7 @@ export class DagHandle {
         let curOutput = first[1];
         let curTime = first[3];
         measurements.slice(1).forEach((measurement) => {
-            const [nextInput, nextOutput, , nextTime] = measurement;
+            const [nextInput, nextOutput, , , nextTime] = measurement;
             const segTime = nextTime - curTime;
             inputSegments = [
                 ...inputSegments,
