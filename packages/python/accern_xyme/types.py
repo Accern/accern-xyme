@@ -329,11 +329,13 @@ KafkaTopicNames = TypedDict('KafkaTopicNames', {
     "input": Optional[str],
     "output": Optional[str],
     "error": Optional[str],
+    "error_msg": Optional[str],
 })
 KafkaMessage = TypedDict('KafkaMessage', {
     "messages": Dict[str, str],
 })
 KafkaOffsets = TypedDict('KafkaOffsets', {
+    "error_msg": int,
     "error": int,
     "input": int,
     "output": int,
@@ -358,6 +360,7 @@ KafkaThroughput = TypedDict('KafkaThroughput', {
     "output": ThroughputDict,
     "faster": Literal["input", "output", "both"],
     "errors": int,
+    "error_msgs": int,
 })
 PutNodeBlob = TypedDict('PutNodeBlob', {
     "key": str,

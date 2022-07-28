@@ -1123,6 +1123,15 @@ export default class XYMEClient {
         return assertString(res);
     }
 
+    public async getKafkaErrorMessageTopic(): Promise<string> {
+        const res = await this.requestJSON<KafkaTopicNames>({
+            method: METHOD_GET,
+            path: '/kafka_topic_names',
+            args: {},
+        }).then((response) => response.error_msg);
+        return assertString(res);
+    }
+
     public async deleteKafkaErrorTopic(): Promise<KafkaTopics> {
         return await this.requestJSON<KafkaTopics>({
             method: METHOD_POST,
@@ -1133,12 +1142,16 @@ export default class XYMEClient {
         });
     }
 
-    public async readKafkaErrors(offset: string): Promise<string[]> {
+    public async readKafkaErrors(
+            offset: string,
+            consumerType: string
+    ): Promise<string[]> {
         return await this.requestJSON<string[]>({
             method: METHOD_GET,
             path: '/kafka_msg',
             args: {
                 offset: offset || 'current',
+                consumer_type: consumerType,
             },
         });
     }
@@ -1917,6 +1930,7 @@ export class DagHandle {
     }
 
     public async readKafkaOutput(
+        consumerType: string,
         offset = 'current',
         maxRows = 100
     ): Promise<ByteResponse | null> {
@@ -1928,6 +1942,7 @@ export class DagHandle {
                 args: {
                     dag: this.getURI(),
                     offset: offsetStr[0],
+                    consumer_type: consumerType,
                 },
             });
         };
@@ -1989,8 +2004,14 @@ export class DagHandle {
         }
         let offsets = await this.getKafkaOffsets(false, postfix);
         let now = performance.now();
-        let measurements: [number, number, number, number][] = [
-            [offsets.input, offsets.output, offsets.error, now],
+        let measurements: [number, number, number, number, number][] = [
+            [
+                offsets.input,
+                offsets.output,
+                offsets.error,
+                offsets.error_msg,
+                now,
+            ],
         ];
         let prev: number;
         const range = Array.from(Array(segments).keys());
@@ -2006,7 +2027,13 @@ export class DagHandle {
             offsets = await this.getKafkaOffsets(false);
             measurements = [
                 ...measurements,
-                [offsets.input, offsets.output, offsets.error, now],
+                [
+                    offsets.input,
+                    offsets.output,
+                    offsets.error,
+                    offsets.error_msg,
+                    now,
+                ],
             ];
         });
         const first = measurements[0];
@@ -2014,7 +2041,8 @@ export class DagHandle {
         const totalInput = last[0] - first[0];
         const totalOutput = last[1] - first[1];
         const errors = last[2] - first[2];
-        const total = last[3] - first[3];
+        const errorMsgs = last[3] - first[3];
+        const total = last[4] - first[4];
         let inputSegments: number[] = [];
         let outputSegments: number[] = [];
         let curInput = first[0];
@@ -2063,6 +2091,7 @@ export class DagHandle {
             },
             faster,
             errors,
+            errorMsgs,
         };
     }
 

@@ -891,16 +891,26 @@ class XYMEClient:
         assert res is not None
         return res
 
+    def get_kafka_error_message_topic(self) -> str:
+        res = cast(KafkaTopicNames, self.request_json(
+            METHOD_GET, "/kafka_topic_names", {}))["error_msg"]
+        assert res is not None
+        return res
+
     def delete_kafka_error_topic(self) -> KafkaTopics:
         return cast(KafkaTopics, self.request_json(
             METHOD_POST, "/kafka_topics", {
                 "num_partitions": 0,
             }))
 
-    def read_kafka_errors(self, offset: str = "current") -> List[str]:
+    def read_kafka_errors(
+            self,
+            consumer_type: str,
+            offset: str = "current") -> List[str]:
         return cast(List[str], self.request_json(
             METHOD_GET, "/kafka_msg", {
                 "offset": offset,
+                "consumer_type": consumer_type
             }))
 
     def get_named_secrets(
@@ -1802,17 +1812,19 @@ class DagHandle:
 
     def read_kafka_output(
             self,
+            consumer_type: str,
             offset: str = "current",
             max_rows: int = 100) -> Optional[ByteResponse]:
-        offset_str = [offset]
 
         def read_single() -> Tuple[Optional[ByteResponse], str]:
+            nonlocal offset
             cur, read_ctype = self._client.request_bytes(
                 METHOD_GET, "/kafka_msg", {
                     "dag": self.get_uri(),
-                    "offset": offset_str[0],
+                    "offset": offset,
+                    "consumer_type": consumer_type,
                 })
-            offset_str[0] = "current"
+            offset = "current"
             return interpret_ctype(cur, read_ctype), read_ctype
 
         if max_rows <= 1:
@@ -1837,7 +1849,9 @@ class DagHandle:
         return merge_ctype(res, ctype)
 
     def get_kafka_offsets(
-            self, alive: bool, postfix: Optional[str] = None) -> KafkaOffsets:
+            self,
+            alive: bool,
+            postfix: Optional[str] = None) -> KafkaOffsets:
         args = {
             "dag": self.get_uri(),
             "alive": int(alive),
@@ -1856,10 +1870,11 @@ class DagHandle:
         assert segment_interval > 0.0
         offsets = self.get_kafka_offsets(postfix=postfix, alive=False)
         now = time.monotonic()
-        measurements: List[Tuple[int, int, int, float]] = [(
+        measurements: List[Tuple[int, int, int, int, float]] = [(
             offsets["input"],
             offsets["output"],
             offsets["error"],
+            offsets["error_msg"],
             now,
         )]
         for _ in range(segments):
@@ -1872,6 +1887,7 @@ class DagHandle:
                 offsets["input"],
                 offsets["output"],
                 offsets["error"],
+                offsets["error_msg"],
                 now,
             ))
         first = measurements[0]
@@ -1879,13 +1895,14 @@ class DagHandle:
         total_input = last[0] - first[0]
         total_output = last[1] - first[1]
         errors = last[2] - first[2]
-        total = last[3] - first[3]
+        error_msgs = last[3] - first[3]
+        total = last[4] - first[4]
         input_segments: List[float] = []
         output_segments: List[float] = []
         cur_input = first[0]
         cur_output = first[1]
-        cur_time = first[3]
-        for (next_input, next_output, _, next_time) in measurements[1:]:
+        cur_time = first[4]
+        for (next_input, next_output, _, _, next_time) in measurements[1:]:
             seg_time = next_time - cur_time
             input_segments.append((next_input - cur_input) / seg_time)
             output_segments.append((next_output - cur_output) / seg_time)
@@ -1917,6 +1934,7 @@ class DagHandle:
             "faster": "both" if total_input == total_output else (
                 "input" if total_input > total_output else "output"),
             "errors": errors,
+            "error_msgs": error_msgs,
         }
 
     def get_kafka_group(self) -> KafkaGroup:

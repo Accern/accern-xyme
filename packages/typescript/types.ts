@@ -399,6 +399,7 @@ export interface KafkaTopicNames {
     input: string | null;
     output: string | null;
     error: string | null;
+    error_msg: string | null;
 }
 
 export interface KafkaMessage {
@@ -406,6 +407,7 @@ export interface KafkaMessage {
 }
 
 export interface KafkaOffsets {
+    error_msg: number;
     error: number;
     input: number;
     output: number;
@@ -433,6 +435,7 @@ export interface KafkaThroughput {
     output: ThroughputDict;
     faster: 'input' | 'output' | 'both';
     errors: number;
+    errorMsgs: number;
 }
 
 export interface PutNodeBlob {
