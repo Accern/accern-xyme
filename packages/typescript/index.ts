@@ -1143,8 +1143,8 @@ export default class XYMEClient {
     }
 
     public async readKafkaErrors(
-            offset: string,
-            consumerType: string
+        consumerType: string,
+        offset: string
     ): Promise<string[]> {
         return await this.requestJSON<string[]>({
             method: METHOD_GET,

@@ -1815,16 +1815,17 @@ class DagHandle:
             consumer_type: str,
             offset: str = "current",
             max_rows: int = 100) -> Optional[ByteResponse]:
+        offset_str = [offset]
 
         def read_single() -> Tuple[Optional[ByteResponse], str]:
             nonlocal offset
             cur, read_ctype = self._client.request_bytes(
                 METHOD_GET, "/kafka_msg", {
                     "dag": self.get_uri(),
-                    "offset": offset,
+                    "offset": offset_str[0],
                     "consumer_type": consumer_type,
                 })
-            offset = "current"
+            offset_str[0] = "current"
             return interpret_ctype(cur, read_ctype), read_ctype
 
         if max_rows <= 1:
