@@ -12,6 +12,7 @@ from typing import (
     Iterator,
     List,
     Optional,
+    get_args,
     overload,
     Set,
     TextIO,
@@ -143,7 +144,6 @@ if TYPE_CHECKING:
 else:
     WVD = weakref.WeakValueDictionary
 
-
 API_VERSION = 5
 MIN_API_VERSION = 4
 DEFAULT_URL = "http://localhost:8080"
@@ -173,6 +173,16 @@ CUSTOM_NODE_TYPES = {
     "custom_json_join_data",
 }
 NO_RETRY: List[str] = []  # [METHOD_POST, METHOD_FILE]
+
+ConsumerType = Literal[
+    "dag",
+    "err",
+    "err_msg",
+]
+CONSUMER_DAG: ConsumerType = "dag"
+CONSUMER_ERR: ConsumerType = "err"
+CONSUMER_ERR_MSG: ConsumerType = "err_msg"
+CONSUMER_TYPES: Set[ConsumerType] = set(get_args(ConsumerType))
 
 
 class AccessDenied(Exception):
@@ -905,13 +915,49 @@ class XYMEClient:
 
     def read_kafka_errors(
             self,
-            consumer_type: str,
+            consumer_type: ConsumerType,
             offset: str = "current") -> List[str]:
+        if consumer_type == CONSUMER_DAG:
+            raise ValueError(
+                f"consumer_type cannot be {CONSUMER_DAG} "
+                "for reading kafka errors. provide consumer type from "
+                f"{[CONSUMER_ERR, CONSUMER_ERR_MSG]}")
         return cast(List[str], self.request_json(
             METHOD_GET, "/kafka_msg", {
                 "offset": offset,
                 "consumer_type": consumer_type
             }))
+
+    def read_kafka_full_json_errors(
+            self,
+            input_id_path: List[str]) -> Iterable[Tuple[str, Any]]:
+        errs = self.read_kafka_errors(consumer_type=CONSUMER_ERR)
+        msgs = self.read_kafka_errors(consumer_type=CONSUMER_ERR_MSG)
+
+        def parse_input_id_json(json_str: str) -> Optional[str]:
+            try:
+                res = json.loads(json_str)
+                for path in input_id_path:
+                    res = res[path]
+                return res
+            except Exception as e:
+                return None
+
+        def parse_input_id_text(text: str) -> Optional[str]:
+            ix = text.find("input_id:")
+            return text[ix + len("input_id:"):]
+
+        msg_lookup: Dict[str, str] = {}
+        for msg in msgs:
+            input_id = parse_input_id_json(msg)
+            if input_id is not None:
+                msg_lookup[input_id] = msg
+        for err in errs:
+            input_id = parse_input_id_text(err)
+            if input_id is None:
+                yield (err, None)
+            else:
+                yield (err, msg_lookup.get(input_id, default=None))
 
     def get_named_secrets(
             self,
@@ -1812,7 +1858,6 @@ class DagHandle:
 
     def read_kafka_output(
             self,
-            consumer_type: str,
             offset: str = "current",
             max_rows: int = 100) -> Optional[ByteResponse]:
         offset_str = [offset]
@@ -1823,7 +1868,7 @@ class DagHandle:
                 METHOD_GET, "/kafka_msg", {
                     "dag": self.get_uri(),
                     "offset": offset_str[0],
-                    "consumer_type": consumer_type,
+                    "consumer_type": CONSUMER_DAG,
                 })
             offset_str[0] = "current"
             return interpret_ctype(cur, read_ctype), read_ctype

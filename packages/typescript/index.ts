@@ -126,6 +126,10 @@ const CUSTOM_NODE_TYPES = [
 ];
 const NO_RETRY: string[] = []; // [METHOD_POST, METHOD_FILE]
 const NO_RETRY_CODE = [403, 404, 500];
+type ConsumerType = 'dag' | 'err' | 'err_msg';
+const CONSUMER_DAG: ConsumerType = 'dag';
+const CONSUMER_ERR: ConsumerType = 'err';
+const CONSUMER_ERR_MSG: ConsumerType = 'err_msg';
 const formCustomCode = (func: string, funcName: string) => `
 ${func}
 result = ${funcName}(*data, **kwargs)
@@ -458,11 +462,11 @@ export default class XYMEClient {
             case METHOD_FILE: {
                 const formData = new FormData();
                 if (files) {
-                    Object.keys(files).map((key) => {
+                    Object.keys(files).forEach((key) => {
                         const buffCopy = Buffer.from(files[key]);
                         formData.append(key, buffCopy);
                     });
-                    Object.keys(args).map((key) => {
+                    Object.keys(args).forEach((key) => {
                         formData.append(key, args[key]);
                     });
                     response = await fetch(url, {
@@ -549,11 +553,11 @@ export default class XYMEClient {
             case METHOD_FILE: {
                 const formData = new FormData();
                 if (files) {
-                    Object.keys(files).map((key) => {
+                    Object.keys(files).forEach((key) => {
                         const buffCopy = Buffer.from(files[key]);
                         formData.append(key, buffCopy);
                     });
-                    Object.keys(args).map((key) => {
+                    Object.keys(args).forEach((key) => {
                         formData.append(key, args[key]);
                     });
                     response = await fetch(url, {
@@ -1143,9 +1147,16 @@ export default class XYMEClient {
     }
 
     public async readKafkaErrors(
-        consumerType: string,
+        consumerType: ConsumerType,
         offset: string
     ): Promise<string[]> {
+        if (consumerType == CONSUMER_DAG) {
+            throw new Error(
+                `consumer_type cannot be  ${CONSUMER_DAG} for reading kafka
+                errors. provide consumer type from
+                ${[CONSUMER_ERR, CONSUMER_ERR_MSG]}`
+            );
+        }
         return await this.requestJSON<string[]>({
             method: METHOD_GET,
             path: '/kafka_msg',
@@ -1676,14 +1687,14 @@ export class DagHandle {
         });
         const status = res.status;
         let hndMap: { [key: string]: ComputationHandle } = {};
-        valueIds.map((id) => {
+        valueIds.forEach((id) => {
             hndMap = {
                 ...hndMap,
                 [id.getId()]: id,
             };
         });
         let hndStatus: { [key: string]: QueueStatus } = {};
-        Object.keys(status).map((key) => {
+        Object.keys(status).forEach((key) => {
             hndStatus = {
                 ...hndStatus,
                 [hndMap[key].valueId]: status[key],
@@ -1930,7 +1941,6 @@ export class DagHandle {
     }
 
     public async readKafkaOutput(
-        consumerType: string,
         offset = 'current',
         maxRows = 100
     ): Promise<ByteResponse | null> {
@@ -1942,7 +1952,7 @@ export class DagHandle {
                 args: {
                     dag: this.getURI(),
                     offset: offsetStr[0],
-                    consumer_type: consumerType,
+                    consumer_type: CONSUMER_DAG,
                 },
             });
         };
