@@ -1148,7 +1148,7 @@ export default class XYMEClient {
 
     public async readKafkaErrors(
         consumerType: ConsumerType,
-        offset: string
+        offset?: string
     ): Promise<string[]> {
         if (consumerType == CONSUMER_DAG) {
             throw new Error(
@@ -1165,6 +1165,44 @@ export default class XYMEClient {
                 consumer_type: consumerType,
             },
         });
+    }
+
+    public async readKafkaFullJsonErrors(
+        inputIdPath: string[]
+    ): Promise<[string, string | undefined][]> {
+        const errs = await this.readKafkaErrors(CONSUMER_ERR);
+        const msgs = await this.readKafkaErrors(CONSUMER_ERR_MSG);
+
+        function parseInputIdJson(json_str: string): string | undefined {
+            let res = JSON.parse(json_str);
+            Array.from(inputIdPath).forEach((path) => {
+                res = res[path];
+            });
+            return res;
+        }
+
+        function parseInputIdText(text: string): string | undefined {
+            const ix = text.search('input_id:');
+            if (ix != -1) {
+                return text.slice(ix + 'input_id:'.length);
+            } else {
+                return null;
+            }
+        }
+
+        const msgLookup = new Map<string, string>();
+        Array.from(msgs).forEach((msg) => {
+            const inputId = parseInputIdJson(msg);
+            if (inputId != null) {
+                msgLookup.set(inputId, msg);
+            }
+        });
+        const res: [string, string | undefined][] = [];
+        Array.from(errs).forEach((err) => {
+            const inputId = parseInputIdText(err);
+            res.push([err, msgLookup.get(inputId)]);
+        });
+        return res;
     }
 
     public async getNamedSecrets(

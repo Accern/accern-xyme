@@ -940,12 +940,16 @@ class XYMEClient:
                 for path in input_id_path:
                     res = res[path]
                 return res
-            except Exception as e:
+            # except json.decoder.JSONDecodeError:
+            #     return None
+            except KeyError:
                 return None
 
         def parse_input_id_text(text: str) -> Optional[str]:
             ix = text.find("input_id:")
-            return text[ix + len("input_id:"):]
+            if ix != -1:
+                return text[ix + len("input_id:"):]
+            return None
 
         msg_lookup: Dict[str, str] = {}
         for msg in msgs:
