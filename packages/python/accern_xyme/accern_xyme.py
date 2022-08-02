@@ -1867,7 +1867,6 @@ class DagHandle:
         offset_str = [offset]
 
         def read_single() -> Tuple[Optional[ByteResponse], str]:
-            nonlocal offset
             cur, read_ctype = self._client.request_bytes(
                 METHOD_GET, "/kafka_msg", {
                     "dag": self.get_uri(),
