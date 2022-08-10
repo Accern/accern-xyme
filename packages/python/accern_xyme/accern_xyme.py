@@ -945,9 +945,9 @@ class XYMEClient:
                 return None
 
         def parse_input_id_text(text: str) -> Optional[str]:
-            ix = text.find("input_id:")
+            ix = text.find("\ninput_id")
             if ix != -1:
-                return text[ix + len("input_id:"):]
+                return text[ix + len("\ninput_id"):]
             return None
 
         msg_lookup: Dict[str, str] = {}
@@ -960,7 +960,7 @@ class XYMEClient:
             if input_id is None:
                 yield (err, None)
             else:
-                yield (err, msg_lookup.get(input_id, default=None))
+                yield (err, msg_lookup.get(input_id, None))
 
     def get_named_secrets(
             self,

@@ -1183,9 +1183,9 @@ export default class XYMEClient {
         }
 
         function parseInputIdText(text: string): string | undefined {
-            const ix = text.search('input_id:');
+            const ix = text.search('\ninput_id');
             if (ix != -1) {
-                return text.slice(ix + 'input_id:'.length);
+                return text.slice(ix + '\ninput_id'.length);
             } else {
                 return null;
             }
