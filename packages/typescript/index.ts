@@ -126,8 +126,9 @@ const CUSTOM_NODE_TYPES = [
 ];
 const NO_RETRY: string[] = []; // [METHOD_POST, METHOD_FILE]
 const NO_RETRY_CODE = [403, 404, 500];
-type ConsumerType = 'dag' | 'err' | 'err_msg';
-const CONSUMER_DAG: ConsumerType = 'dag';
+const CONSUMER_DAG = 'dag';
+type ConsumerType = 'err' | 'err_msg';
+const CONSUMER_TYPES: string[] = ['err', 'err_msg'];
 const CONSUMER_ERR: ConsumerType = 'err';
 const CONSUMER_ERR_MSG: ConsumerType = 'err_msg';
 const formCustomCode = (func: string, funcName: string) => `
@@ -1147,14 +1148,14 @@ export default class XYMEClient {
     }
 
     public async readKafkaErrors(
-        consumerType: ConsumerType,
+        consumerType: string,
         offset?: string
     ): Promise<string[]> {
-        if (consumerType == CONSUMER_DAG) {
+        if (CONSUMER_TYPES.includes(consumerType)) {
             throw new Error(
-                `consumer_type cannot be  ${CONSUMER_DAG} for reading kafka
+                `consumer_type cannot be  ${consumerType} for reading kafka
                 errors. provide consumer type from
-                ${[CONSUMER_ERR, CONSUMER_ERR_MSG]}`
+                ${CONSUMER_TYPES}`
             );
         }
         return await this.requestJSON<string[]>({

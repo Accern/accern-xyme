@@ -174,12 +174,11 @@ CUSTOM_NODE_TYPES = {
 }
 NO_RETRY: List[str] = []  # [METHOD_POST, METHOD_FILE]
 
+CONSUMER_DAG = "dag"
 ConsumerType = Literal[
-    "dag",
     "err",
     "err_msg",
 ]
-CONSUMER_DAG: ConsumerType = "dag"
 CONSUMER_ERR: ConsumerType = "err"
 CONSUMER_ERR_MSG: ConsumerType = "err_msg"
 CONSUMER_TYPES: Set[ConsumerType] = set(get_args(ConsumerType))
@@ -915,13 +914,13 @@ class XYMEClient:
 
     def read_kafka_errors(
             self,
-            consumer_type: ConsumerType,
+            consumer_type: str,
             offset: str = "current") -> List[str]:
-        if consumer_type == CONSUMER_DAG:
+        if consumer_type not in CONSUMER_TYPES:
             raise ValueError(
-                f"consumer_type cannot be {CONSUMER_DAG} "
+                f"consumer_type cannot be {consumer_type} "
                 "for reading kafka errors. provide consumer type from "
-                f"{[CONSUMER_ERR, CONSUMER_ERR_MSG]}")
+                f"{CONSUMER_TYPES}")
         return cast(List[str], self.request_json(
             METHOD_GET, "/kafka_msg", {
                 "offset": offset,
