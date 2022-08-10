@@ -135,6 +135,7 @@ export declare class DagHandle {
     company?: string;
     dynamicError?: string;
     ins?: string[];
+    kafkaTopics?: [string, string];
     highPriority?: boolean;
     name?: string;
     nodeLookup: DictStrStr;

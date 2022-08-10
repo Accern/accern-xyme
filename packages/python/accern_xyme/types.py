@@ -24,6 +24,7 @@ BaseDagDef = TypedDict('BaseDagDef', {
 class UserDagDef(BaseDagDef, total=False):
     default_input_key: Optional[str]
     default_output_key: Optional[str]
+    kafka_topics: Optional[Tuple[str, str]]
     uri_prefix: URIPrefix
     state_uri: str
     version_override: Optional[str]
@@ -32,6 +33,7 @@ class UserDagDef(BaseDagDef, total=False):
 class DagDef(BaseDagDef):
     default_input_key: Optional[str]
     default_output_key: Optional[str]
+    kafka_topics: Optional[Tuple[str, str]]
     uri_prefix: URIPrefix
     state_uri: str
     version_override: Optional[str]
@@ -228,6 +230,7 @@ DagInfo = TypedDict('DagInfo', {
     "company": str,
     "high_priority": bool,
     "ins": List[str],
+    "kafka_topics": Optional[Tuple[str, str]],
     "name": str,
     "nodes": List[NodeInfo],
     "outs": List[Tuple[str, str]],

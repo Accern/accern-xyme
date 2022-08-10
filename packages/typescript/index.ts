@@ -1323,6 +1323,7 @@ export class DagHandle {
     dynamicError?: string;
     ins?: string[];
     highPriority?: boolean;
+    kafkaTopics?: [string, string];
     name?: string;
     nodeLookup: DictStrStr = {};
     nodes: { [key: string]: NodeHandle } = {};
@@ -1343,6 +1344,7 @@ export class DagHandle {
         this.ins = undefined;
         this.highPriority = undefined;
         this.name = undefined;
+        this.kafkaTopics = undefined;
         this.outs = undefined;
         this.queueMng = undefined;
         this.stateUri = undefined;
@@ -1372,6 +1374,7 @@ export class DagHandle {
         this.queueMng = info.queue_mng;
         this.ins = info.ins;
         this.outs = info.outs;
+        this.kafkaTopics = info.kafka_topics;
         const oldNodes = this.nodes === undefined ? {} : this.nodes;
         this.nodes = info.nodes.reduce(
             (o, nodeInfo) => ({
@@ -1444,6 +1447,14 @@ export class DagHandle {
         this.maybeRefresh();
         await this.maybeFetch();
         return assertString(this.versionOverride);
+    }
+
+    public async getKafkaTopics(): Promise<[string, string]> {
+        this.maybeRefresh();
+        await this.maybeFetch();
+        assertString(this.kafkaTopics[0]);
+        assertString(this.kafkaTopics[1]);
+        return this.kafkaTopics;
     }
 
     public async getURIPrefix(): Promise<URIPrefix> {
@@ -1833,6 +1844,12 @@ export class DagHandle {
 
     public async setVersionOverride(value: string): Promise<void> {
         await this.setAttr('version_override', value);
+    }
+
+    public async setKafkaTopics(
+        value: [string, string] | undefined
+    ): Promise<void> {
+        await this.setAttr('kafka_topics', value);
     }
 
     public async setURIPrefix(value: URIPrefix): Promise<void> {

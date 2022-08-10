@@ -6,8 +6,8 @@ export interface URIPrefix {
 export interface BaseDagDef {
     name: string;
     company: string;
-    nodes: Partial<NodeDef>[];
     high_priority: boolean;
+    nodes: Partial<NodeDef>[];
     queue_mng?: string;
 }
 
@@ -16,16 +16,19 @@ export interface UserDagDef extends BaseDagDef {
     state_uri?: string;
     default_input_key?: string;
     default_output_key?: string;
+    kafka_topics?: [string, string];
     version_override?: string;
 }
 
 export interface DagDef extends BaseDagDef {
-    uri_prefix: URIPrefix;
-    state_uri: string;
     default_input_key?: string;
     default_output_key?: string;
+    kafka_topics?: [string, string];
+    state_uri: string;
+    uri_prefix: URIPrefix;
     version_override: string;
 }
+
 export interface NodeDef {
     blobs: DictStrStr;
     id: string;
@@ -254,6 +257,7 @@ export interface DagInfo {
     company: string;
     high_priority: boolean;
     ins: string[];
+    kafka_topics?: [string, string];
     name: string;
     nodes: NodeInfo[];
     outs: [string, string][];

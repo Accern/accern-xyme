@@ -924,7 +924,7 @@ class XYMEClient:
         return cast(List[str], self.request_json(
             METHOD_GET, "/kafka_msg", {
                 "offset": offset,
-                "consumer_type": consumer_type
+                "consumer_type": consumer_type,
             }))
 
     def read_kafka_full_json_errors(
@@ -1169,6 +1169,7 @@ class DagHandle:
         self._dynamic_error: Optional[str] = None
         self._ins: Optional[List[str]] = None
         self._outs: Optional[List[Tuple[str, str]]] = None
+        self._kafka_topics: Optional[Tuple[str, str]] = None
 
     def refresh(self) -> None:
         self._name = None
@@ -1180,6 +1181,7 @@ class DagHandle:
         self._version_override = None
         self._ins = None
         self._outs = None
+        self._kafka_topics = None
         # NOTE: we don't reset nodes
 
     def _maybe_refresh(self) -> None:
@@ -1207,6 +1209,7 @@ class DagHandle:
         self._version_override = info["version_override"]
         self._ins = info["ins"]
         self._outs = [(el[0], el[1]) for el in info["outs"]]
+        self._kafka_topics = info["kafka_topics"]
         old_nodes = {} if self._nodes is None else self._nodes
         self._nodes = {
             node["id"]: NodeHandle.from_node_info(
@@ -1251,11 +1254,17 @@ class DagHandle:
         assert self._state_uri is not None
         return self._state_uri
 
-    def get_version_override(self) -> Optional[str]:
+    def get_version_override(self) -> str:
         self._maybe_refresh()
         self._maybe_fetch()
         assert self._version_override is not None
         return self._version_override
+
+    def get_kafka_topics(self) -> Tuple[str, str]:
+        self._maybe_refresh()
+        self._maybe_fetch()
+        assert self._kafka_topics is not None
+        return self._kafka_topics
 
     def get_uri_prefix(self) -> URIPrefix:
         self._maybe_refresh()
@@ -1766,6 +1775,9 @@ class DagHandle:
 
     def set_version_override(self, value: Optional[str]) -> None:
         self.set_attr("version_override", value)
+
+    def set_kafka_topics(self, value: Optional[Tuple[str, str]]) -> None:
+        self.set_attr("kafka_topics", value)
 
     @overload
     def check_queue_stats(  # pylint: disable=no-self-use
