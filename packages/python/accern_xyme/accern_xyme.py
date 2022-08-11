@@ -932,6 +932,7 @@ class XYMEClient:
             input_id_path: List[str]) -> Iterable[Tuple[str, Any]]:
         errs = self.read_kafka_errors(consumer_type=CONSUMER_ERR)
         msgs = self.read_kafka_errors(consumer_type=CONSUMER_ERR_MSG)
+        msg_lookup: Dict[str, str] = {}
 
         def parse_input_id_json(json_str: str) -> Optional[str]:
             try:
@@ -945,16 +946,16 @@ class XYMEClient:
                 return None
 
         def parse_input_id_text(text: str) -> Optional[str]:
-            ix = text.find("\ninput_id")
+            ix = text.find("\ninput_id: ")
             if ix != -1:
-                return text[ix + len("\ninput_id"):]
+                return text[ix + len("\ninput_id: "):]
             return None
 
-        msg_lookup: Dict[str, str] = {}
         for msg in msgs:
-            input_id = parse_input_id_json(msg)
-            if input_id is not None:
-                msg_lookup[input_id] = msg
+            if msg:
+                input_id = parse_input_id_json(msg)
+                if input_id is not None:
+                    msg_lookup[input_id] = msg
         for err in errs:
             input_id = parse_input_id_text(err)
             if input_id is None:
