@@ -1175,11 +1175,11 @@ export default class XYMEClient {
         const msgs = await this.readKafkaErrors(CONSUMER_ERR_MSG);
 
         function parseInputIdJson(json_str: string): string | undefined {
-            let res = JSON.parse(json_str);
+            let jres = JSON.parse(json_str);
             Array.from(inputIdPath).forEach((path) => {
-                res = res[path];
+                jres = jres[path];
             });
-            return res;
+            return jres;
         }
 
         function parseInputIdText(text: string): string | undefined {
