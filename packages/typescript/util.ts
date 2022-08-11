@@ -103,7 +103,7 @@ export function assertDict(value: unknown): { [key: string]: any } {
 
 export function getQueryURL(args: DictStrStr, inURL: string): string {
     const params = new URLSearchParams();
-    Object.keys(args).map((key) => {
+    Object.keys(args).forEach((key) => {
         params.append(key, args[key]);
     });
     let url = inURL;

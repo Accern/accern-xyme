@@ -458,11 +458,11 @@ export default class XYMEClient {
             case METHOD_FILE: {
                 const formData = new FormData();
                 if (files) {
-                    Object.keys(files).map((key) => {
+                    Object.keys(files).forEach((key) => {
                         const buffCopy = Buffer.from(files[key]);
                         formData.append(key, buffCopy);
                     });
-                    Object.keys(args).map((key) => {
+                    Object.keys(args).forEach((key) => {
                         formData.append(key, args[key]);
                     });
                     response = await fetch(url, {
@@ -549,11 +549,11 @@ export default class XYMEClient {
             case METHOD_FILE: {
                 const formData = new FormData();
                 if (files) {
-                    Object.keys(files).map((key) => {
+                    Object.keys(files).forEach((key) => {
                         const buffCopy = Buffer.from(files[key]);
                         formData.append(key, buffCopy);
                     });
-                    Object.keys(args).map((key) => {
+                    Object.keys(args).forEach((key) => {
                         formData.append(key, args[key]);
                     });
                     response = await fetch(url, {
@@ -1663,14 +1663,14 @@ export class DagHandle {
         });
         const status = res.status;
         let hndMap: { [key: string]: ComputationHandle } = {};
-        valueIds.map((id) => {
+        valueIds.forEach((id) => {
             hndMap = {
                 ...hndMap,
                 [id.getId()]: id,
             };
         });
         let hndStatus: { [key: string]: QueueStatus } = {};
-        Object.keys(status).map((key) => {
+        Object.keys(status).forEach((key) => {
             hndStatus = {
                 ...hndStatus,
                 [hndMap[key].valueId]: status[key],
