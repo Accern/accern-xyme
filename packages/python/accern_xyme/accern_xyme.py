@@ -929,10 +929,10 @@ class XYMEClient:
 
     def read_kafka_full_json_errors(
             self,
-            input_id_path: List[str]) -> Iterable[Tuple[str, Any]]:
+            input_id_path: List[str],
+            msg_lookup: Dict[str, str]) -> Iterable[Tuple[str, Any]]:
         errs = self.read_kafka_errors(consumer_type=CONSUMER_ERR)
         msgs = self.read_kafka_errors(consumer_type=CONSUMER_ERR_MSG)
-        msg_lookup: Dict[str, str] = {}
 
         def parse_input_id_json(json_str: str) -> Optional[str]:
             try:
@@ -940,8 +940,8 @@ class XYMEClient:
                 for path in input_id_path:
                     res = res[path]
                 return res
-            # except json.decoder.JSONDecodeError:
-            #     return None
+            except json.decoder.JSONDecodeError:
+                return None
             except KeyError:
                 return None
 

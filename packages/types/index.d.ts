@@ -117,8 +117,10 @@ export default class XYMEClient {
     resetCache(): Promise<CacheStats>;
     createKafkaErrorTopic(): Promise<KafkaTopics>;
     getKafkaErrorTopic(): Promise<string>;
+    getKafkaErrorMessageTopic(): Promise<string>;
     deleteKafkaErrorTopic(): Promise<KafkaTopics>;
-    readKafkaErrors(offset: string): Promise<string[]>;
+    readKafkaErrors(consumerType: string, offset?: string): Promise<string[]>;
+    readKafkaFullJsonErrors(inputIdPath: string[], msgLookup: Map<string, string>): Promise<[string, string | undefined][]>;
     getNamedSecrets(configToken?: string | null, showValues?: boolean): Promise<{
         [key: string]: string | null;
     }>;
