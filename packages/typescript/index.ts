@@ -1181,8 +1181,8 @@ export default class XYMEClient {
         *    as input_id in the input json.
         *    msg_lookup (Dict[str, str]): Initially an empty dictionary can be
         *    passed for this argument. Consequent calls to this method
-        *    will require the user to pass the msg_lookup dictionary returned in
-        *    the previous call to this function.
+        *    will require the user to pass the msg_lookup dictionary returned
+        *    in the previous call to this function.
 
         * Yields:
         *    Iterable[Tuple[str, Optional[str], Dict[str, str]]]: the error,
@@ -1204,7 +1204,7 @@ export default class XYMEClient {
 
         function parseInputIdText(text: string): string | undefined {
             const ix = text.search('\ninput_id');
-            if (ix != -1) {
+            if (ix !== -1) {
                 return text.slice(ix + '\ninput_id'.length);
             } else {
                 return null;
