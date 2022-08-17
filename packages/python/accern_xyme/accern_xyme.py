@@ -930,7 +930,26 @@ class XYMEClient:
     def read_kafka_full_json_errors(
             self,
             input_id_path: List[str],
-            msg_lookup: Dict[str, str]) -> Iterable[Tuple[str, Any]]:
+            msg_lookup: Dict[str, str],
+            ) -> Iterable[Tuple[str, Optional[str], Dict[str, str]]]:
+        """
+        Provides information as to what the error is and what is the
+        input id and its associated input message.
+
+        Args:
+            input_id_path (List[str]): The path of the field to be considered
+            as input_id in the input json.
+            msg_lookup (Dict[str, str]): Initially an empty dictionary can be
+            passed for this argument. Consequent calls to this method
+            will require the user to pass the msg_lookup dictionary returned in
+            the previous call to this function.
+
+        Yields:
+            Iterable[Tuple[str, Optional[str], Dict[str, str]]]: the error,
+            the input msg associated with the input_id and the updated
+            msg_lookup dictionary that will contain the input_id and msg
+            mapping.
+        """
         errs = self.read_kafka_errors(consumer_type=CONSUMER_ERR)
         msgs = self.read_kafka_errors(consumer_type=CONSUMER_ERR_MSG)
 
@@ -959,9 +978,9 @@ class XYMEClient:
         for err in errs:
             input_id = parse_input_id_text(err)
             if input_id is None:
-                yield (err, None)
+                yield (err, None, msg_lookup)
             else:
-                yield (err, msg_lookup.get(input_id, None))
+                yield (err, msg_lookup.get(input_id, None), msg_lookup)
 
     def get_named_secrets(
             self,
