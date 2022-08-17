@@ -1168,29 +1168,21 @@ export default class XYMEClient {
         });
     }
 
+    /**
+     * Provides information as to what the error is and what is the
+     * input id and its associated input message.
+     * @param inputIdPath: The path of the field to be considered as
+     * input_id in the input json.
+     * @param msgLookup: Initially an empty dictionary can be passed for
+     * this argument. Consequent calls to this method will require the user
+     * to pass the msgLookup dictionary returned in the previous call to
+     * this function.
+     * @returns
+     */
     public async readKafkaFullJsonErrors(
         inputIdPath: string[],
         msgLookup: Map<string, string>
     ): Promise<[string, string | undefined, Map<string, string>][]> {
-        /**
-        * Provides information as to what the error is and what is the
-        * input id and its associated input message.
-
-        * Args:
-        *    input_id_path (List[str]): The path of the field to be considered
-        *    as input_id in the input json.
-        *    msg_lookup (Dict[str, str]): Initially an empty dictionary can be
-        *    passed for this argument. Consequent calls to this method
-        *    will require the user to pass the msg_lookup dictionary returned
-        *    in the previous call to this function.
-
-        * Yields:
-        *    Iterable[Tuple[str, Optional[str], Dict[str, str]]]: the error,
-        *    the input msg associated with the input_id and the updated
-        *    msg_lookup dictionary that will contain the input_id and msg
-        *    mapping.
-        */
-
         const errs = await this.readKafkaErrors(CONSUMER_ERR);
         const msgs = await this.readKafkaErrors(CONSUMER_ERR_MSG);
 
