@@ -1182,7 +1182,7 @@ export default class XYMEClient {
     public async readKafkaFullJsonErrors(
         inputIdPath: string[],
         msgLookup: Map<string, string>
-    ): Promise<[string, string | undefined, Map<string, string>][]> {
+    ): Promise<[string, string | undefined][]> {
         const errs = await this.readKafkaErrors(CONSUMER_ERR);
         const msgs = await this.readKafkaErrors(CONSUMER_ERR_MSG);
 
@@ -1209,10 +1209,10 @@ export default class XYMEClient {
                 msgLookup.set(inputId, msg);
             }
         });
-        const res: [string, string | undefined, Map<string, string>][] = [];
+        const res: [string, string | undefined][] = [];
         Array.from(errs).forEach((err) => {
             const inputId = parseInputIdText(err);
-            res.push([err, msgLookup.get(inputId), msgLookup]);
+            res.push([err, msgLookup.get(inputId)]);
         });
         return res;
     }
