@@ -1173,10 +1173,10 @@ export default class XYMEClient {
      * input id and its associated input message.
      * @param inputIdPath: The path of the field to be considered as
      * input_id in the input json.
-     * @param msgLookup: Initially an empty dictionary can be passed for
-     * this argument. Consequent calls to this method will require the user
-     * to pass the msgLookup dictionary returned in the previous call to
-     * this function.
+     * @param msgLookup:
+     * This dictionary will populate with the mappings of input_ids to
+     * messages. For subsequent calls the same dictionary should be used.
+     * Initially an empty dictionary can be passed for this argument.
      * @returns
      */
     public async readKafkaFullJsonErrors(

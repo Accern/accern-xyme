@@ -940,10 +940,10 @@ class XYMEClient:
                 The path of the field to be considered as input_id in the
                 input json.
             msg_lookup (Dict[str, str]):
-                Initially an empty dictionary can be passed for this argument.
-                Consequent calls to this method will require the user to pass
-                the msg_lookup dictionary returned in the previous call to
-                this function.
+                This dictionary will populate with the mappings of input_ids
+                to messages. For subsequent calls the same dictionary should
+                be used. Initially an empty dictionary can be passed for this
+                argument.
 
         Yields:
             Iterable[Tuple[str, Optional[str]]]: the error, the input msg
