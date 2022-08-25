@@ -202,17 +202,17 @@ class LegacyVersion(Exception):
 
 
 class KafkaErrorMessageState:
-    def __init__(self):
-        self._msg_lookup = {}
-        self._unmatched = []
+    def __init__(self) -> None:
+        self._msg_lookup: Dict[str, str] = {}
+        self._unmatched: List[str] = []
 
-    def get_msg(self, input_id: str) -> Optional[bytes]:
+    def get_msg(self, input_id: str) -> Optional[str]:
         return self._msg_lookup.get(input_id)
 
     def add_msg(self, input_id: str, msg: str) -> None:
         self._msg_lookup[input_id] = msg
 
-    def get_unmatched(self) -> Iterable[bytes]:
+    def get_unmatched(self) -> Iterable[str]:
         unmatched = self._unmatched
         self._unmatched = []
         yield from unmatched
