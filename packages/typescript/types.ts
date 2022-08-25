@@ -190,6 +190,11 @@ export interface VersionResponse {
     xyme_version: string;
 }
 
+export interface KafkaErrorMessageState {
+    msgLookup: Map<string, string>;
+    unmatched: string[];
+}
+
 export interface ReadNode {
     redis_key: string;
     result_uri?: string;
