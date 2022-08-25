@@ -155,6 +155,34 @@ interface XYMERequestArgument {
     retry?: Partial<RetryOptions>;
 }
 
+export class KafkaErrorMessageState {
+    msgLookup: Map<string, string>;
+    unmatched: string[];
+
+    constructor(config: KafkaErrorMessageState) {
+        this.msgLookup = config.msgLookup;
+        this.unmatched = config.unmatched;
+    }
+
+    public getMsg(input_id: string): string | undefined {
+        return this.msgLookup.get(input_id);
+    }
+
+    public addMsg(input_id: string, msg: string) {
+        this.msgLookup.set(input_id, msg);
+    }
+
+    public getUnmatched(): string[] {
+        const res = this.unmatched;
+        this.unmatched = [];
+        return res;
+    }
+
+    public addUnmatched(msg: string) {
+        this.unmatched.push(msg);
+    }
+}
+
 export default class XYMEClient {
     httpAgent?: http.Agent;
     httpsAgent?: https.Agent;
@@ -1173,16 +1201,17 @@ export default class XYMEClient {
      * input id and its associated input message.
      * @param inputIdPath: The path of the field to be considered as
      * input_id in the input json.
-     * @param msgLookup:
-     * This dictionary will populate with the mappings of input_ids to
-     * messages. For subsequent calls the same dictionary should be used.
-     * Initially an empty dictionary can be passed for this argument.
+     * @param errMsgState:
+     * This will be populated with the mappings of input_ids to messages.
+     * Also stores any unmatched messages in the unmatched list and after
+     * filling msg_lookup, check if they have matches. Initially an object
+     * of KafkaErrorMessageState can be passed for this argument.
      * @returns
      */
     public async readKafkaFullJsonErrors(
         inputIdPath: string[],
-        msgLookup: Map<string, string>
-    ): Promise<[string, string | undefined][]> {
+        errMsgState: KafkaErrorMessageState
+    ): Promise<[string, string][]> {
         const errs = await this.readKafkaErrors(CONSUMER_ERR);
         const msgs = await this.readKafkaErrors(CONSUMER_ERR_MSG);
 
@@ -1206,13 +1235,35 @@ export default class XYMEClient {
         Array.from(msgs).forEach((msg) => {
             const inputId = parseInputIdJson(msg);
             if (inputId != null) {
-                msgLookup.set(inputId, msg);
+                errMsgState.addMsg(inputId, msg);
             }
         });
-        const res: [string, string | undefined][] = [];
+        const oldRes: [string, string][] = [];
+        Array.from(errMsgState.getUnmatched()).forEach((oldErr) => {
+            const inputId = parseInputIdText(oldErr);
+            if (inputId != null) {
+                const match = errMsgState.getMsg(inputId);
+                if (match === null) {
+                    errMsgState.addUnmatched(oldErr);
+                } else {
+                    oldRes.push([oldErr, match]);
+                }
+            }
+        });
+        if (oldRes.length) {
+            return oldRes;
+        }
+        const res: [string, string][] = [];
         Array.from(errs).forEach((err) => {
             const inputId = parseInputIdText(err);
-            res.push([err, msgLookup.get(inputId)]);
+            if (inputId != null) {
+                const match = errMsgState.getMsg(inputId);
+                if (match === null) {
+                    errMsgState.addUnmatched(err);
+                } else {
+                    res.push([err, match]);
+                }
+            }
         });
         return res;
     }

@@ -201,6 +201,28 @@ class LegacyVersion(Exception):
 # *** LegacyVersion ***
 
 
+class KafkaErrorMessageState:
+    def __init__(self):
+        self._msg_lookup = {}
+        self._unmatched = []
+
+    def get_msg(self, input_id: str) -> Optional[bytes]:
+        return self._msg_lookup.get(input_id)
+
+    def add_msg(self, input_id: str, msg: str) -> None:
+        self._msg_lookup[input_id] = msg
+
+    def get_unmatched(self) -> Iterable[bytes]:
+        unmatched = self._unmatched
+        self._unmatched = []
+        yield from unmatched
+
+    def add_unmatched(self, msg: str) -> None:
+        self._unmatched.append(msg)
+
+# *** KafkaErrorMessageState ***
+
+
 class XYMEClient:
     def __init__(
             self,
@@ -930,7 +952,8 @@ class XYMEClient:
     def read_kafka_full_json_errors(
             self,
             input_id_path: List[str],
-            msg_lookup: Dict[str, str]) -> Iterable[Tuple[str, Optional[str]]]:
+            err_msg_state: KafkaErrorMessageState,
+            ) -> Iterable[Tuple[str, str]]:
         """
         Provides information as to what the error is and what is the
         input id and its associated input message.
@@ -939,11 +962,12 @@ class XYMEClient:
             input_id_path (List[str]):
                 The path of the field to be considered as input_id in the
                 input json.
-            msg_lookup (Dict[str, str]):
-                This dictionary will populate with the mappings of input_ids
-                to messages. For subsequent calls the same dictionary should
-                be used. Initially an empty dictionary can be passed for this
-                argument.
+            err_msg_state (KafkaErrorMessageState):
+                This will be populated with the mappings of input_ids
+                to messages. Also stores any unmatched messages in the
+                unmatched list and after filling msg_lookup, check if they
+                have matches. Initially an object of KafkaErrorMessageState
+                can be passed for this argument.
 
         Yields:
             Iterable[Tuple[str, Optional[str]]]: the error, the input msg
@@ -970,16 +994,27 @@ class XYMEClient:
             return None
 
         for msg in msgs:
-            if msg:
-                input_id = parse_input_id_json(msg)
-                if input_id is not None:
-                    msg_lookup[input_id] = msg
+            input_id = parse_input_id_json(msg)
+            if input_id is not None:
+                err_msg_state.add_msg(input_id, msg)
+        for old_err in err_msg_state.get_unmatched():
+            input_id = parse_input_id_text(old_err)
+            if input_id is None:
+                continue
+            match = err_msg_state.get_msg(input_id)
+            if match is None:
+                err_msg_state.add_unmatched(old_err)
+            else:
+                yield (old_err, match)
         for err in errs:
             input_id = parse_input_id_text(err)
             if input_id is None:
-                yield (err, None)
+                continue
+            match = err_msg_state.get_msg(input_id)
+            if match is None:
+                err_msg_state.add_unmatched(err)
             else:
-                yield (err, msg_lookup.get(input_id, None))
+                yield (err, match)
 
     def get_named_secrets(
             self,
