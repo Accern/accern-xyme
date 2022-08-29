@@ -16,5 +16,5 @@ if [ ${MAJOR} -eq 3 ] && [ ${MINOR} -lt 8 ] || [ ${MAJOR} -lt 3 ]; then
     exit 1
 fi
 
-${PYTHON} -m pip install --upgrade pip
+${PYTHON} -m pip install --progress-bar off --upgrade pip
 ${PYTHON} -m pip install --progress-bar off --upgrade -r requirements.lint.txt
