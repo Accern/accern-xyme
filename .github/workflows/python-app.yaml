@@ -1,0 +1,77 @@
+# This workflow will install Python dependencies, run tests and lint with
+# multiple version of Python
+name: Python Checks
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  push:
+    branches:
+      - master
+    tags:
+      - 'v*'
+
+jobs:
+  lints_pipeline:
+    name: Lints CI Pipeline
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ['3.8']
+    env:
+      ENV: CI
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Set up Python ${{ matrix.python }}
+      uses: actions/setup-python@v1
+      with:
+        python-version: ${{ matrix.python }}
+
+    - name: Cache python modules 3.8
+      uses: actions/cache@v3
+      if: ${{ matrix.python == '3.8'}}
+      with:
+        path: ${{ env.pythonLocation }}
+        key: ${{ env.pythonLocation }}-${{ hashFiles('**/requirements.txt') }}-${{ hashFiles('**/requirements.lint.txt') }}
+
+    - name: Install dependencies
+      run: |
+        make install PYTHON=python
+
+    - name: Lint Code (use uppercase TODO, XXX, FIXME, NOTE and explain nopep8)
+      run: |
+        make lint-comment
+
+    - name: Lint Code (sort requirements)
+      run: |
+        make lint-requirements
+
+    - name: Lint Code (use f"" style formating)
+      run: |
+        make lint-stringformat
+
+    - name: Lint Code (no f"a", "{a}", or f'{a}')
+      run: |
+        make lint-forgottenformat
+
+    - name: Lint Code (missing trailing comma)
+      run: |
+        make lint-flake8
+
+    - name: Lint Code (pycodestyle)
+      run: |
+        make lint-pycodestyle
+
+    - name: Lint Code (type-check)
+      run: |
+        make lint-type-check
+
+    - name: Lint Code (pylint)
+      run: |
+        make lint-pylint
+
+    - name: Lint Code (docstring)
+      run: |
+        make lint-docstring

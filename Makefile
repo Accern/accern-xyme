@@ -1,5 +1,6 @@
 help:
 	@echo "The following make targets are available:"
+	@echo "install	install all dependencies"
 	@echo "lint-all	run all lint steps"
 	@echo "lint-comment	run linter check over regular comments"
 	@echo "lint-docstring	run linter check over docstring"
@@ -15,6 +16,9 @@ help:
 	@echo "version-sync	check package versions are same"
 	@echo "publish	publish the library on pypi"
 	@echo "publish-ts	publish the library on npm"
+
+install:
+	./install.sh $(PYTHON)
 
 lint-comment:
 	! find . \( -name '*.py' -o -name '*.pyi' \) -and -not -path './venv/*' \
