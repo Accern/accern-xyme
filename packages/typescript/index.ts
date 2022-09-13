@@ -5,6 +5,8 @@ import { promises as fpm } from 'fs';
 import fetch, { HeadersInit, Response, RequestInit } from 'node-fetch';
 import { performance } from 'perf_hooks';
 import { isNull } from 'lodash';
+import http = require('http');
+import https = require('https');
 import {
     AllowedCustomImports,
     BlobFilesResponse,
@@ -22,6 +24,7 @@ import {
     DagPrettyNode,
     DagReload,
     DictStrStr,
+    DictStrList,
     DynamicFormat,
     DynamicResults,
     DynamicStatusResponse,
@@ -107,7 +110,8 @@ export * from './errors';
 export * from './request';
 export * from './types';
 
-const API_VERSION = 4;
+const API_VERSION = 5;
+const MIN_API_VERSION = 4;
 const MAX_RETRY = 20;
 const RETRY_SLEEP = 5.0;
 const EMPTY_BLOB_PREFIX = 'null://';
@@ -120,7 +124,7 @@ const CUSTOM_NODE_TYPES = [
     'custom_json_to_data',
     'custom_json_join_data',
 ];
-const NO_RETRY = [METHOD_POST, METHOD_FILE];
+const NO_RETRY: string[] = []; // [METHOD_POST, METHOD_FILE]
 const NO_RETRY_CODE = [403, 404, 500];
 const formCustomCode = (func: string, funcName: string) => `
 ${func}
@@ -147,6 +151,8 @@ interface XYMERequestArgument {
 }
 
 export default class XYMEClient {
+    httpAgent?: http.Agent;
+    httpsAgent?: https.Agent;
     apiVersion?: number;
     apiVersionMinor?: number;
     autoRefresh = true;
@@ -161,13 +167,15 @@ export default class XYMEClient {
         this.url = config.url;
         this.namespace = config.namespace || DEFAULT_NAMESPACE;
         this.dagCache = new WeakMap();
+        this.httpAgent = new http.Agent({ maxSockets: 10, keepAlive: true });
+        this.httpsAgent = new https.Agent({ maxSockets: 10, keepAlive: true });
     }
 
     public async getAPIVersion(): Promise<number> {
         if (isUndefined(this.apiVersion)) {
             const serverVersions = await this.getServerVersion();
 
-            if (serverVersions.api_version < API_VERSION) {
+            if (serverVersions.api_version < MIN_API_VERSION) {
                 throw new Error(
                     `Legacy version ${serverVersions.api_version}`
                 );
@@ -383,6 +391,14 @@ export default class XYMEClient {
         }
     }
 
+    private getAgent(parsedURL: URL): http.Agent | https.Agent {
+        if (parsedURL.protocol == 'http:') {
+            return this.httpAgent;
+        } else {
+            return this.httpsAgent;
+        }
+    }
+
     private async fallibleRawRequestBytes(
         method: string,
         path: string,
@@ -411,13 +427,18 @@ export default class XYMEClient {
         let options: RequestInit;
 
         let response: Response | undefined = undefined;
+
+        const parsedURL = new URL(getQueryURL(args, url));
+        const agent = this.getAgent(parsedURL);
+
         switch (method) {
             case METHOD_GET: {
                 options = {
                     method,
                     headers,
+                    agent,
                 };
-                response = await fetch(getQueryURL(args, url), options);
+                response = await fetch(parsedURL, options);
                 break;
             }
             case METHOD_POST:
@@ -430,17 +451,18 @@ export default class XYMEClient {
                         'content-type': 'application/json',
                     },
                     body: JSON.stringify(args),
+                    agent,
                 });
                 break;
             }
             case METHOD_FILE: {
                 const formData = new FormData();
                 if (files) {
-                    Object.keys(files).map((key) => {
+                    Object.keys(files).forEach((key) => {
                         const buffCopy = Buffer.from(files[key]);
                         formData.append(key, buffCopy);
                     });
-                    Object.keys(args).map((key) => {
+                    Object.keys(args).forEach((key) => {
                         formData.append(key, args[key]);
                     });
                     response = await fetch(url, {
@@ -450,6 +472,7 @@ export default class XYMEClient {
                             ...headers,
                             ...formData.getHeaders(),
                         },
+                        agent,
                     });
                 }
                 break;
@@ -495,13 +518,17 @@ export default class XYMEClient {
         }
         let options: RequestInit;
         let response: Response | undefined = undefined;
+        const parsedURL = new URL(getQueryURL(args, url));
+        const agent = this.getAgent(parsedURL);
+
         switch (method) {
             case METHOD_GET: {
                 options = {
                     method,
                     headers,
+                    agent,
                 };
-                response = await fetch(getQueryURL(args, url), options);
+                response = await fetch(parsedURL, options);
                 break;
             }
             case METHOD_POST:
@@ -514,6 +541,7 @@ export default class XYMEClient {
                         'content-type': 'application/json',
                     },
                     body: JSON.stringify(args),
+                    agent,
                 };
                 response = await fetch(url, options);
                 break;
@@ -521,11 +549,11 @@ export default class XYMEClient {
             case METHOD_FILE: {
                 const formData = new FormData();
                 if (files) {
-                    Object.keys(files).map((key) => {
+                    Object.keys(files).forEach((key) => {
                         const buffCopy = Buffer.from(files[key]);
                         formData.append(key, buffCopy);
                     });
-                    Object.keys(args).map((key) => {
+                    Object.keys(args).forEach((key) => {
                         formData.append(key, args[key]);
                     });
                     response = await fetch(url, {
@@ -535,6 +563,7 @@ export default class XYMEClient {
                             ...headers,
                             ...formData.getHeaders(),
                         },
+                        agent,
                     });
                 }
                 break;
@@ -571,13 +600,16 @@ export default class XYMEClient {
                 namespace: this.namespace,
             };
         }
+        const parsedURL = new URL(getQueryURL(args, url));
+        const agent = this.getAgent(parsedURL);
         const options: RequestInit = {
             method,
             headers,
+            agent,
         };
         switch (method) {
             case METHOD_GET: {
-                response = await fetch(getQueryURL(args, url), options);
+                response = await fetch(parsedURL, options);
                 break;
             }
             case METHOD_POST: {
@@ -655,6 +687,16 @@ export default class XYMEClient {
             addNamespace: false,
             args: {},
         });
+    }
+
+    public async getVersionOverride(): Promise<DictStrList> {
+        const serverVersion = await this.getServerVersion();
+        const repoTag: DictStrList = {};
+        repoTag['versions'] = [
+            serverVersion.image_repo,
+            serverVersion.image_tag,
+        ];
+        return repoTag;
     }
 
     public async getNamespaces(): Promise<string[]> {
@@ -1520,7 +1562,7 @@ export class DagHandle {
         return resArray;
     }
 
-    public async dynamic(inputData: Buffer): Promise<ByteResponse> {
+    public async dynamic(inputData: Buffer): Promise<ByteResponse | null> {
         const [res, ctype] = await this.client.requestBytes({
             method: METHOD_FILE,
             path: '/dynamic',
@@ -1534,7 +1576,7 @@ export class DagHandle {
         return interpretContentType(res, ctype);
     }
 
-    public async dynamicObj(inputObj: any): Promise<ByteResponse> {
+    public async dynamicObj(inputObj: any): Promise<ByteResponse | null> {
         const buffer = Buffer.from(JSON.stringify(inputObj));
         return this.dynamic(buffer);
     }
@@ -1586,7 +1628,9 @@ export class DagHandle {
         );
     }
 
-    public async getDynamicResult(valueId: string): Promise<ByteResponse> {
+    public async getDynamicResult(
+        valueId: string
+    ): Promise<ByteResponse | null> {
         try {
             const [res, ctype] = await this.client.requestBytes({
                 method: METHOD_GET,
@@ -1619,14 +1663,14 @@ export class DagHandle {
         });
         const status = res.status;
         let hndMap: { [key: string]: ComputationHandle } = {};
-        valueIds.map((id) => {
+        valueIds.forEach((id) => {
             hndMap = {
                 ...hndMap,
                 [id.getId()]: id,
             };
         });
         let hndStatus: { [key: string]: QueueStatus } = {};
-        Object.keys(status).map((key) => {
+        Object.keys(status).forEach((key) => {
             hndStatus = {
                 ...hndStatus,
                 [hndMap[key].valueId]: status[key],
@@ -2058,6 +2102,23 @@ export class DagHandle {
             },
         });
     }
+
+    public async downloadFullDagZip(
+        toPath?: string
+    ): Promise<Buffer | undefined> {
+        const [res] = await this.client.requestBytes({
+            method: METHOD_GET,
+            path: '/download_dag_zip',
+            args: {
+                dag: this.getURI(),
+            },
+        });
+        if (isUndefined(toPath)) {
+            return res;
+        }
+        await openWrite(res, toPath);
+        return;
+    }
 }
 
 export class NodeHandle {
@@ -2392,6 +2453,18 @@ export class NodeHandle {
                 dag: this.getDag().getURI(),
                 node: this.getId(),
                 action: 'reset',
+            },
+        });
+    }
+
+    public async requeue(): Promise<NodeState> {
+        return this.client.requestJSON<NodeState>({
+            method: METHOD_PUT,
+            path: '/requeue',
+            args: {
+                dag: this.getDag().getURI(),
+                node: this.getId(),
+                action: 'requeue',
             },
         });
     }
@@ -2808,8 +2881,24 @@ export class BlobHandle {
         return uri;
     }
 
-    public async appendUpload(uri: string, fobj: Buffer): Promise<number> {
+    private async legacyAppendUpload(
+        uri: string,
+        fobj: Buffer
+    ): Promise<number> {
         const res = await this.performUploadAction('append', { uri }, fobj);
+        return res.pos;
+    }
+
+    private async appendUpload(
+        uri: string,
+        offset: number,
+        fobj: Buffer
+    ): Promise<number> {
+        const res = await this.performUploadAction(
+            'append',
+            { uri, offset },
+            fobj
+        );
         return res.pos;
     }
 
@@ -2839,15 +2928,65 @@ export class BlobHandle {
     /**
      * This is the helper method being used by uploadFile
      * and uploadFileUsingContent
-     * @param curSize: Size of the updated buffer so far
      * @param buffer: the buffer chunk being uploaded
      * @param nread: number of bytes from the in the buffer
-     * @param chunk: chunk size
+     * @param offset: start byte position of part
      * @param blobHandle: the parent this being passed here
      * @returns
      */
+    private async updateBuffer(
+        read: (pos: number, size: number) => Promise<Buffer>,
+        offset: number,
+        blobHandle: BlobHandle
+    ) {
+        const buffer = await read(offset, getFileUploadChunkSize());
+        const newSize = await blobHandle.appendUpload(
+            this.tmpURI,
+            offset,
+            buffer
+        );
+        if (newSize !== buffer.length) {
+            throw new Error(`
+                incomplete chunk upload n:${newSize} b: ${buffer.length}
+            `);
+        }
+        return newSize;
+    }
 
-    public async updateBuffer(
+    private async uploadReader(
+        read: (pos: number, size: number) => Promise<Buffer>,
+        ext: string,
+        progressBar?: WritableStream,
+        method?: string
+    ): Promise<void> {
+        if (this.client.apiVersion < 5) {
+            await this.legacyUploadReader(read, ext, progressBar, method);
+            return;
+        }
+        if (progressBar !== undefined) {
+            const methodStr = method !== undefined ? ` ${method}` : '';
+            progressBar.getWriter().write(`Uploading${methodStr}:\n`);
+        }
+        const [hash, totalSize] = await getReaderHash(read);
+        const tmpURI = await this.startUpload(totalSize, hash, ext);
+        this.tmpURI = tmpURI;
+        const uploadChunkSize = getFileUploadChunkSize();
+        const totalChunks = Math.ceil(totalSize / uploadChunkSize);
+        const begins: number[] = [];
+        Array.from(Array(totalChunks).keys()).forEach((chunk) => {
+            begins.push(chunk * uploadChunkSize);
+        });
+        await Promise.all(
+            begins.map((offset) => {
+                return this.updateBuffer(read, offset, this);
+            })
+        ).catch((err) => {
+            this.clearUpload();
+            throw err;
+        });
+    }
+
+    private async legacyUpdateBuffer(
         curSize: number,
         buffer: Buffer,
         nread: number,
@@ -2860,7 +2999,7 @@ export class BlobHandle {
         } else {
             data = buffer;
         }
-        const newSize = await blobHandle.appendUpload(this.tmpURI, data);
+        const newSize = await blobHandle.legacyAppendUpload(this.tmpURI, data);
         if (newSize - curSize !== data.length) {
             throw new Error(`
                 incomplete chunk upload n:${newSize} o:${curSize}
@@ -2870,7 +3009,7 @@ export class BlobHandle {
         return newSize;
     }
 
-    public async uploadReader(
+    private async legacyUploadReader(
         read: (pos: number, size: number) => Promise<Buffer>,
         ext: string,
         progressBar?: WritableStream,
@@ -2898,7 +3037,7 @@ export class BlobHandle {
                 return;
             }
             curPos += nread;
-            const newSize = await blobHandle.updateBuffer(
+            const newSize = await blobHandle.legacyUpdateBuffer(
                 curSize,
                 buffer,
                 nread,
@@ -2928,7 +3067,6 @@ export class BlobHandle {
             const nread = response.bytesRead;
             return buffer.slice(0, nread);
         }
-
         return await this.uploadReader(readFile, ext, progressBar, 'File');
     }
 
@@ -3047,7 +3185,8 @@ export class BlobHandle {
 export class CSVBlobHandle extends BlobHandle {
     public async addFromFile(
         fileName: string,
-        progressBar: WritableStream | undefined = undefined
+        progressBar: WritableStream | undefined = undefined,
+        requeueOnFinish: NodeHandle | undefined = undefined
     ) {
         let fname = fileName;
         if (fileName.endsWith(INPUT_ZIP_EXT)) {
@@ -3066,6 +3205,9 @@ export class CSVBlobHandle extends BlobHandle {
             await this.uploadFile(fileHandle, ext, progressBar);
             return await this.finishCSVUpload(fileName);
         } finally {
+            if (!isUndefined(requeueOnFinish)) {
+                requeueOnFinish.requeue();
+            }
             await fileHandle.close();
             await this.clearUpload();
         }
@@ -3074,7 +3216,8 @@ export class CSVBlobHandle extends BlobHandle {
     public async addFromContent(
         fileName: string,
         content: Buffer,
-        progressBar: WritableStream | undefined = undefined
+        progressBar: WritableStream | undefined = undefined,
+        requeueOnFinish: NodeHandle | undefined = undefined
     ) {
         let fname = fileName;
         if (fileName.endsWith(INPUT_ZIP_EXT)) {
@@ -3092,6 +3235,9 @@ export class CSVBlobHandle extends BlobHandle {
             await this.uploadFileUsingContent(content, ext, progressBar);
             return await this.finishCSVUpload(fileName);
         } finally {
+            if (!isUndefined(requeueOnFinish)) {
+                requeueOnFinish.requeue();
+            }
             await this.clearUpload();
         }
     }
@@ -3293,7 +3439,7 @@ export class ComputationHandle {
         return this.value !== undefined;
     }
 
-    public async get(): Promise<ByteResponse> {
+    public async get(): Promise<ByteResponse | null> {
         try {
             if (isUndefined(this.value)) {
                 const res = await this.dag.getDynamicResult(this.valueId);

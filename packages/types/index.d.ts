@@ -2,7 +2,9 @@
 /// <reference lib="dom" />
 import { Readable } from 'stream';
 import { promises as fpm } from 'fs';
-import { AllowedCustomImports, BlobOwner, BlobTypeResponse, CacheStats, DagDef, DagInfo, DagList, DagPrettyNode, DictStrStr, DynamicFormat, InstanceStatus, KafkaGroup, KafkaOffsets, KafkaThroughput, KafkaTopics, KnownBlobs, MinimalQueueStatsResponse, ModelInfo, ModelParamsResponse, ModelReleaseResponse, ModelVersionResponse, NodeCustomImports, NodeDef, NodeDefInfo, NodeInfo, NodeState, NodeTypes, NodeUserColumnsResponse, QueueStatsResponse, QueueStatus, SettingsObj, TaskStatus, Timing, TimingResult, UploadFilesResponse, VersionResponse, DeleteBlobResponse, NodeCustomCode, URIPrefix, BaseDagDef } from './types';
+import http = require('http');
+import https = require('https');
+import { AllowedCustomImports, BlobOwner, BlobTypeResponse, CacheStats, DagDef, DagInfo, DagList, DagPrettyNode, DictStrStr, DictStrList, DynamicFormat, InstanceStatus, KafkaGroup, KafkaOffsets, KafkaThroughput, KafkaTopics, KnownBlobs, MinimalQueueStatsResponse, ModelInfo, ModelParamsResponse, ModelReleaseResponse, ModelVersionResponse, NodeCustomImports, NodeDef, NodeDefInfo, NodeInfo, NodeState, NodeTypes, NodeUserColumnsResponse, QueueStatsResponse, QueueStatus, SettingsObj, TaskStatus, Timing, TimingResult, UploadFilesResponse, VersionResponse, DeleteBlobResponse, NodeCustomCode, URIPrefix, BaseDagDef } from './types';
 import { RetryOptions } from './request';
 import { ByteResponse } from './util';
 export * from './errors';
@@ -28,6 +30,8 @@ interface XYMERequestArgument {
     retry?: Partial<RetryOptions>;
 }
 export default class XYMEClient {
+    httpAgent?: http.Agent;
+    httpsAgent?: https.Agent;
     apiVersion?: number;
     apiVersionMinor?: number;
     autoRefresh: boolean;
@@ -52,6 +56,7 @@ export default class XYMEClient {
     private rawRequestBytes;
     private rawRequestJSON;
     private rawRequestString;
+    private getAgent;
     private fallibleRawRequestBytes;
     private fallibleRawRequestJSON;
     private fallibleRawRequestString;
@@ -59,6 +64,7 @@ export default class XYMEClient {
     requestJSON<T>(rargs: XYMERequestArgument): Promise<T>;
     requestString(rargs: XYMERequestArgument): Promise<Readable>;
     getServerVersion(): Promise<VersionResponse>;
+    getVersionOverride(): Promise<DictStrList>;
     getNamespaces(): Promise<string[]>;
     getDags(): Promise<string[]>;
     getDagAges(): Promise<DictStrStr[]>;
@@ -171,13 +177,13 @@ export declare class DagHandle {
         forceKeys?: boolean;
         noCache?: boolean;
     }): Promise<any[]>;
-    dynamic(inputData: Buffer): Promise<ByteResponse>;
-    dynamicObj(inputObj: any): Promise<ByteResponse>;
+    dynamic(inputData: Buffer): Promise<ByteResponse | null>;
+    dynamicObj(inputObj: any): Promise<ByteResponse | null>;
     dynamicAsync(inputData: Buffer[]): Promise<ComputationHandle[]>;
     setDynamicErrorMessage(msg?: string): void;
     getDynamicErrorMessage(): string | undefined;
     dynamicAsyncObj(inputData: any[]): Promise<ComputationHandle[]>;
-    getDynamicResult(valueId: string): Promise<ByteResponse>;
+    getDynamicResult(valueId: string): Promise<ByteResponse | null>;
     getDynamicStatus(valueIds: ComputationHandle[]): Promise<{
         [key: string]: QueueStatus;
     }>;
@@ -213,6 +219,7 @@ export declare class DagHandle {
     getKafkaGroup(): Promise<KafkaGroup>;
     setKafkaGroup(groupId: string | undefined, reset: string | undefined, ...kwargs: any[]): Promise<KafkaGroup>;
     delete(): Promise<DeleteBlobResponse>;
+    downloadFullDagZip(toPath?: string): Promise<Buffer | undefined>;
 }
 export declare class NodeHandle {
     blobs: {
@@ -267,6 +274,7 @@ export declare class NodeHandle {
      */
     readAll(key: string, forceRefresh?: boolean): Promise<ByteResponse | null>;
     clear(): Promise<NodeState>;
+    requeue(): Promise<NodeState>;
     getBlobURI(blobKey: string, blobType: string): Promise<[string, BlobOwner]>;
     getCSVBlob(key?: string): Promise<CSVBlobHandle>;
     getTorchBlob(key?: string): Promise<TorchBlobHandle>;
@@ -324,21 +332,23 @@ export declare class BlobHandle {
         [key: string]: string | number;
     }, fobj: Buffer | null): Promise<UploadFilesResponse>;
     startUpload(size: number, hashStr: string, ext: string): Promise<string>;
-    appendUpload(uri: string, fobj: Buffer): Promise<number>;
+    private legacyAppendUpload;
+    private appendUpload;
     finishUploadZip(): Promise<string[]>;
     clearUpload(): Promise<void>;
     /**
      * This is the helper method being used by uploadFile
      * and uploadFileUsingContent
-     * @param curSize: Size of the updated buffer so far
      * @param buffer: the buffer chunk being uploaded
      * @param nread: number of bytes from the in the buffer
-     * @param chunk: chunk size
+     * @param offset: start byte position of part
      * @param blobHandle: the parent this being passed here
      * @returns
      */
-    updateBuffer(curSize: number, buffer: Buffer, nread: number, chunk: number, blobHandle: BlobHandle): Promise<number>;
-    uploadReader(read: (pos: number, size: number) => Promise<Buffer>, ext: string, progressBar?: WritableStream, method?: string): Promise<void>;
+    private updateBuffer;
+    private uploadReader;
+    private legacyUpdateBuffer;
+    private legacyUploadReader;
     uploadFile(fileContent: fpm.FileHandle, ext: string, progressBar?: WritableStream): Promise<void>;
     /**
      * This prototype method allows you to upload the file using content Buffer
@@ -356,8 +366,8 @@ export declare class BlobHandle {
     delete(): Promise<DeleteBlobResponse>;
 }
 export declare class CSVBlobHandle extends BlobHandle {
-    addFromFile(fileName: string, progressBar?: WritableStream | undefined): Promise<UploadFilesResponse>;
-    addFromContent(fileName: string, content: Buffer, progressBar?: WritableStream | undefined): Promise<UploadFilesResponse>;
+    addFromFile(fileName: string, progressBar?: WritableStream | undefined, requeueOnFinish?: NodeHandle | undefined): Promise<UploadFilesResponse>;
+    addFromContent(fileName: string, content: Buffer, progressBar?: WritableStream | undefined, requeueOnFinish?: NodeHandle | undefined): Promise<UploadFilesResponse>;
     finishCSVUpload(fileName?: string): Promise<UploadFilesResponse>;
 }
 export declare class TorchBlobHandle extends BlobHandle {
@@ -384,6 +394,6 @@ export declare class ComputationHandle {
     setDynError: (error: string) => void;
     constructor(dag: DagHandle, valueId: string, getDynError: () => string | undefined, setDynError: (error: string) => void);
     hasFetched(): boolean;
-    get(): Promise<ByteResponse>;
+    get(): Promise<ByteResponse | null>;
     getId(): string;
 }
