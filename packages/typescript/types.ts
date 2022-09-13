@@ -55,7 +55,7 @@ export interface TritonBucketSettings {
     aws_session_token?: string;
     buckets: DictStrStr;
     endpoint_url: string;
-    model_repository?: string;
+    model_repository: string;
     region_name: string;
     use_ssl?: boolean;
     verify?: boolean;

@@ -64,7 +64,7 @@ TritonBucketSettings = TypedDict('TritonBucketSettings', {
     "aws_session_token": Optional[str],
     "buckets": Dict[str, str],
     "endpoint_url": Optional[str],
-    "model_repository": Optional[str],
+    "model_repository": str,
     "region_name": Optional[str],
     "use_ssl": Optional[bool],
     "verify": Optional[bool],
