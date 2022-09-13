@@ -48,6 +48,19 @@ export interface S3BucketSettings {
     verify?: boolean;
 }
 
+export interface TritonBucketSettings {
+    api_version?: string;
+    aws_access_key_id: string;
+    aws_secret_access_key: string;
+    aws_session_token?: string;
+    buckets: DictStrStr;
+    endpoint_url: string;
+    model_repository?: string;
+    region_name: string;
+    use_ssl?: boolean;
+    verify?: boolean;
+}
+
 export interface ESConnectorSettings {
     host: string;
     password: string;
@@ -62,7 +75,7 @@ export interface DremioAuthSettings {
 export interface SettingsObj {
     es?: { [key: string]: ESConnectorSettings };
     s3?: { [key: string]: S3BucketSettings };
-    triton?: { [key: string]: S3BucketSettings };
+    triton?: { [key: string]: TritonBucketSettings };
     dremio?: { [key: string]: DremioAuthSettings };
     versions?: { [key: string]: [string, string] };
 }
