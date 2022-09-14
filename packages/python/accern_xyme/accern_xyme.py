@@ -2852,9 +2852,10 @@ class BlobHandle:
             version: int = -1,
             model_params: Dict[str, Any] = {},
             delete_later_versions: bool = False,
+            max_threads: int = 10,
             full_init: bool = True) -> UploadFilesResponse:
         try:
-            self._upload_file(model_obj, ext="pkl")
+            self._upload_file(model_obj, max_threads, ext="pkl")
             return self._finish_upload_torch(
                 model_name=model_name,
                 version=version,
