@@ -12,6 +12,7 @@ from typing import (
     Iterator,
     List,
     Optional,
+    get_args,
     overload,
     Set,
     TextIO,
@@ -143,7 +144,6 @@ if TYPE_CHECKING:
 else:
     WVD = weakref.WeakValueDictionary
 
-
 API_VERSION = 5
 MIN_API_VERSION = 4
 DEFAULT_URL = "http://localhost:8080"
@@ -174,6 +174,15 @@ CUSTOM_NODE_TYPES = {
 }
 NO_RETRY: List[str] = []  # [METHOD_POST, METHOD_FILE]
 
+CONSUMER_DAG = "dag"
+ConsumerType = Literal[
+    "err",
+    "err_msg",
+]
+CONSUMER_ERR: ConsumerType = "err"
+CONSUMER_ERR_MSG: ConsumerType = "err_msg"
+CONSUMER_TYPES: Set[ConsumerType] = set(get_args(ConsumerType))
+
 
 class AccessDenied(Exception):
     pass
@@ -190,6 +199,28 @@ class LegacyVersion(Exception):
         return self._api_version
 
 # *** LegacyVersion ***
+
+
+class KafkaErrorMessageState:
+    def __init__(self) -> None:
+        self._msg_lookup: Dict[str, str] = {}
+        self._unmatched: List[str] = []
+
+    def get_msg(self, input_id: str) -> Optional[str]:
+        return self._msg_lookup.get(input_id)
+
+    def add_msg(self, input_id: str, msg: str) -> None:
+        self._msg_lookup[input_id] = msg
+
+    def get_unmatched(self) -> Iterable[str]:
+        unmatched = self._unmatched
+        self._unmatched = []
+        yield from unmatched
+
+    def add_unmatched(self, msg: str) -> None:
+        self._unmatched.append(msg)
+
+# *** KafkaErrorMessageState ***
 
 
 class XYMEClient:
@@ -891,17 +922,99 @@ class XYMEClient:
         assert res is not None
         return res
 
+    def get_kafka_error_message_topic(self) -> str:
+        res = cast(KafkaTopicNames, self.request_json(
+            METHOD_GET, "/kafka_topic_names", {}))["error_msg"]
+        assert res is not None
+        return res
+
     def delete_kafka_error_topic(self) -> KafkaTopics:
         return cast(KafkaTopics, self.request_json(
             METHOD_POST, "/kafka_topics", {
                 "num_partitions": 0,
             }))
 
-    def read_kafka_errors(self, offset: str = "current") -> List[str]:
+    def read_kafka_errors(
+            self,
+            consumer_type: str,
+            offset: str = "current") -> List[str]:
+        if consumer_type not in CONSUMER_TYPES:
+            raise ValueError(
+                f"consumer_type cannot be {consumer_type} "
+                "for reading kafka errors. provide consumer type from "
+                f"{CONSUMER_TYPES}")
         return cast(List[str], self.request_json(
             METHOD_GET, "/kafka_msg", {
                 "offset": offset,
+                "consumer_type": consumer_type,
             }))
+
+    def read_kafka_full_json_errors(
+            self,
+            input_id_path: List[str],
+            err_msg_state: KafkaErrorMessageState,
+            ) -> Iterable[Tuple[str, str]]:
+        """
+        Provides information as to what the error is and what is the
+        input id and its associated input message.
+
+        Args:
+            input_id_path (List[str]):
+                The path of the field to be considered as input_id in the
+                input json.
+            err_msg_state (KafkaErrorMessageState):
+                This will be populated with the mappings of input_ids
+                to messages. Also stores any unmatched messages in the
+                unmatched list and after filling msg_lookup, check if they
+                have matches. Initially an object of KafkaErrorMessageState
+                can be passed for this argument.
+
+        Yields:
+            Iterable[Tuple[str, Optional[str]]]: the error, the input msg
+            associated with the input_id.
+        """
+        errs = self.read_kafka_errors(consumer_type=CONSUMER_ERR)
+        msgs = self.read_kafka_errors(consumer_type=CONSUMER_ERR_MSG)
+
+        def parse_input_id_json(json_str: str) -> Optional[str]:
+            try:
+                res = json.loads(json_str)
+                for path in input_id_path:
+                    res = res[path]
+                return res
+            except json.decoder.JSONDecodeError:
+                return None
+            except KeyError:
+                return None
+
+        def parse_input_id_text(text: str) -> Optional[str]:
+            ix = text.find("\ninput_id: ")
+            if ix != -1:
+                return text[ix + len("\ninput_id: "):]
+            return None
+
+        for msg in msgs:
+            input_id = parse_input_id_json(msg)
+            if input_id is not None:
+                err_msg_state.add_msg(input_id, msg)
+        for old_err in err_msg_state.get_unmatched():
+            input_id = parse_input_id_text(old_err)
+            if input_id is None:
+                continue
+            match = err_msg_state.get_msg(input_id)
+            if match is None:
+                err_msg_state.add_unmatched(old_err)
+            else:
+                yield (old_err, match)
+        for err in errs:
+            input_id = parse_input_id_text(err)
+            if input_id is None:
+                continue
+            match = err_msg_state.get_msg(input_id)
+            if match is None:
+                err_msg_state.add_unmatched(err)
+            else:
+                yield (err, match)
 
     def get_named_secrets(
             self,
@@ -1110,6 +1223,7 @@ class DagHandle:
         self._dynamic_error: Optional[str] = None
         self._ins: Optional[List[str]] = None
         self._outs: Optional[List[Tuple[str, str]]] = None
+        self._kafka_topics: Optional[Tuple[str, str]] = None
 
     def refresh(self) -> None:
         self._name = None
@@ -1121,6 +1235,7 @@ class DagHandle:
         self._version_override = None
         self._ins = None
         self._outs = None
+        self._kafka_topics = None
         # NOTE: we don't reset nodes
 
     def _maybe_refresh(self) -> None:
@@ -1148,6 +1263,7 @@ class DagHandle:
         self._version_override = info["version_override"]
         self._ins = info["ins"]
         self._outs = [(el[0], el[1]) for el in info["outs"]]
+        self._kafka_topics = info["kafka_topics"]
         old_nodes = {} if self._nodes is None else self._nodes
         self._nodes = {
             node["id"]: NodeHandle.from_node_info(
@@ -1192,11 +1308,17 @@ class DagHandle:
         assert self._state_uri is not None
         return self._state_uri
 
-    def get_version_override(self) -> Optional[str]:
+    def get_version_override(self) -> str:
         self._maybe_refresh()
         self._maybe_fetch()
         assert self._version_override is not None
         return self._version_override
+
+    def get_kafka_topics(self) -> Tuple[str, str]:
+        self._maybe_refresh()
+        self._maybe_fetch()
+        assert self._kafka_topics is not None
+        return self._kafka_topics
 
     def get_uri_prefix(self) -> URIPrefix:
         self._maybe_refresh()
@@ -1708,6 +1830,9 @@ class DagHandle:
     def set_version_override(self, value: Optional[str]) -> None:
         self.set_attr("version_override", value)
 
+    def set_kafka_topics(self, value: Optional[Tuple[str, str]]) -> None:
+        self.set_attr("kafka_topics", value)
+
     @overload
     def check_queue_stats(  # pylint: disable=no-self-use
             self, minimal: Literal[True]) -> MinimalQueueStatsResponse:
@@ -1811,6 +1936,7 @@ class DagHandle:
                 METHOD_GET, "/kafka_msg", {
                     "dag": self.get_uri(),
                     "offset": offset_str[0],
+                    "consumer_type": CONSUMER_DAG,
                 })
             offset_str[0] = "current"
             return interpret_ctype(cur, read_ctype), read_ctype
@@ -1837,7 +1963,9 @@ class DagHandle:
         return merge_ctype(res, ctype)
 
     def get_kafka_offsets(
-            self, alive: bool, postfix: Optional[str] = None) -> KafkaOffsets:
+            self,
+            alive: bool,
+            postfix: Optional[str] = None) -> KafkaOffsets:
         args = {
             "dag": self.get_uri(),
             "alive": int(alive),
@@ -1856,10 +1984,11 @@ class DagHandle:
         assert segment_interval > 0.0
         offsets = self.get_kafka_offsets(postfix=postfix, alive=False)
         now = time.monotonic()
-        measurements: List[Tuple[int, int, int, float]] = [(
+        measurements: List[Tuple[int, int, int, int, float]] = [(
             offsets["input"],
             offsets["output"],
             offsets["error"],
+            offsets["error_msg"],
             now,
         )]
         for _ in range(segments):
@@ -1872,6 +2001,7 @@ class DagHandle:
                 offsets["input"],
                 offsets["output"],
                 offsets["error"],
+                offsets["error_msg"],
                 now,
             ))
         first = measurements[0]
@@ -1879,13 +2009,14 @@ class DagHandle:
         total_input = last[0] - first[0]
         total_output = last[1] - first[1]
         errors = last[2] - first[2]
-        total = last[3] - first[3]
+        error_msgs = last[3] - first[3]
+        total = last[4] - first[4]
         input_segments: List[float] = []
         output_segments: List[float] = []
         cur_input = first[0]
         cur_output = first[1]
-        cur_time = first[3]
-        for (next_input, next_output, _, next_time) in measurements[1:]:
+        cur_time = first[4]
+        for (next_input, next_output, _, _, next_time) in measurements[1:]:
             seg_time = next_time - cur_time
             input_segments.append((next_input - cur_input) / seg_time)
             output_segments.append((next_output - cur_output) / seg_time)
@@ -1917,6 +2048,7 @@ class DagHandle:
             "faster": "both" if total_input == total_output else (
                 "input" if total_input > total_output else "output"),
             "errors": errors,
+            "error_msgs": error_msgs,
         }
 
     def get_kafka_group(self) -> KafkaGroup:
