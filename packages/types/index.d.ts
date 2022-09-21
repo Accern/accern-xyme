@@ -4,7 +4,7 @@ import { Readable } from 'stream';
 import { promises as fpm } from 'fs';
 import http = require('http');
 import https = require('https');
-import { AllowedCustomImports, BlobOwner, BlobTypeResponse, CacheStats, DagDef, DagInfo, DagList, DagPrettyNode, DictStrStr, DictStrList, DynamicFormat, InstanceStatus, KafkaGroup, KafkaOffsets, KafkaThroughput, KafkaTopics, KnownBlobs, MinimalQueueStatsResponse, ModelInfo, ModelParamsResponse, ModelReleaseResponse, ModelVersionResponse, NodeCustomImports, NodeDef, NodeDefInfo, NodeInfo, NodeState, NodeTypes, NodeUserColumnsResponse, QueueStatsResponse, QueueStatus, SettingsObj, TaskStatus, Timing, TimingResult, UploadFilesResponse, VersionResponse, DeleteBlobResponse, NodeCustomCode, URIPrefix, BaseDagDef } from './types';
+import { AllowedCustomImports, BlobOwner, BlobTypeResponse, CacheStats, DagDef, DagInfo, DagList, DagPrettyNode, DictStrStr, DictStrList, DynamicFormat, InstanceStatus, KafkaErrorMessageState, KafkaGroup, KafkaOffsets, KafkaThroughput, KafkaTopics, KnownBlobs, MinimalQueueStatsResponse, ModelInfo, ModelParamsResponse, ModelReleaseResponse, ModelVersionResponse, NodeCustomImports, NodeDef, NodeDefInfo, NodeInfo, NodeState, NodeTypes, NodeUserColumnsResponse, QueueStatsResponse, QueueStatus, SettingsObj, TaskStatus, Timing, TimingResult, UploadFilesResponse, VersionResponse, DeleteBlobResponse, NodeCustomCode, URIPrefix, BaseDagDef } from './types';
 import { RetryOptions } from './request';
 import { ByteResponse } from './util';
 export * from './errors';
@@ -117,8 +117,10 @@ export default class XYMEClient {
     resetCache(): Promise<CacheStats>;
     createKafkaErrorTopic(): Promise<KafkaTopics>;
     getKafkaErrorTopic(): Promise<string>;
+    getKafkaErrorMessageTopic(): Promise<string>;
     deleteKafkaErrorTopic(): Promise<KafkaTopics>;
-    readKafkaErrors(offset: string): Promise<string[]>;
+    readKafkaErrors(consumerType: string, offset?: string): Promise<string[]>;
+    readKafkaFullJsonErrors(inputIdPath: string[], errMsgState: KafkaErrorMessageState): Promise<[string, string][]>;
     getNamedSecrets(configToken?: string | null, showValues?: boolean): Promise<{
         [key: string]: string | null;
     }>;
@@ -135,6 +137,7 @@ export declare class DagHandle {
     company?: string;
     dynamicError?: string;
     ins?: string[];
+    kafkaTopics?: [string, string];
     highPriority?: boolean;
     name?: string;
     nodeLookup: DictStrStr;
