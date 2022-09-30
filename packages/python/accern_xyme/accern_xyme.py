@@ -1946,10 +1946,13 @@ class DagHandle:
         ))
 
     def download_full_dag_zip(
-            self, to_path: Optional[str]) -> Optional[io.BytesIO]:
+            self,
+            to_path: Optional[str],
+            include_synthetic: bool = False) -> Optional[io.BytesIO]:
         cur_res, _ = self._client.request_bytes(
             METHOD_GET, "/download_dag_zip", {
                 "dag": self.get_uri(),
+                "include_synthetic": include_synthetic,
             })
         if to_path is None:
             return io.BytesIO(cur_res.read())
@@ -2512,12 +2515,15 @@ class BlobHandle:
                 time.sleep(sleep_time)
                 sleep_time = min(sleep_time * sleep_mul, sleep_max)
 
-    def list_files(self) -> List['BlobHandle']:
+    def list_files(
+            self,
+            include_synthetic: bool = True) -> List['BlobHandle']:
         if self.is_full():
             raise ValueError(f"URI must not be full: {self}")
         resp = cast(BlobFilesResponse, self._client.request_json(
             METHOD_GET, "/blob_files", {
                 "blob": self.get_uri(),
+                "include_synthetic": include_synthetic,
             }))
         return [
             BlobHandle(self._client, blob_uri, is_full=True)
@@ -2597,12 +2603,16 @@ class BlobHandle:
             }))
         return BlobHandle(self._client, res["new_uri"], is_full=False)
 
-    def download_zip(self, to_path: Optional[str]) -> Optional[io.BytesIO]:
+    def download_zip(
+            self,
+            to_path: Optional[str],
+            include_synthetic: bool = False) -> Optional[io.BytesIO]:
         if self.is_full():
             raise ValueError(f"URI must not be full: {self}")
         cur_res, _ = self._client.request_bytes(
             METHOD_GET, "/download_zip", {
                 "blob": self.get_uri(),
+                "include_synthetic": include_synthetic,
             })
         if to_path is None:
             return io.BytesIO(cur_res.read())
