@@ -6,8 +6,8 @@ export interface URIPrefix {
 export interface BaseDagDef {
     name: string;
     company: string;
-    nodes: Partial<NodeDef>[];
     high_priority: boolean;
+    nodes: Partial<NodeDef>[];
     queue_mng?: string;
 }
 
@@ -16,16 +16,19 @@ export interface UserDagDef extends BaseDagDef {
     state_uri?: string;
     default_input_key?: string;
     default_output_key?: string;
+    kafka_topics?: [string, string];
     version_override?: string;
 }
 
 export interface DagDef extends BaseDagDef {
-    uri_prefix: URIPrefix;
-    state_uri: string;
     default_input_key?: string;
     default_output_key?: string;
+    kafka_topics?: [string, string];
+    state_uri: string;
+    uri_prefix: URIPrefix;
     version_override: string;
 }
+
 export interface NodeDef {
     blobs: DictStrStr;
     id: string;
@@ -200,6 +203,11 @@ export interface VersionResponse {
     xyme_version: string;
 }
 
+export interface KafkaErrorMessageState {
+    msgLookup: Map<string, string>;
+    unmatched: string[];
+}
+
 export interface ReadNode {
     redis_key: string;
     result_uri?: string;
@@ -267,6 +275,7 @@ export interface DagInfo {
     company: string;
     high_priority: boolean;
     ins: string[];
+    kafka_topics?: [string, string];
     name: string;
     nodes: NodeInfo[];
     outs: [string, string][];
@@ -412,6 +421,7 @@ export interface KafkaTopicNames {
     input: string | null;
     output: string | null;
     error: string | null;
+    error_msg: string | null;
 }
 
 export interface KafkaMessage {
@@ -419,6 +429,7 @@ export interface KafkaMessage {
 }
 
 export interface KafkaOffsets {
+    error_msg: number;
     error: number;
     input: number;
     output: number;
@@ -446,6 +457,7 @@ export interface KafkaThroughput {
     output: ThroughputDict;
     faster: 'input' | 'output' | 'both';
     errors: number;
+    errorMsgs: number;
 }
 
 export interface PutNodeBlob {

@@ -24,6 +24,7 @@ BaseDagDef = TypedDict('BaseDagDef', {
 class UserDagDef(BaseDagDef, total=False):
     default_input_key: Optional[str]
     default_output_key: Optional[str]
+    kafka_topics: Optional[Tuple[str, str]]
     uri_prefix: URIPrefix
     state_uri: str
     version_override: Optional[str]
@@ -32,6 +33,7 @@ class UserDagDef(BaseDagDef, total=False):
 class DagDef(BaseDagDef):
     default_input_key: Optional[str]
     default_output_key: Optional[str]
+    kafka_topics: Optional[Tuple[str, str]]
     uri_prefix: URIPrefix
     state_uri: str
     version_override: Optional[str]
@@ -240,6 +242,7 @@ DagInfo = TypedDict('DagInfo', {
     "company": str,
     "high_priority": bool,
     "ins": List[str],
+    "kafka_topics": Optional[Tuple[str, str]],
     "name": str,
     "nodes": List[NodeInfo],
     "outs": List[Tuple[str, str]],
@@ -341,11 +344,13 @@ KafkaTopicNames = TypedDict('KafkaTopicNames', {
     "input": Optional[str],
     "output": Optional[str],
     "error": Optional[str],
+    "error_msg": Optional[str],
 })
 KafkaMessage = TypedDict('KafkaMessage', {
     "messages": Dict[str, str],
 })
 KafkaOffsets = TypedDict('KafkaOffsets', {
+    "error_msg": int,
     "error": int,
     "input": int,
     "output": int,
@@ -370,6 +375,7 @@ KafkaThroughput = TypedDict('KafkaThroughput', {
     "output": ThroughputDict,
     "faster": Literal["input", "output", "both"],
     "errors": int,
+    "error_msgs": int,
 })
 PutNodeBlob = TypedDict('PutNodeBlob', {
     "key": str,

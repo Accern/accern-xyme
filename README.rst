@@ -3,10 +3,10 @@ Accern-XYME
 
 *accern\_xyme* is a python/typescript library for accessing XYME functionality.
 
-|CircleCI|
+|GHAction|
 
-.. |CircleCI| image:: https://circleci.com/gh/Accern/accern-xyme.svg?style=svg
-   :target: https://circleci.com/gh/Accern/accern-xyme
+.. |GHAction| image:: https://github.com/Accern/accern-xyme/actions/workflows/python-app.yaml/badge.svg
+   :target: https://github.com/Accern/accern-xyme/actions/workflows/python-app.yaml/
 
 Python Usage
 ------------

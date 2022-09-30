@@ -126,6 +126,11 @@ const CUSTOM_NODE_TYPES = [
 ];
 const NO_RETRY: string[] = []; // [METHOD_POST, METHOD_FILE]
 const NO_RETRY_CODE = [403, 404, 500];
+const CONSUMER_DAG = 'dag';
+type ConsumerType = 'err' | 'err_msg';
+const CONSUMER_TYPES: string[] = ['err', 'err_msg'];
+const CONSUMER_ERR: ConsumerType = 'err';
+const CONSUMER_ERR_MSG: ConsumerType = 'err_msg';
 const formCustomCode = (func: string, funcName: string) => `
 ${func}
 result = ${funcName}(*data, **kwargs)
@@ -148,6 +153,34 @@ interface XYMERequestArgument {
     method: string;
     path: string;
     retry?: Partial<RetryOptions>;
+}
+
+export class KafkaErrorMessageState {
+    msgLookup: Map<string, string>;
+    unmatched: string[];
+
+    constructor(config: KafkaErrorMessageState) {
+        this.msgLookup = config.msgLookup;
+        this.unmatched = config.unmatched;
+    }
+
+    public getMsg(input_id: string): string | undefined {
+        return this.msgLookup.get(input_id);
+    }
+
+    public addMsg(input_id: string, msg: string) {
+        this.msgLookup.set(input_id, msg);
+    }
+
+    public getUnmatched(): string[] {
+        const res = this.unmatched;
+        this.unmatched = [];
+        return res;
+    }
+
+    public addUnmatched(msg: string) {
+        this.unmatched.push(msg);
+    }
 }
 
 export default class XYMEClient {
@@ -1123,6 +1156,15 @@ export default class XYMEClient {
         return assertString(res);
     }
 
+    public async getKafkaErrorMessageTopic(): Promise<string> {
+        const res = await this.requestJSON<KafkaTopicNames>({
+            method: METHOD_GET,
+            path: '/kafka_topic_names',
+            args: {},
+        }).then((response) => response.error_msg);
+        return assertString(res);
+    }
+
     public async deleteKafkaErrorTopic(): Promise<KafkaTopics> {
         return await this.requestJSON<KafkaTopics>({
             method: METHOD_POST,
@@ -1133,14 +1175,97 @@ export default class XYMEClient {
         });
     }
 
-    public async readKafkaErrors(offset: string): Promise<string[]> {
+    public async readKafkaErrors(
+        consumerType: string,
+        offset?: string
+    ): Promise<string[]> {
+        if (CONSUMER_TYPES.includes(consumerType)) {
+            throw new Error(
+                `consumer_type cannot be  ${consumerType} for reading kafka
+                errors. provide consumer type from
+                ${CONSUMER_TYPES}`
+            );
+        }
         return await this.requestJSON<string[]>({
             method: METHOD_GET,
             path: '/kafka_msg',
             args: {
                 offset: offset || 'current',
+                consumer_type: consumerType,
             },
         });
+    }
+
+    /**
+     * Provides information as to what the error is and what is the
+     * input id and its associated input message.
+     * @param inputIdPath: The path of the field to be considered as
+     * input_id in the input json.
+     * @param errMsgState:
+     * This will be populated with the mappings of input_ids to messages.
+     * Also stores any unmatched messages in the unmatched list and after
+     * filling msg_lookup, check if they have matches. Initially an object
+     * of KafkaErrorMessageState can be passed for this argument.
+     * @returns
+     */
+    public async readKafkaFullJsonErrors(
+        inputIdPath: string[],
+        errMsgState: KafkaErrorMessageState
+    ): Promise<[string, string][]> {
+        const errs = await this.readKafkaErrors(CONSUMER_ERR);
+        const msgs = await this.readKafkaErrors(CONSUMER_ERR_MSG);
+
+        function parseInputIdJson(json_str: string): string | undefined {
+            let jres = JSON.parse(json_str);
+            Array.from(inputIdPath).forEach((path) => {
+                jres = jres[path];
+            });
+            return jres;
+        }
+
+        function parseInputIdText(text: string): string | undefined {
+            const ix = text.search('\ninput_id');
+            if (ix !== -1) {
+                return text.slice(ix + '\ninput_id'.length);
+            } else {
+                return null;
+            }
+        }
+
+        Array.from(msgs).forEach((msg) => {
+            const inputId = parseInputIdJson(msg);
+            if (inputId != null) {
+                errMsgState.addMsg(inputId, msg);
+            }
+        });
+        const oldRes: [string, string][] = [];
+        Array.from(errMsgState.getUnmatched()).forEach((oldErr) => {
+            const inputId = parseInputIdText(oldErr);
+            if (inputId != null) {
+                const match = errMsgState.getMsg(inputId);
+                if (match === null) {
+                    errMsgState.addUnmatched(oldErr);
+                } else {
+                    oldRes.push([oldErr, match]);
+                }
+            }
+        });
+        if (oldRes.length) {
+            return oldRes;
+        }
+        const res: [string, string][] = [];
+        Array.from(errs).forEach((err) => {
+            const inputId = parseInputIdText(err);
+            if (inputId != null) {
+                const match = errMsgState.getMsg(inputId);
+                if (match === null) {
+                    errMsgState.addUnmatched(err);
+                } else {
+                    res.push([err, match]);
+                }
+            }
+        });
+        return res;
     }
 
     public async getNamedSecrets(
@@ -1260,6 +1385,7 @@ export class DagHandle {
     dynamicError?: string;
     ins?: string[];
     highPriority?: boolean;
+    kafkaTopics?: [string, string];
     name?: string;
     nodeLookup: DictStrStr = {};
     nodes: { [key: string]: NodeHandle } = {};
@@ -1280,6 +1406,7 @@ export class DagHandle {
         this.ins = undefined;
         this.highPriority = undefined;
         this.name = undefined;
+        this.kafkaTopics = undefined;
         this.outs = undefined;
         this.queueMng = undefined;
         this.stateUri = undefined;
@@ -1309,6 +1436,7 @@ export class DagHandle {
         this.queueMng = info.queue_mng;
         this.ins = info.ins;
         this.outs = info.outs;
+        this.kafkaTopics = info.kafka_topics;
         const oldNodes = this.nodes === undefined ? {} : this.nodes;
         this.nodes = info.nodes.reduce(
             (o, nodeInfo) => ({
@@ -1381,6 +1509,14 @@ export class DagHandle {
         this.maybeRefresh();
         await this.maybeFetch();
         return assertString(this.versionOverride);
+    }
+
+    public async getKafkaTopics(): Promise<[string, string]> {
+        this.maybeRefresh();
+        await this.maybeFetch();
+        assertString(this.kafkaTopics[0]);
+        assertString(this.kafkaTopics[1]);
+        return this.kafkaTopics;
     }
 
     public async getURIPrefix(): Promise<URIPrefix> {
@@ -1772,6 +1908,12 @@ export class DagHandle {
         await this.setAttr('version_override', value);
     }
 
+    public async setKafkaTopics(
+        value: [string, string] | undefined
+    ): Promise<void> {
+        await this.setAttr('kafka_topics', value);
+    }
+
     public async setURIPrefix(value: URIPrefix): Promise<void> {
         await this.setAttr('uri_prefix', value);
     }
@@ -1928,6 +2070,7 @@ export class DagHandle {
                 args: {
                     dag: this.getURI(),
                     offset: offsetStr[0],
+                    consumer_type: CONSUMER_DAG,
                 },
             });
         };
@@ -1989,8 +2132,14 @@ export class DagHandle {
         }
         let offsets = await this.getKafkaOffsets(false, postfix);
         let now = performance.now();
-        let measurements: [number, number, number, number][] = [
-            [offsets.input, offsets.output, offsets.error, now],
+        let measurements: [number, number, number, number, number][] = [
+            [
+                offsets.input,
+                offsets.output,
+                offsets.error,
+                offsets.error_msg,
+                now,
+            ],
         ];
         let prev: number;
         const range = Array.from(Array(segments).keys());
@@ -2006,7 +2155,13 @@ export class DagHandle {
             offsets = await this.getKafkaOffsets(false);
             measurements = [
                 ...measurements,
-                [offsets.input, offsets.output, offsets.error, now],
+                [
+                    offsets.input,
+                    offsets.output,
+                    offsets.error,
+                    offsets.error_msg,
+                    now,
+                ],
             ];
         });
         const first = measurements[0];
@@ -2014,14 +2169,15 @@ export class DagHandle {
         const totalInput = last[0] - first[0];
         const totalOutput = last[1] - first[1];
         const errors = last[2] - first[2];
-        const total = last[3] - first[3];
+        const errorMsgs = last[3] - first[3];
+        const total = last[4] - first[4];
         let inputSegments: number[] = [];
         let outputSegments: number[] = [];
         let curInput = first[0];
         let curOutput = first[1];
         let curTime = first[3];
         measurements.slice(1).forEach((measurement) => {
-            const [nextInput, nextOutput, , nextTime] = measurement;
+            const [nextInput, nextOutput, , , nextTime] = measurement;
             const segTime = nextTime - curTime;
             inputSegments = [
                 ...inputSegments,
@@ -2063,6 +2219,7 @@ export class DagHandle {
             },
             faster,
             errors,
+            errorMsgs,
         };
     }
 
