@@ -2805,7 +2805,7 @@ class BlobHandle:
     def _finish_upload_sklike(
             self,
             xcols: List[str],
-            ycols: List[str],
+            ycols: Optional[List[str]],
             is_clf: bool,
             model_name: str,
             version: int,
@@ -2954,7 +2954,7 @@ class BlobHandle:
             self,
             model_obj: IO[bytes],
             xcols: List[str],
-            ycols: List[str],
+            ycols: Optional[List[str]],
             is_clf: bool,
             model_name: str,
             version: int = -1,
