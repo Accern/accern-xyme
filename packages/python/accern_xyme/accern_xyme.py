@@ -2802,9 +2802,9 @@ class BlobHandle:
             METHOD_POST, "/finish_zip", {"uri": uri}))
         return res["files"]
 
-    def _finish_upload_sklike(
+    def _finish_model_upload(
             self,
-            xcols: List[str],
+            xcols: Optional[List[str]],
             ycols: Optional[List[str]],
             is_clf: bool,
             model_name: str,
@@ -2816,7 +2816,7 @@ class BlobHandle:
         if uri is None:
             raise ValueError("tmp_uri is None")
         return cast(UploadFilesResponse, self._client.request_json(
-            METHOD_POST, "/finish_sklike", {
+            METHOD_POST, "/finish_model_upload", {
                 "model_params": model_params,
                 "full_init": full_init,
                 "is_clf": is_clf,
@@ -2828,31 +2828,6 @@ class BlobHandle:
                 "tmp_uri": uri,
                 "xcols": xcols,
                 "ycols": ycols,
-                "delete_later_versions": delete_later_versions,
-            }))
-
-    def _finish_upload_torch(
-            self,
-            is_clf: bool,
-            model_name: str,
-            version: int,
-            model_params: Dict[str, Any],
-            delete_later_versions: bool,
-            full_init: bool) -> UploadFilesResponse:
-        uri = self._tmp_uri
-        if uri is None:
-            raise ValueError("tmp_uri is None")
-        return cast(UploadFilesResponse, self._client.request_json(
-            METHOD_POST, "/finish_torch_model", {
-                "model_params": model_params,
-                "full_init": full_init,
-                "is_clf": is_clf,
-                "model_uri": self.get_uri(),
-                "model_name": model_name,
-                "version": version,
-                "owner_dag": self.get_owner_dag(),
-                "owner_node": self.get_owner_node(),
-                "tmp_uri": uri,
                 "delete_later_versions": delete_later_versions,
             }))
 
@@ -2950,10 +2925,10 @@ class BlobHandle:
             for blob_uri in files
         ]
 
-    def upload_sklike_model_file(
+    def upload_model_file(
             self,
             model_obj: IO[bytes],
-            xcols: List[str],
+            xcols: Optional[List[str]],
             ycols: Optional[List[str]],
             is_clf: bool,
             model_name: str,
@@ -2964,34 +2939,12 @@ class BlobHandle:
             full_init: bool = True) -> UploadFilesResponse:
         try:
             self._upload_file(model_obj, max_threads, ext="pkl")
-            return self._finish_upload_sklike(
+            return self._finish_model_upload(
                 model_name=model_name,
                 version=version,
                 model_params=model_params,
                 xcols=xcols,
                 ycols=ycols,
-                is_clf=is_clf,
-                delete_later_versions=delete_later_versions,
-                full_init=full_init)
-        finally:
-            self._clear_upload()
-
-    def upload_torch_model_file(
-            self,
-            model_obj: IO[bytes],
-            is_clf: bool,
-            model_name: str,
-            version: int = -1,
-            model_params: Dict[str, Any] = {},
-            delete_later_versions: bool = False,
-            max_threads: int = 10,
-            full_init: bool = True) -> UploadFilesResponse:
-        try:
-            self._upload_file(model_obj, max_threads, ext="pkl")
-            return self._finish_upload_torch(
-                model_name=model_name,
-                version=version,
-                model_params=model_params,
                 is_clf=is_clf,
                 delete_later_versions=delete_later_versions,
                 full_init=full_init)
@@ -3021,7 +2974,7 @@ class BlobHandle:
             raise ValueError(f"can not infer classes from {model}") from e
         dump = pickle.dumps(model, pickle.HIGHEST_PROTOCOL)
         with io.BytesIO(dump) as buffer:
-            return self.upload_sklike_model_file(
+            return self.upload_model_file(
                 buffer,
                 xcols,
                 ycols,
