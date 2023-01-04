@@ -2933,12 +2933,14 @@ class BlobHandle:
             is_clf: bool,
             model_name: str,
             version: int = -1,
-            model_params: Dict[str, Any] = {},
+            model_params: Dict[str, Any] = None,
             delete_later_versions: bool = False,
             max_threads: int = 10,
             full_init: bool = True) -> UploadFilesResponse:
         try:
             self._upload_file(model_obj, max_threads, ext="pkl")
+            if model_params is None:
+                model_params = {}
             return self._finish_model_upload(
                 model_name=model_name,
                 version=version,
@@ -2955,11 +2957,11 @@ class BlobHandle:
             self,
             model: Any,
             xcols: List[str],
-            ycols: List[str],
+            ycols: Optional[List[str]],
             is_clf: bool,
             model_name: str = None,
             version: int = -1,
-            model_params: Dict[str, Any] = {},
+            model_params: Dict[str, Any] = None,
             delete_later_versions: bool = False,
             full_init: bool = True) -> UploadFilesResponse:
         if model_name is None:
@@ -2967,6 +2969,8 @@ class BlobHandle:
                 model_name = type(model).__name__
             except Exception as e:
                 raise ValueError(f"can not infer model name {model}") from e
+        if model_params is None:
+            model_params = {}
         try:
             if is_clf and "classes" not in model_params:
                 model_params["classes"] = model.classes_
