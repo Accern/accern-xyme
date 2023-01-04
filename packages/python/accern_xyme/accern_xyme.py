@@ -2802,29 +2802,33 @@ class BlobHandle:
             METHOD_POST, "/finish_zip", {"uri": uri}))
         return res["files"]
 
-    def _finish_upload_sklike(
+    def _finish_model_upload(
             self,
-            xcols: List[str],
+            xcols: Optional[List[str]],
+            ycols: Optional[List[str]],
             is_clf: bool,
             model_name: str,
-            maybe_classes: Optional[List[str]],
-            maybe_range: Tuple[Optional[float], Optional[float]],
+            version: int,
+            model_params: Dict[str, Any],
+            delete_later_versions: bool,
             full_init: bool) -> UploadFilesResponse:
         uri = self._tmp_uri
         if uri is None:
             raise ValueError("tmp_uri is None")
         return cast(UploadFilesResponse, self._client.request_json(
-            METHOD_POST, "/finish_sklike", {
-                "classes": maybe_classes,
+            METHOD_POST, "/finish_model_upload", {
+                "model_params": model_params,
                 "full_init": full_init,
                 "is_clf": is_clf,
                 "model_uri": self.get_uri(),
                 "model_name": model_name,
-                "output_range": maybe_range,
+                "version": version,
                 "owner_dag": self.get_owner_dag(),
                 "owner_node": self.get_owner_node(),
                 "tmp_uri": uri,
                 "xcols": xcols,
+                "ycols": ycols,
+                "delete_later_versions": delete_later_versions,
             }))
 
     def _clear_upload(self) -> None:
@@ -2921,26 +2925,30 @@ class BlobHandle:
             for blob_uri in files
         ]
 
-    def upload_sklike_model_file(
+    def upload_model_file(
             self,
             model_obj: IO[bytes],
-            xcols: List[str],
+            xcols: Optional[List[str]],
+            ycols: Optional[List[str]],
             is_clf: bool,
             model_name: str,
-            maybe_classes: Optional[List[str]] = None,
-            maybe_range: Optional[
-                Tuple[Optional[float], Optional[float]]] = None,
+            version: int = -1,
+            model_params: Optional[Dict[str, Any]] = None,
+            delete_later_versions: bool = False,
             max_threads: int = 10,
             full_init: bool = True) -> UploadFilesResponse:
         try:
             self._upload_file(model_obj, max_threads, ext="pkl")
-            output_range = (None, None) if maybe_range is None else maybe_range
-            return self._finish_upload_sklike(
+            if model_params is None:
+                model_params = {}
+            return self._finish_model_upload(
                 model_name=model_name,
-                maybe_classes=maybe_classes,
-                maybe_range=output_range,
+                version=version,
+                model_params=model_params,
                 xcols=xcols,
+                ycols=ycols,
                 is_clf=is_clf,
+                delete_later_versions=delete_later_versions,
                 full_init=full_init)
         finally:
             self._clear_upload()
@@ -2949,35 +2957,46 @@ class BlobHandle:
             self,
             model: Any,
             xcols: List[str],
+            ycols: Optional[List[str]],
             is_clf: bool,
-            maybe_classes: Optional[List[str]] = None,
-            maybe_range: Optional[
-                Tuple[Optional[float], Optional[float]]] = None,
+            model_name: Optional[str] = None,
+            version: int = -1,
+            model_params: Optional[Dict[str, Any]] = None,
+            delete_later_versions: bool = False,
             full_init: bool = True) -> UploadFilesResponse:
+        if model_name is None:
+            try:
+                model_name = type(model).__name__
+            except Exception as e:
+                raise ValueError(f"can not infer model name {model}") from e
+        if model_params is None:
+            model_params = {}
         try:
-            model_name = type(model).__name__
-        except Exception as e:
-            raise ValueError(f"can not infer model name {model}") from e
-        try:
-            if is_clf and maybe_classes is None:
-                maybe_classes = model.classes_
+            if is_clf and "classes" not in model_params:
+                model_params["classes"] = model.classes_
         except Exception as e:
             raise ValueError(f"can not infer classes from {model}") from e
         dump = pickle.dumps(model, pickle.HIGHEST_PROTOCOL)
         with io.BytesIO(dump) as buffer:
-            return self.upload_sklike_model_file(
+            return self.upload_model_file(
                 buffer,
                 xcols,
+                ycols,
                 is_clf,
                 model_name,
-                maybe_classes,
-                maybe_range,
+                version,
+                model_params,
+                delete_later_versions,
                 full_init)
 
-    def convert_model(self, reload: bool = True) -> ModelReleaseResponse:
+    def convert_model(
+            self,
+            version: Optional[int] = None,
+            reload: bool = True) -> ModelReleaseResponse:
         return cast(ModelReleaseResponse, self._client.request_json(
             METHOD_POST, "/convert_model", {
                 "blob": self.get_uri(),
+                "version": version,
                 "reload": reload,
             }))
 
