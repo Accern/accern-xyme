@@ -3265,7 +3265,10 @@ export class BlobHandle {
         );
     }
 
-    public async convertModel(version:number = null, reload:boolean = true): Promise<ModelReleaseResponse> {
+    public async convertModel(
+        version: number = null,
+        reload = true
+    ): Promise<ModelReleaseResponse> {
         return await this.client.requestJSON<ModelReleaseResponse>({
             method: METHOD_POST,
             path: '/convert_model',
