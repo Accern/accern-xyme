@@ -2933,7 +2933,7 @@ class BlobHandle:
             is_clf: bool,
             model_name: str,
             version: int = -1,
-            model_params: Dict[str, Any] = None,
+            model_params: Optional[Dict[str, Any]] = None,
             delete_later_versions: bool = False,
             max_threads: int = 10,
             full_init: bool = True) -> UploadFilesResponse:
@@ -2959,9 +2959,9 @@ class BlobHandle:
             xcols: List[str],
             ycols: Optional[List[str]],
             is_clf: bool,
-            model_name: str = None,
+            model_name: Optional[str] = None,
             version: int = -1,
-            model_params: Dict[str, Any] = None,
+            model_params: Optional[Dict[str, Any]] = None,
             delete_later_versions: bool = False,
             full_init: bool = True) -> UploadFilesResponse:
         if model_name is None:
