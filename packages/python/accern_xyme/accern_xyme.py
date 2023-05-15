@@ -1223,7 +1223,8 @@ class DagHandle:
         self._dynamic_error: Optional[str] = None
         self._ins: Optional[List[str]] = None
         self._outs: Optional[List[Tuple[str, str]]] = None
-        self._kafka_topics: Optional[Tuple[str, str]] = None
+        self._input_kafka_topic: Optional[str] = None
+        self._output_kafka_topic: Optional[str] = None
 
     def refresh(self) -> None:
         self._name = None
@@ -1235,7 +1236,8 @@ class DagHandle:
         self._version_override = None
         self._ins = None
         self._outs = None
-        self._kafka_topics = None
+        self._input_kafka_topic = None
+        self._output_kafka_topic = None
         # NOTE: we don't reset nodes
 
     def _maybe_refresh(self) -> None:
@@ -1263,7 +1265,8 @@ class DagHandle:
         self._version_override = info["version_override"]
         self._ins = info["ins"]
         self._outs = [(el[0], el[1]) for el in info["outs"]]
-        self._kafka_topics = info["kafka_topics"]
+        self._input_kafka_topic = info["input_kafka_topic"]
+        self._output_kafka_topic = info["output_kafka_topic"]
         old_nodes = {} if self._nodes is None else self._nodes
         self._nodes = {
             node["id"]: NodeHandle.from_node_info(
@@ -1314,11 +1317,12 @@ class DagHandle:
         assert self._version_override is not None
         return self._version_override
 
-    def get_kafka_topics(self) -> Tuple[str, str]:
+    def get_kafka_topic(self) -> Tuple[str, str]:
         self._maybe_refresh()
         self._maybe_fetch()
-        assert self._kafka_topics is not None
-        return self._kafka_topics
+        assert self._input_kafka_topic is not None
+        assert self._output_kafka_topic is not None
+        return self._input_kafka_topic, self._output_kafka_topic
 
     def get_uri_prefix(self) -> URIPrefix:
         self._maybe_refresh()
@@ -1830,8 +1834,11 @@ class DagHandle:
     def set_version_override(self, value: Optional[str]) -> None:
         self.set_attr("version_override", value)
 
-    def set_kafka_topics(self, value: Optional[Tuple[str, str]]) -> None:
-        self.set_attr("kafka_topics", value)
+    def set_input_kafka_topic(self, value: Optional[str]) -> None:
+        self.set_attr("input_kafka_topic", value)
+
+    def set_output_kafka_topic(self, value: Optional[str]) -> None:
+        self.set_attr("output_kafka_topic", value)
 
     @overload
     def check_queue_stats(  # pylint: disable=no-self-use
