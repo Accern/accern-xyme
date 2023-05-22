@@ -1515,7 +1515,8 @@ export class DagHandle {
     }
 
     public async getKafkaTopics(): Promise<
-        [string | undefined, string | undefined]> {
+        [string | undefined, string | undefined]
+    > {
         this.maybeRefresh();
         await this.maybeFetch();
         return [this.kafkaInputTopic, this.kafkaOutputTopic];

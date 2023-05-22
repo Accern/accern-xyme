@@ -185,7 +185,10 @@ export declare class DagHandle {
     getCompany(): Promise<string>;
     getStateUri(): Promise<string>;
     getVersionOverride(): Promise<string>;
-    getKafkaTopics(): Promise<[string | undefined, string | undefined]>;
+    getKafkaTopics(): Promise<[
+        string | undefined,
+        string | undefined
+    ]>;
     getURIPrefix(): Promise<URIPrefix>;
     getTiming(blacklist?: string[]): Promise<TimingResult>;
     isHighPriority(): Promise<boolean>;
