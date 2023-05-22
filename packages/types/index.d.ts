@@ -4,7 +4,7 @@ import { Readable } from 'stream';
 import { promises as fpm } from 'fs';
 import http = require('http');
 import https = require('https');
-import { AllowedCustomImports, BlobOwner, BlobTypeResponse, CacheStats, DagDef, DagInfo, DagList, DagPrettyNode, DictStrStr, DictStrList, DynamicFormat, InstanceStatus, KafkaGroup, KafkaOffsets, KafkaThroughput, KafkaTopics, KnownBlobs, MinimalQueueStatsResponse, ModelInfo, ModelParamsResponse, ModelReleaseResponse, ModelVersionResponse, NodeCustomImports, NodeDef, NodeDefInfo, NodeInfo, NodeState, NodeTypes, NodeUserColumnsResponse, QueueStatsResponse, QueueStatus, SettingsObj, TaskStatus, Timing, TimingResult, UploadFilesResponse, VersionResponse, DeleteBlobResponse, NodeCustomCode, URIPrefix, UserDagDef } from './types';
+import { AllowedCustomImports, BlobOwner, BlobTypeResponse, CacheStats, DagInfo, DagList, DagPrettyNode, DictStrStr, DictStrList, DynamicFormat, InstanceStatus, KafkaGroup, KafkaOffsets, KafkaThroughput, KafkaTopics, KnownBlobs, MinimalQueueStatsResponse, ModelInfo, ModelParamsResponse, ModelReleaseResponse, ModelVersionResponse, NodeCustomImports, NodeDef, NodeDefInfo, NodeInfo, NodeState, NodeTypes, NodeUserColumnsResponse, QueueStatsResponse, QueueStatus, SettingsObj, TaskStatus, Timing, TimingResult, UploadFilesResponse, VersionResponse, DeleteBlobResponse, NodeCustomCode, URIPrefix, UserDagDef } from './types';
 import { RetryOptions } from './request';
 import { ByteResponse } from './util';
 export * from './errors';
@@ -219,7 +219,7 @@ export declare class DagHandle {
     private _pretty;
     pretty(nodesOnly?: boolean, allowUnicode?: boolean, method?: string, fields?: string[] | null, display?: boolean): Promise<string | undefined>;
     prettyObj(nodesOnly?: boolean, allowUnicode?: boolean, fields?: string[] | null): Promise<DagPrettyNode[]>;
-    getDef(full?: boolean): Promise<DagDef>;
+    getDef(full?: boolean): Promise<UserDagDef>;
     setAttr(attr: string, value: any): Promise<void>;
     setName(value: string): Promise<void>;
     setCompany(value: string): Promise<void>;
