@@ -1317,11 +1317,9 @@ class DagHandle:
         assert self._version_override is not None
         return self._version_override
 
-    def get_kafka_topics(self) -> Tuple[str, str]:
+    def get_kafka_topics(self) -> Tuple[Optional[str], Optional[str]]:
         self._maybe_refresh()
         self._maybe_fetch()
-        assert self._kafka_input_topic is not None
-        assert self._kafka_output_topic is not None
         return self._kafka_input_topic, self._kafka_output_topic
 
     def get_uri_prefix(self) -> URIPrefix:
