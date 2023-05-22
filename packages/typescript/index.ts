@@ -1514,8 +1514,8 @@ export class DagHandle {
         return assertString(this.versionOverride);
     }
 
-    public async getKafkaTopics(
-    ): Promise<[string | undefined, string | undefined]> {
+    public async getKafkaTopics(): Promise<
+        [string | undefined, string | undefined]> {
         this.maybeRefresh();
         await this.maybeFetch();
         return [this.kafkaInputTopic, this.kafkaOutputTopic];
