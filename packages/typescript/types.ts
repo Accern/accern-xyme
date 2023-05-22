@@ -16,14 +16,16 @@ export interface UserDagDef extends BaseDagDef {
     state_uri?: string;
     default_input_key?: string;
     default_output_key?: string;
-    kafka_topics?: [string, string];
+    kafka_input_topic?: string;
+    kafka_output_topic?: string;
     version_override?: string;
 }
 
 export interface DagDef extends BaseDagDef {
     default_input_key?: string;
     default_output_key?: string;
-    kafka_topics?: [string, string];
+    kafka_input_topic?: string;
+    kafka_output_topic?: string;
     state_uri: string;
     uri_prefix: URIPrefix;
     version_override: string;
