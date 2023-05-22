@@ -159,7 +159,8 @@ export declare class DagHandle {
     dynamicError?: string;
     ins?: string[];
     highPriority?: boolean;
-    kafkaTopics?: [string, string];
+    kafkaInputTopic?: string;
+    kafkaOutputTopic?: string;
     name?: string;
     nodeLookup: DictStrStr;
     nodes: {
@@ -184,7 +185,7 @@ export declare class DagHandle {
     getCompany(): Promise<string>;
     getStateUri(): Promise<string>;
     getVersionOverride(): Promise<string>;
-    getKafkaTopics(): Promise<[string, string]>;
+    getKafkaTopics(): Promise<[string | undefined, string | undefined]>;
     getURIPrefix(): Promise<URIPrefix>;
     getTiming(blacklist?: string[]): Promise<TimingResult>;
     isHighPriority(): Promise<boolean>;
@@ -221,7 +222,8 @@ export declare class DagHandle {
     setCompany(value: string): Promise<void>;
     setStateUri(value: string): Promise<void>;
     setVersionOverride(value: string): Promise<void>;
-    setKafkaTopics(value: [string, string] | undefined): Promise<void>;
+    setKafkaInputTopic(value: string | undefined): Promise<void>;
+    setKafkaOutputTopic(value: string | undefined): Promise<void>;
     setURIPrefix(value: URIPrefix): Promise<void>;
     setHighPriority(value: string): Promise<void>;
     setQueueMng(value: string | undefined): Promise<void>;
