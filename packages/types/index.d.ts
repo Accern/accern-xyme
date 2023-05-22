@@ -361,7 +361,7 @@ export declare class BlobHandle {
      */
     uploadFileUsingContent(contentBuffer: Buffer, ext: string, progressBar?: WritableStream): Promise<void>;
     uploadZip(source: string | fpm.FileHandle): Promise<BlobHandle[]>;
-    convertModel(reload?: boolean): Promise<ModelReleaseResponse>;
+    convertModel(version?: number, reload?: boolean): Promise<ModelReleaseResponse>;
     getModelRelease(): Promise<ModelReleaseResponse>;
     getModelVersion(): Promise<ModelVersionResponse>;
     copyModelVersion(readVersion: number, writeVersion: number, overwrite: boolean): Promise<ModelVersionResponse>;
