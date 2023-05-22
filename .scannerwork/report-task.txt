@@ -1,6 +1,0 @@
-projectKey=Accern_accern-xyme
-serverUrl=https://sonarqube.staging-v3.accern.com
-serverVersion=9.6.1.59531
-dashboardUrl=https://sonarqube.staging-v3.accern.com/dashboard?id=Accern_accern-xyme
-ceTaskId=AYM7wxiVXc132X49UuzF
-ceTaskUrl=https://sonarqube.staging-v3.accern.com/api/ce/task?id=AYM7wxiVXc132X49UuzF
