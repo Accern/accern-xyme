@@ -74,7 +74,6 @@ from .types import (
     CacheStats,
     CopyBlob,
     DagCreate,
-    DagDef,
     DagDupResponse,
     DagInfo,
     DagInit,
@@ -1799,8 +1798,8 @@ class DagHandle:
             allow_unicode=allow_unicode,
             fields=fields)["nodes"]
 
-    def get_def(self, full: bool = True) -> DagDef:
-        return cast(DagDef, self._client.request_json(
+    def get_def(self, full: bool = True) -> UserDagDef:
+        return cast(UserDagDef, self._client.request_json(
             METHOD_GET, "/dag_def", {
                 "dag": self.get_uri(),
                 "full": full,

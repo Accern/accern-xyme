@@ -17,7 +17,6 @@ import {
     CacheStats,
     CopyBlob,
     DagCreate,
-    DagDef,
     DagInfo,
     DagInit,
     DagList,
@@ -1875,7 +1874,7 @@ export class DagHandle {
         ).then((res) => res.nodes);
     }
 
-    public async getDef(full = true): Promise<DagDef> {
+    public async getDef(full = true): Promise<UserDagDef> {
         return await this.client.requestJSON({
             method: METHOD_GET,
             path: '/dag_def',
