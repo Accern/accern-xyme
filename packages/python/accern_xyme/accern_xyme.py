@@ -65,7 +65,6 @@ from .util import (
 )
 from .types import (
     AllowedCustomImports,
-    BaseDagDef,
     BlobDetails,
     BlobFilesResponse,
     BlobInit,
@@ -134,6 +133,7 @@ from .types import (
     TritonModelsResponse,
     URIPrefix,
     UploadFilesResponse,
+    UserDagDef,
     UUIDResponse,
     VersionResponse,
     WorkerScale,
@@ -794,7 +794,7 @@ class XYMEClient:
     def set_dag(
             self,
             dag_uri: str,
-            defs: BaseDagDef,
+            defs: UserDagDef,
             warnings_io: Optional[IO[Any]] = sys.stderr) -> 'DagHandle':
         dag_create = cast(DagCreate, self.request_json(
             METHOD_POST, "/dag_create", {
@@ -1406,7 +1406,7 @@ class DagHandle:
                 self.refresh()
             yield do_refresh
 
-    def set_dag(self, defs: BaseDagDef) -> None:
+    def set_dag(self, defs: UserDagDef) -> None:
         self._client.set_dag(self.get_uri(), defs)
 
     def dynamic_model(
