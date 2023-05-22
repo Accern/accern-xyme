@@ -262,7 +262,8 @@ export interface DagInfo {
     company: string;
     high_priority: boolean;
     ins: string[];
-    kafka_topics?: [string, string];
+    kafka_input_topic?: string;
+    kafka_output_topic?: string;
     name: string;
     nodes: NodeInfo[];
     outs: [string, string][];

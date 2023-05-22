@@ -1385,7 +1385,8 @@ export class DagHandle {
     dynamicError?: string;
     ins?: string[];
     highPriority?: boolean;
-    kafkaTopics?: [string, string];
+    kafkaInputTopic?: string;
+    kafkaOutputTopic?: string;
     name?: string;
     nodeLookup: DictStrStr = {};
     nodes: { [key: string]: NodeHandle } = {};
@@ -1406,7 +1407,8 @@ export class DagHandle {
         this.ins = undefined;
         this.highPriority = undefined;
         this.name = undefined;
-        this.kafkaTopics = undefined;
+        this.kafkaInputTopic = undefined;
+        this.kafkaOutputTopic = undefined;
         this.outs = undefined;
         this.queueMng = undefined;
         this.stateUri = undefined;
@@ -1436,7 +1438,8 @@ export class DagHandle {
         this.queueMng = info.queue_mng;
         this.ins = info.ins;
         this.outs = info.outs;
-        this.kafkaTopics = info.kafka_topics;
+        this.kafkaInputTopic = info.kafka_input_topic;
+        this.kafkaOutputTopic = info.kafka_output_topic;
         const oldNodes = this.nodes === undefined ? {} : this.nodes;
         this.nodes = info.nodes.reduce(
             (o, nodeInfo) => ({
@@ -1511,12 +1514,11 @@ export class DagHandle {
         return assertString(this.versionOverride);
     }
 
-    public async getKafkaTopics(): Promise<[string, string]> {
+    public async getKafkaTopics(
+    ): Promise<[string | undefined, string | undefined]> {
         this.maybeRefresh();
         await this.maybeFetch();
-        assertString(this.kafkaTopics[0]);
-        assertString(this.kafkaTopics[1]);
-        return this.kafkaTopics;
+        return [this.kafkaInputTopic, this.kafkaOutputTopic];
     }
 
     public async getURIPrefix(): Promise<URIPrefix> {
@@ -1908,10 +1910,14 @@ export class DagHandle {
         await this.setAttr('version_override', value);
     }
 
-    public async setKafkaTopics(
-        value: [string, string] | undefined
+    public async setKafkaInputTopic(value: string | undefined): Promise<void> {
+        await this.setAttr('kafka_input_topic', value);
+    }
+
+    public async setKafkaOutputTopic(
+        value: string | undefined
     ): Promise<void> {
-        await this.setAttr('kafka_topics', value);
+        await this.setAttr('kafka_output_topic', value);
     }
 
     public async setURIPrefix(value: URIPrefix): Promise<void> {
