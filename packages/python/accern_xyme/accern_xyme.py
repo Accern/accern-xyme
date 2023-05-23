@@ -65,7 +65,6 @@ from .util import (
 )
 from .types import (
     AllowedCustomImports,
-    BaseDagDef,
     BlobDetails,
     BlobFilesResponse,
     BlobInit,
@@ -75,7 +74,6 @@ from .types import (
     CacheStats,
     CopyBlob,
     DagCreate,
-    DagDef,
     DagDupResponse,
     DagInfo,
     DagInit,
@@ -134,6 +132,7 @@ from .types import (
     TritonModelsResponse,
     URIPrefix,
     UploadFilesResponse,
+    UserDagDef,
     UUIDResponse,
     VersionResponse,
     WorkerScale,
@@ -794,7 +793,7 @@ class XYMEClient:
     def set_dag(
             self,
             dag_uri: str,
-            defs: BaseDagDef,
+            defs: UserDagDef,
             warnings_io: Optional[IO[Any]] = sys.stderr) -> 'DagHandle':
         dag_create = cast(DagCreate, self.request_json(
             METHOD_POST, "/dag_create", {
@@ -1223,7 +1222,8 @@ class DagHandle:
         self._dynamic_error: Optional[str] = None
         self._ins: Optional[List[str]] = None
         self._outs: Optional[List[Tuple[str, str]]] = None
-        self._kafka_topics: Optional[Tuple[str, str]] = None
+        self._kafka_input_topic: Optional[str] = None
+        self._kafka_output_topic: Optional[str] = None
 
     def refresh(self) -> None:
         self._name = None
@@ -1235,7 +1235,8 @@ class DagHandle:
         self._version_override = None
         self._ins = None
         self._outs = None
-        self._kafka_topics = None
+        self._kafka_input_topic = None
+        self._kafka_output_topic = None
         # NOTE: we don't reset nodes
 
     def _maybe_refresh(self) -> None:
@@ -1263,7 +1264,8 @@ class DagHandle:
         self._version_override = info["version_override"]
         self._ins = info["ins"]
         self._outs = [(el[0], el[1]) for el in info["outs"]]
-        self._kafka_topics = info["kafka_topics"]
+        self._kafka_input_topic = info["kafka_input_topic"]
+        self._kafka_output_topic = info["kafka_output_topic"]
         old_nodes = {} if self._nodes is None else self._nodes
         self._nodes = {
             node["id"]: NodeHandle.from_node_info(
@@ -1314,11 +1316,10 @@ class DagHandle:
         assert self._version_override is not None
         return self._version_override
 
-    def get_kafka_topics(self) -> Tuple[str, str]:
+    def get_kafka_topics(self) -> Tuple[Optional[str], Optional[str]]:
         self._maybe_refresh()
         self._maybe_fetch()
-        assert self._kafka_topics is not None
-        return self._kafka_topics
+        return self._kafka_input_topic, self._kafka_output_topic
 
     def get_uri_prefix(self) -> URIPrefix:
         self._maybe_refresh()
@@ -1404,7 +1405,7 @@ class DagHandle:
                 self.refresh()
             yield do_refresh
 
-    def set_dag(self, defs: BaseDagDef) -> None:
+    def set_dag(self, defs: UserDagDef) -> None:
         self._client.set_dag(self.get_uri(), defs)
 
     def dynamic_model(
@@ -1797,8 +1798,8 @@ class DagHandle:
             allow_unicode=allow_unicode,
             fields=fields)["nodes"]
 
-    def get_def(self, full: bool = True) -> DagDef:
-        return cast(DagDef, self._client.request_json(
+    def get_def(self, full: bool = True) -> UserDagDef:
+        return cast(UserDagDef, self._client.request_json(
             METHOD_GET, "/dag_def", {
                 "dag": self.get_uri(),
                 "full": full,
@@ -1830,8 +1831,11 @@ class DagHandle:
     def set_version_override(self, value: Optional[str]) -> None:
         self.set_attr("version_override", value)
 
-    def set_kafka_topics(self, value: Optional[Tuple[str, str]]) -> None:
-        self.set_attr("kafka_topics", value)
+    def set_kafka_input_topic(self, value: Optional[str]) -> None:
+        self.set_attr("kafka_input_topic", value)
+
+    def set_kafka_output_topic(self, value: Optional[str]) -> None:
+        self.set_attr("kafka_output_topic", value)
 
     @overload
     def check_queue_stats(  # pylint: disable=no-self-use

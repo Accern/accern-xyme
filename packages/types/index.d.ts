@@ -4,7 +4,7 @@ import { Readable } from 'stream';
 import { promises as fpm } from 'fs';
 import http = require('http');
 import https = require('https');
-import { AllowedCustomImports, BlobOwner, BlobTypeResponse, CacheStats, DagDef, DagInfo, DagList, DagPrettyNode, DictStrStr, DictStrList, DynamicFormat, InstanceStatus, KafkaErrorMessageState, KafkaGroup, KafkaOffsets, KafkaThroughput, KafkaTopics, KnownBlobs, MinimalQueueStatsResponse, ModelInfo, ModelParamsResponse, ModelReleaseResponse, ModelVersionResponse, NodeCustomImports, NodeDef, NodeDefInfo, NodeInfo, NodeState, NodeTypes, NodeUserColumnsResponse, QueueStatsResponse, QueueStatus, SettingsObj, TaskStatus, Timing, TimingResult, UploadFilesResponse, VersionResponse, DeleteBlobResponse, NodeCustomCode, URIPrefix, BaseDagDef } from './types';
+import { AllowedCustomImports, BlobOwner, BlobTypeResponse, CacheStats, DagInfo, DagList, DagPrettyNode, DictStrStr, DictStrList, DynamicFormat, InstanceStatus, KafkaGroup, KafkaOffsets, KafkaThroughput, KafkaTopics, KnownBlobs, MinimalQueueStatsResponse, ModelInfo, ModelParamsResponse, ModelReleaseResponse, ModelVersionResponse, NodeCustomImports, NodeDef, NodeDefInfo, NodeInfo, NodeState, NodeTypes, NodeUserColumnsResponse, QueueStatsResponse, QueueStatus, SettingsObj, TaskStatus, Timing, TimingResult, UploadFilesResponse, VersionResponse, DeleteBlobResponse, NodeCustomCode, URIPrefix, UserDagDef } from './types';
 import { RetryOptions } from './request';
 import { ByteResponse } from './util';
 export * from './errors';
@@ -28,6 +28,15 @@ interface XYMERequestArgument {
     method: string;
     path: string;
     retry?: Partial<RetryOptions>;
+}
+export declare class KafkaErrorMessageState {
+    msgLookup: Map<string, string>;
+    unmatched: string[];
+    constructor(config: KafkaErrorMessageState);
+    getMsg(input_id: string): string | undefined;
+    addMsg(input_id: string, msg: string): void;
+    getUnmatched(): string[];
+    addUnmatched(msg: string): void;
 }
 export default class XYMEClient {
     httpAgent?: http.Agent;
@@ -101,7 +110,7 @@ export default class XYMEClient {
     getJSONBlob(blobURI: string): Promise<JSONBlobHandle>;
     duplicateDag(dagURI: string, destURI?: string, copyNonownedBlobs?: boolean): Promise<string>;
     duplicateDagNew(dagURI: string, destURI?: string, retainNonownedBlobs?: boolean): Promise<string>;
-    setDag(dagURI: string, defs: BaseDagDef): Promise<DagHandle>;
+    setDag(dagURI: string, defs: UserDagDef): Promise<DagHandle>;
     setSettings(configToken: string, settings: SettingsObj): Promise<SettingsObj>;
     getSettings(): Promise<SettingsObj>;
     getAllowedCustomImports(): Promise<AllowedCustomImports>;
@@ -120,6 +129,18 @@ export default class XYMEClient {
     getKafkaErrorMessageTopic(): Promise<string>;
     deleteKafkaErrorTopic(): Promise<KafkaTopics>;
     readKafkaErrors(consumerType: string, offset?: string): Promise<string[]>;
+    /**
+     * Provides information as to what the error is and what is the
+     * input id and its associated input message.
+     * @param inputIdPath: The path of the field to be considered as
+     * input_id in the input json.
+     * @param errMsgState:
+     * This will be populated with the mappings of input_ids to messages.
+     * Also stores any unmatched messages in the unmatched list and after
+     * filling msg_lookup, check if they have matches. Initially an object
+     * of KafkaErrorMessageState can be passed for this argument.
+     * @returns
+     */
     readKafkaFullJsonErrors(inputIdPath: string[], errMsgState: KafkaErrorMessageState): Promise<[string, string][]>;
     getNamedSecrets(configToken?: string | null, showValues?: boolean): Promise<{
         [key: string]: string | null;
@@ -137,8 +158,9 @@ export declare class DagHandle {
     company?: string;
     dynamicError?: string;
     ins?: string[];
-    kafkaTopics?: [string, string];
     highPriority?: boolean;
+    kafkaInputTopic?: string;
+    kafkaOutputTopic?: string;
     name?: string;
     nodeLookup: DictStrStr;
     nodes: {
@@ -163,6 +185,10 @@ export declare class DagHandle {
     getCompany(): Promise<string>;
     getStateUri(): Promise<string>;
     getVersionOverride(): Promise<string>;
+    getKafkaTopics(): Promise<[
+        string | undefined,
+        string | undefined
+    ]>;
     getURIPrefix(): Promise<URIPrefix>;
     getTiming(blacklist?: string[]): Promise<TimingResult>;
     isHighPriority(): Promise<boolean>;
@@ -170,7 +196,7 @@ export declare class DagHandle {
     getQueueMng(): Promise<string | undefined>;
     getIns(): Promise<string[]>;
     getOuts(): Promise<[string, string][]>;
-    setDag(defs: BaseDagDef): Promise<void>;
+    setDag(defs: UserDagDef): Promise<void>;
     dynamicModel(inputs: any[], formatMethod?: DynamicFormat, noCache?: boolean): Promise<any[]>;
     dynamicList(inputs: any[], fargs: {
         inputKey?: string;
@@ -193,12 +219,14 @@ export declare class DagHandle {
     private _pretty;
     pretty(nodesOnly?: boolean, allowUnicode?: boolean, method?: string, fields?: string[] | null, display?: boolean): Promise<string | undefined>;
     prettyObj(nodesOnly?: boolean, allowUnicode?: boolean, fields?: string[] | null): Promise<DagPrettyNode[]>;
-    getDef(full?: boolean): Promise<DagDef>;
+    getDef(full?: boolean): Promise<UserDagDef>;
     setAttr(attr: string, value: any): Promise<void>;
     setName(value: string): Promise<void>;
     setCompany(value: string): Promise<void>;
     setStateUri(value: string): Promise<void>;
     setVersionOverride(value: string): Promise<void>;
+    setKafkaInputTopic(value: string | undefined): Promise<void>;
+    setKafkaOutputTopic(value: string | undefined): Promise<void>;
     setURIPrefix(value: URIPrefix): Promise<void>;
     setHighPriority(value: string): Promise<void>;
     setQueueMng(value: string | undefined): Promise<void>;
@@ -361,7 +389,7 @@ export declare class BlobHandle {
      */
     uploadFileUsingContent(contentBuffer: Buffer, ext: string, progressBar?: WritableStream): Promise<void>;
     uploadZip(source: string | fpm.FileHandle): Promise<BlobHandle[]>;
-    convertModel(reload?: boolean): Promise<ModelReleaseResponse>;
+    convertModel(version?: number, reload?: boolean): Promise<ModelReleaseResponse>;
     getModelRelease(): Promise<ModelReleaseResponse>;
     getModelVersion(): Promise<ModelVersionResponse>;
     copyModelVersion(readVersion: number, writeVersion: number, overwrite: boolean): Promise<ModelVersionResponse>;
