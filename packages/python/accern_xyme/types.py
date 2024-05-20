@@ -61,6 +61,18 @@ S3BucketSettings = TypedDict('S3BucketSettings', {
     "use_ssl": Optional[bool],
     "verify": Optional[bool],
 })
+TritonBucketSettings = TypedDict('TritonBucketSettings', {
+    "api_version": Optional[str],
+    "aws_access_key_id": str,
+    "aws_secret_access_key": str,
+    "aws_session_token": Optional[str],
+    "buckets": Dict[str, str],
+    "endpoint_url": Optional[str],
+    "model_repository": str,
+    "region_name": Optional[str],
+    "use_ssl": Optional[bool],
+    "verify": Optional[bool],
+})
 ESConnectorSettings = TypedDict('ESConnectorSettings', {
     "host": str,
     "password": str,
@@ -72,7 +84,7 @@ DremioAuthSettings = TypedDict('DremioAuthSettings', {
 })
 SettingsObj = TypedDict('SettingsObj', {
     "s3": Dict[str, S3BucketSettings],
-    "triton": Dict[str, S3BucketSettings],
+    "triton": Dict[str, TritonBucketSettings],
     "es": Dict[str, ESConnectorSettings],
     "dremio": Dict[str, DremioAuthSettings],
     "versions": Dict[str, Tuple[str, str]],
